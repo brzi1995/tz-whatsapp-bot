@@ -2,10 +2,10 @@
   "name": "tz-whatsapp-bot",
   "version": "1.0.0",
   "description": "Multi-tenant WhatsApp tourist bot for Croatian tourist boards",
-  "main": "src/index.js",
+  "main": "app.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "start": "node app.js",
+    "dev": "nodemon app.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
