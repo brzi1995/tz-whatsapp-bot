@@ -1,0 +1,6 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/splitwed/tz-bot
+    - cp -r . $DEPLOYPATH
+    - cd $DEPLOYPATH && npm install --omit=dev
