@@ -2,29 +2,40 @@
 <%- include('partials/sidebar', { activePage: 'dashboard' }) %>
 
 <main class="content">
-  <h1>Dashboard</h1>
+  <div class="page-header">
+    <h1>Dashboard</h1>
+    <p>Pregled aktivnosti vašeg WhatsApp bota</p>
+  </div>
 
   <div class="cards">
-    <div class="card">
+    <div class="stat-card">
+      <div class="stat-card-top">
+        <div class="label">Ukupno korisnika</div>
+        <div class="stat-card-icon icon-blue">👥</div>
+      </div>
       <div class="num"><%= totalUsers %></div>
-      <div class="label">Ukupno korisnika</div>
     </div>
-    <div class="card">
+    <div class="stat-card">
+      <div class="stat-card-top">
+        <div class="label">Ukupno poruka</div>
+        <div class="stat-card-icon icon-green">💬</div>
+      </div>
       <div class="num"><%= totalMessages %></div>
-      <div class="label">Ukupno poruka</div>
     </div>
   </div>
 
   <div class="chart-wrap">
-    <h2>Poruke po danu — posljednjih 7 dana</h2>
-    <canvas id="msgChart" height="90"></canvas>
+    <div class="chart-header">
+      <h2>Poruke po danu</h2>
+      <span class="chart-badge">Posljednjih 7 dana</span>
+    </div>
+    <canvas id="msgChart" height="80"></canvas>
   </div>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
   (function () {
-    // Build a full 7-day array so days with 0 messages still appear
     const today = new Date();
     const labels = [];
     const dataMap = {};
@@ -38,39 +49,61 @@
     for (let i = 6; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(d.getDate() - i);
+      labels.push(d.toLocaleDateString('hr-HR', { weekday: 'short', day: 'numeric', month: 'numeric' }));
       const key = d.toISOString().slice(0, 10);
-      labels.push(key.slice(5)); // MM-DD
       if (!dataMap[key]) dataMap[key] = 0;
     }
 
-    const values = labels.map(function(l) {
-      // labels are MM-DD, rebuild full key
-      const year = today.getFullYear();
-      const fullKey = year + '-' + l;
-      return dataMap[fullKey] || 0;
-    });
+    const values = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      values.push(dataMap[d.toISOString().slice(0, 10)] || 0);
+    }
 
-    new Chart(document.getElementById('msgChart'), {
+    const ctx = document.getElementById('msgChart').getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, 260);
+    gradient.addColorStop(0,   'rgba(37,99,235,0.85)');
+    gradient.addColorStop(1,   'rgba(37,99,235,0.15)');
+
+    new Chart(ctx, {
       type: 'bar',
       data: {
-        labels: labels,
+        labels,
         datasets: [{
           label: 'Poruke',
           data: values,
-          backgroundColor: 'rgba(59,130,246,0.75)',
-          borderRadius: 5,
+          backgroundColor: gradient,
+          borderRadius: 8,
           borderSkipped: false,
+          hoverBackgroundColor: 'rgba(37,99,235,1)',
         }]
       },
       options: {
-        plugins: { legend: { display: false } },
+        responsive: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#0f172a',
+            titleColor: '#94a3b8',
+            bodyColor: '#fff',
+            padding: 10,
+            cornerRadius: 8,
+            callbacks: {
+              label: ctx => ` ${ctx.parsed.y} poruka`
+            }
+          }
+        },
         scales: {
           y: {
             beginAtZero: true,
-            ticks: { precision: 0 },
-            grid: { color: '#f1f5f9' }
+            ticks: { precision: 0, color: '#94a3b8', font: { size: 12 } },
+            grid: { color: '#f1f5f9', drawBorder: false }
           },
-          x: { grid: { display: false } }
+          x: {
+            ticks: { color: '#64748b', font: { size: 12 } },
+            grid: { display: false }
+          }
         }
       }
     });
