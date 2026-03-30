@@ -149,6 +149,48 @@ router.get('/dashboard', requireAuth, async (req, res) => {
       [tenantId]
     );
 
+    // Derive human-readable insights from existing data — no AI calls
+    const insights = [];
+    const hasData = intents.reduce((s, r) => s + Number(r.count), 0) > 0;
+
+    if (hasData) {
+      const intentPhrases = {
+        faq:              'Most tourists ask FAQ questions',
+        weather_current:  'Most tourists ask about current weather',
+        weather_tomorrow: 'Most tourists ask about tomorrow\'s forecast',
+        weather_multi:    'Most tourists ask for multi-day forecasts',
+        events:           'Most tourists ask about local events',
+        ai:               'Most tourists use the AI chat',
+        other:            'Most messages are general questions',
+      };
+      const langPhrases = {
+        hr: 'Majority of users speak Croatian',
+        en: 'Majority of users speak English',
+        de: 'Majority of users speak German',
+        it: 'Majority of users speak Italian',
+        fr: 'Majority of users speak French',
+      };
+      const timePhrases = {
+        morning:   'Peak activity is in the morning (6–12)',
+        afternoon: 'Peak activity is in the afternoon (12–18)',
+        evening:   'Peak activity is in the evening (18–24)',
+      };
+
+      if (intents.length) {
+        const top = intents[0];
+        insights.push({ icon: '🎯', text: intentPhrases[top.intent] || `Most common intent: ${top.intent}` });
+      }
+      if (languages.length) {
+        const top = languages[0];
+        insights.push({ icon: '🌍', text: langPhrases[top.lang] || `Most used language: ${top.lang.toUpperCase()}` });
+      }
+      if (timeOfDay) {
+        const tod = { morning: Number(timeOfDay.morning)||0, afternoon: Number(timeOfDay.afternoon)||0, evening: Number(timeOfDay.evening)||0 };
+        const peak = Object.entries(tod).sort((a, b) => b[1] - a[1])[0];
+        if (peak && peak[1] > 0) insights.push({ icon: '⏰', text: timePhrases[peak[0]] });
+      }
+    }
+
     res.render('dashboard', {
       totalUsers:    totalUsersRow.total,
       totalMessages: totalMsgsRow.total,
@@ -156,6 +198,7 @@ router.get('/dashboard', requireAuth, async (req, res) => {
       intents,
       languages,
       timeOfDay,
+      insights,
     });
   } catch (err) {
     console.error('[admin] dashboard error:', err.message);

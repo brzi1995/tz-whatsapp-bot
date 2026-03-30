@@ -7,6 +7,26 @@
     <p>Pregled aktivnosti vašeg WhatsApp bota</p>
   </div>
 
+  <!-- AI Insights -->
+  <div style="background:linear-gradient(135deg,#1e3a5f 0%,#1e40af 100%);border-radius:14px;padding:22px 28px;margin-bottom:28px;color:#fff;box-shadow:0 4px 20px rgba(37,99,235,.25)">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <span style="font-size:20px">✨</span>
+      <span style="font-size:15px;font-weight:700;letter-spacing:-.2px">AI Insights</span>
+    </div>
+    <% if (!insights.length) { %>
+      <p style="color:#93c5fd;font-size:14px;margin:0">No data yet — insights will appear as users interact.</p>
+    <% } else { %>
+      <div style="display:flex;flex-wrap:wrap;gap:12px">
+        <% insights.forEach(function(ins) { %>
+          <div style="background:rgba(255,255,255,.12);border-radius:10px;padding:10px 16px;display:flex;align-items:center;gap:9px;font-size:14px;font-weight:500;flex:1;min-width:220px;backdrop-filter:blur(4px)">
+            <span style="font-size:18px;flex-shrink:0"><%= ins.icon %></span>
+            <span><%= ins.text %></span>
+          </div>
+        <% }); %>
+      </div>
+    <% } %>
+  </div>
+
   <div class="cards">
     <div class="stat-card">
       <div class="stat-card-top">
