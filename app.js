@@ -2,7 +2,13 @@ const fs = require('fs');
 const path = require('path');
 
 try {
-  require('dotenv').config();
+  const dotenvResult = require('dotenv').config({ path: path.join(__dirname, '.env') });
+  if (dotenvResult.error) {
+    console.warn('[app] .env file not found — relying on system env vars:', dotenvResult.error.message);
+  } else {
+    console.log('[app] .env loaded successfully');
+  }
+  console.log('[app] NODE_ENV:', process.env.NODE_ENV, '| DB_HOST:', process.env.DB_HOST, '| DB_NAME:', process.env.DB_NAME);
   const express = require('express');
   const whatsappRoutes = require('./src/routes/whatsapp');
 
