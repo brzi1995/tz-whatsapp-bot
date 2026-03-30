@@ -10,5 +10,8 @@ app.use(express.json());
 app.get('/', (_req, res) => res.send('TZ WhatsApp Bot is running'));
 app.use('/whatsapp', whatsappRoutes);
 
-// Export for Passenger (cPanel) — Passenger calls listen() itself
+// Passenger (cPanel) sets PORT env var and expects the app to listen on it
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
+
 module.exports = app;
