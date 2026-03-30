@@ -10,4 +10,15 @@ const pool = mysql.createPool({
   connectionLimit: 10,
 });
 
+// Test connection on startup so misconfigured DB fails loudly
+pool.getConnection()
+  .then(conn => {
+    console.log('[db] MySQL connection pool ready');
+    conn.release();
+  })
+  .catch(err => {
+    console.error('[db] FAILED to connect to MySQL:', err.message);
+    console.error('[db] DB_HOST:', process.env.DB_HOST, '| DB_USER:', process.env.DB_USER, '| DB_NAME:', process.env.DB_NAME);
+  });
+
 module.exports = pool;
