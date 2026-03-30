@@ -7,8 +7,9 @@ const { sendMessage, validateWebhook } = require('../services/twilio');
 router.post('/webhook', async (req, res) => {
   console.log('[webhook] incoming body:', JSON.stringify(req.body));
 
-  // Respond immediately — Twilio retries if it doesn't get 200 quickly
-  res.sendStatus(200);
+  // Respond immediately with empty body — res.sendStatus(200) would send
+  // the string "OK" which Twilio forwards to the user as a WhatsApp message
+  res.status(200).end();
 
   try {
     if (process.env.NODE_ENV === 'production' && !validateWebhook(req)) {
