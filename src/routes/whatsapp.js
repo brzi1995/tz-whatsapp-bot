@@ -65,28 +65,34 @@ router.post('/webhook', async (req, res) => {
     if (msgLower.includes('vrijeme')) {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'weather');
 
-      if (process.env.OPENWEATHER_API_KEY) {
+      const apiKey = process.env.OPENWEATHER_API_KEY;
+      console.log(`[webhook] OPENWEATHER_API_KEY loaded: ${apiKey ? 'yes (' + apiKey.slice(0, 4) + '...)' : 'NO — key missing'}`);
+
+      if (apiKey) {
         try {
           const city = tenant.city || 'Brela';
-          const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${process.env.OPENWEATHER_API_KEY}&units=metric&lang=hr`;
+          const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric&lang=hr`;
+          console.log(`[webhook] fetching weather for city: ${city}`);
           const weatherRes = await fetch(url);
+          const data = await weatherRes.json();
+
           if (weatherRes.ok) {
-            const data = await weatherRes.json();
             const temp = Math.round(data.main.temp);
             const desc = data.weather[0]?.description || '';
-            const weatherText = `Trenutno vrijeme u ${city}: ${temp}°C, ${desc}.`;
-            console.log(`[webhook] weather response: "${weatherText}"`);
+            const weatherText = `U ${city} je trenutno ${temp}°C, ${desc}.`;
+            console.log(`[webhook] weather OK: "${weatherText}"`);
             return res.send(twiml(weatherText));
           } else {
-            console.warn(`[webhook] OpenWeatherMap returned ${weatherRes.status} — falling through to AI`);
+            console.warn(`[webhook] OpenWeatherMap error ${weatherRes.status}:`, data.message);
+            return res.send(twiml(`Trenutno ne mogu dohvatiti podatke o vremenu. Pokušajte malo kasnije.`));
           }
         } catch (weatherErr) {
-          console.warn('[webhook] weather fetch failed — falling through to AI:', weatherErr.message);
+          console.error('[webhook] weather fetch exception:', weatherErr.message);
+          return res.send(twiml(`Trenutno ne mogu dohvatiti podatke o vremenu. Pokušajte malo kasnije.`));
         }
       } else {
-        console.warn('[webhook] OPENWEATHER_API_KEY not set — falling through to AI');
+        return res.send(twiml(`Servis za vremenske podatke trenutno nije dostupan.`));
       }
-      // Fall through to AI if weather lookup failed or key is missing
     }
 
     // 7. Events check
