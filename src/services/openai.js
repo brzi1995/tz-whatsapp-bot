@@ -1,6 +1,11 @@
 const OpenAI = require('openai');
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Instantiated lazily so a missing key doesn't crash the server at startup
+let client;
+function getClient() {
+  if (!client) client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  return client;
+}
 
 /**
  * Send a conversation to OpenAI and return the assistant's reply.
@@ -9,7 +14,7 @@ const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
  * @param {string} model         - OpenAI model ID (from tenant config)
  */
 async function chat(systemPrompt, messages, model = 'gpt-4o-mini') {
-  const response = await client.chat.completions.create({
+  const response = await getClient().chat.completions.create({
     model,
     messages: [
       { role: 'system', content: systemPrompt },
