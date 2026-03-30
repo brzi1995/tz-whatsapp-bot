@@ -2,19 +2,35 @@ const express = require('express');
 const router = express.Router();
 const { getTenant, getMessages, saveMessages } = require('../db/sessions');
 const { chat } = require('../services/openai');
-const { sendMessage, validateWebhook } = require('../services/twilio');
+const { validateWebhook } = require('../services/twilio');
+
+// Escape special XML characters so TwiML stays valid
+function escapeXml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function twiml(message) {
+  return `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(message)}</Message></Response>`;
+}
+
+function emptyTwiml() {
+  return '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
+}
 
 router.post('/webhook', async (req, res) => {
   console.log('[webhook] incoming body:', JSON.stringify(req.body));
 
-  // Respond immediately with empty body — res.sendStatus(200) would send
-  // the string "OK" which Twilio forwards to the user as a WhatsApp message
-  res.status(200).end();
+  res.type('text/xml');
 
   try {
     if (process.env.NODE_ENV === 'production' && !validateWebhook(req)) {
       console.warn('[webhook] signature validation failed');
-      return;
+      return res.send(emptyTwiml());
     }
 
     const { From: userPhone, To: tenantPhone, Body: userMsg } = req.body || {};
@@ -22,13 +38,13 @@ router.post('/webhook', async (req, res) => {
 
     if (!userMsg?.trim() || !userPhone || !tenantPhone) {
       console.warn('[webhook] missing required fields, ignoring');
-      return;
+      return res.send(emptyTwiml());
     }
 
     const tenant = await getTenant(tenantPhone);
     if (!tenant) {
       console.warn(`[webhook] no tenant configured for number: ${tenantPhone}`);
-      return;
+      return res.send(emptyTwiml());
     }
     console.log(`[webhook] tenant matched: ${tenant.name} | prompt length: ${tenant.system_prompt?.length ?? 0} | preview: "${tenant.system_prompt?.substring(0, 80)}"`);
 
@@ -40,11 +56,13 @@ router.post('/webhook', async (req, res) => {
     messages.push({ role: 'assistant', content: reply });
 
     await saveMessages(tenant.id, userPhone, messages);
-    await sendMessage(userPhone, tenantPhone, reply);
-    console.log(`[webhook] message sent to ${userPhone}`);
+
+    res.send(twiml(reply));
+    console.log(`[webhook] TwiML response sent to ${userPhone}`);
   } catch (err) {
     console.error('[webhook] error:', err.message);
     console.error(err.stack);
+    res.send(emptyTwiml());
   }
 });
 
