@@ -4,37 +4,26 @@ const { getTenant, getMessages, saveMessages } = require('../db/sessions');
 const { chat } = require('../services/openai');
 const { sendMessage, validateWebhook } = require('../services/twilio');
 
-/**
- * POST /whatsapp/webhook
- *
- * Twilio sends a form-encoded POST with at minimum:
- *   From  - sender's WhatsApp number, e.g. "whatsapp:+385912345678"
- *   To    - your Twilio WhatsApp number, e.g. "whatsapp:+38512345678"
- *   Body  - the message text
- *
- * The tenant is identified by the `To` number, so each tourist board
- * gets its own Twilio number pointing to this same webhook.
- */
 router.post('/webhook', async (req, res) => {
-  console.log('[webhook] incoming request body:', JSON.stringify(req.body));
+  console.log('[webhook] incoming body:', JSON.stringify(req.body));
 
-  if (process.env.NODE_ENV === 'production' && !validateWebhook(req)) {
-    console.warn('[webhook] signature validation failed');
-    return res.status(403).send('Forbidden');
-  }
-
-  // Respond to Twilio immediately — it retries if it doesn't get 200 quickly
+  // Respond immediately — Twilio retries if it doesn't get 200 quickly
   res.sendStatus(200);
 
-  const { From: userPhone, To: tenantPhone, Body: userMsg } = req.body;
-  console.log(`[webhook] From=${userPhone} To=${tenantPhone} Body="${userMsg}"`);
-
-  if (!userMsg?.trim() || !userPhone || !tenantPhone) {
-    console.warn('[webhook] missing required fields, ignoring');
-    return;
-  }
-
   try {
+    if (process.env.NODE_ENV === 'production' && !validateWebhook(req)) {
+      console.warn('[webhook] signature validation failed');
+      return;
+    }
+
+    const { From: userPhone, To: tenantPhone, Body: userMsg } = req.body || {};
+    console.log(`[webhook] From=${userPhone} To=${tenantPhone} Body="${userMsg}"`);
+
+    if (!userMsg?.trim() || !userPhone || !tenantPhone) {
+      console.warn('[webhook] missing required fields, ignoring');
+      return;
+    }
+
     const tenant = await getTenant(tenantPhone);
     if (!tenant) {
       console.warn(`[webhook] no tenant configured for number: ${tenantPhone}`);
