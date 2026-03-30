@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
+
 try {
   require('dotenv').config({ path: path.join(__dirname, '.env') });
 
@@ -15,6 +16,8 @@ try {
 
   app.get('/', (_req, res) => res.send('TZ WhatsApp Bot is running'));
   app.use('/whatsapp', whatsappRoutes);
+  app.use(express.static(path.join(__dirname, 'public')));
+  app.use('/admin', require('./src/routes/admin'));
 
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));

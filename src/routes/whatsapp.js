@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getTenant, getMessages, saveMessages } = require('../db/sessions');
 const { chat } = require('../services/openai');
+const { logMessage, getFaqMatch, getUpcomingEvents, checkAndIncrementUsage } = require('../db/bot');
 
 function escapeXml(str) {
   return String(str)
@@ -25,14 +26,17 @@ router.post('/webhook', async (req, res) => {
   res.type('text/xml');
 
   try {
+    // 1. Extract fields
     const { From: userPhone, To: tenantPhone, Body: userMsg } = req.body || {};
     console.log(`[webhook] From=${userPhone} To=${tenantPhone} Body="${userMsg}"`);
 
+    // 2. Validate fields
     if (!userMsg?.trim() || !userPhone || !tenantPhone) {
       console.warn('[webhook] missing required fields');
       return res.send(emptyTwiml());
     }
 
+    // 3. Resolve tenant
     const tenant = await getTenant(tenantPhone);
     if (!tenant) {
       console.warn(`[webhook] no tenant for number: ${tenantPhone}`);
@@ -40,14 +44,88 @@ router.post('/webhook', async (req, res) => {
     }
     console.log(`[webhook] tenant: ${tenant.name} | prompt length: ${tenant.system_prompt?.length ?? 0}`);
 
+    const trimmedMsg = userMsg.trim();
+
+    // 4. Human takeover — agent is handling this conversation manually
+    if (tenant.human_takeover) {
+      console.log(`[webhook] human_takeover active for tenant ${tenant.id} — silencing bot`);
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'ai');
+      return res.send(emptyTwiml());
+    }
+
+    // 5. FAQ check
+    const faqAnswer = await getFaqMatch(tenant.id, trimmedMsg);
+    if (faqAnswer) {
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'faq');
+      return res.send(twiml(faqAnswer));
+    }
+
+    // 6. Weather check
+    const msgLower = trimmedMsg.toLowerCase();
+    if (msgLower.includes('vrijeme')) {
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'weather');
+
+      if (process.env.OPENWEATHER_API_KEY) {
+        try {
+          const city = tenant.city || 'Brela';
+          const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${process.env.OPENWEATHER_API_KEY}&units=metric&lang=hr`;
+          const weatherRes = await fetch(url);
+          if (weatherRes.ok) {
+            const data = await weatherRes.json();
+            const temp = Math.round(data.main.temp);
+            const desc = data.weather[0]?.description || '';
+            const weatherText = `Trenutno vrijeme u ${city}: ${temp}°C, ${desc}.`;
+            console.log(`[webhook] weather response: "${weatherText}"`);
+            return res.send(twiml(weatherText));
+          } else {
+            console.warn(`[webhook] OpenWeatherMap returned ${weatherRes.status} — falling through to AI`);
+          }
+        } catch (weatherErr) {
+          console.warn('[webhook] weather fetch failed — falling through to AI:', weatherErr.message);
+        }
+      } else {
+        console.warn('[webhook] OPENWEATHER_API_KEY not set — falling through to AI');
+      }
+      // Fall through to AI if weather lookup failed or key is missing
+    }
+
+    // 7. Events check
+    if (msgLower.includes('događaj') || msgLower.includes('dogadjaj') || msgLower.includes('event')) {
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'events');
+
+      const events = await getUpcomingEvents(tenant.id);
+      if (!events.length) {
+        return res.send(twiml('Trenutno nema nadolazećih događaja.'));
+      }
+
+      const lines = events.map((ev, i) => {
+        const dateStr = new Date(ev.date).toLocaleDateString('hr-HR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        let line = `${i + 1}. ${ev.title} (${dateStr})\n${ev.description}`;
+        if (ev.location_link) line += `\nLokacija: ${ev.location_link}`;
+        return line;
+      });
+
+      return res.send(twiml('Nadolazeći događaji:\n' + lines.join('\n\n')));
+    }
+
+    // 8. AI usage rate limit
+    const usage = await checkAndIncrementUsage(tenant.id, userPhone);
+    if (!usage.allowed) {
+      console.log(`[webhook] AI rate limit reached for ${userPhone} on tenant ${tenant.id}`);
+      const city = tenant.city || 'Brela';
+      return res.send(twiml(`Za dodatna pitanja javit će vam se zaposlenik TZ ${city}.`));
+    }
+
+    // 9. AI response
     const messages = await getMessages(tenant.id, userPhone);
-    messages.push({ role: 'user', content: userMsg.trim() });
+    messages.push({ role: 'user', content: trimmedMsg });
 
     const reply = await chat(tenant.system_prompt, messages, tenant.openai_model);
     console.log(`[webhook] reply: "${reply}"`);
     messages.push({ role: 'assistant', content: reply });
 
     await saveMessages(tenant.id, userPhone, messages);
+    await logMessage(tenant.id, userPhone, trimmedMsg, 'ai');
 
     res.send(twiml(reply));
     console.log(`[webhook] TwiML sent to ${userPhone}`);
