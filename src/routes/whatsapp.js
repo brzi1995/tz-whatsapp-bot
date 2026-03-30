@@ -16,7 +16,10 @@ const { sendMessage, validateWebhook } = require('../services/twilio');
  * gets its own Twilio number pointing to this same webhook.
  */
 router.post('/webhook', async (req, res) => {
+  console.log('[webhook] incoming request body:', JSON.stringify(req.body));
+
   if (process.env.NODE_ENV === 'production' && !validateWebhook(req)) {
+    console.warn('[webhook] signature validation failed');
     return res.status(403).send('Forbidden');
   }
 
@@ -24,26 +27,34 @@ router.post('/webhook', async (req, res) => {
   res.sendStatus(200);
 
   const { From: userPhone, To: tenantPhone, Body: userMsg } = req.body;
+  console.log(`[webhook] From=${userPhone} To=${tenantPhone} Body="${userMsg}"`);
 
-  if (!userMsg?.trim() || !userPhone || !tenantPhone) return;
+  if (!userMsg?.trim() || !userPhone || !tenantPhone) {
+    console.warn('[webhook] missing required fields, ignoring');
+    return;
+  }
 
   try {
     const tenant = await getTenant(tenantPhone);
     if (!tenant) {
-      console.warn(`[webhook] No tenant configured for number: ${tenantPhone}`);
+      console.warn(`[webhook] no tenant configured for number: ${tenantPhone}`);
       return;
     }
+    console.log(`[webhook] tenant matched: ${tenant.name}`);
 
     const messages = await getMessages(tenant.id, userPhone);
     messages.push({ role: 'user', content: userMsg.trim() });
 
     const reply = await chat(tenant.system_prompt, messages, tenant.openai_model);
+    console.log(`[webhook] OpenAI reply: "${reply}"`);
     messages.push({ role: 'assistant', content: reply });
 
     await saveMessages(tenant.id, userPhone, messages);
     await sendMessage(userPhone, tenantPhone, reply);
+    console.log(`[webhook] message sent to ${userPhone}`);
   } catch (err) {
-    console.error('[webhook] Error processing message:', err);
+    console.error('[webhook] error:', err.message);
+    console.error(err.stack);
   }
 });
 
