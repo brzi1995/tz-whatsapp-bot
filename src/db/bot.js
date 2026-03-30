@@ -1,26 +1,15 @@
 const pool = require('./index');
 
-// Lightweight language detection for analytics — no AI call needed.
-function detectLang(text) {
-  if (/[čćžšđČĆŽŠĐ]/.test(text)) return 'hr';
-  const tokens = new Set(text.toLowerCase().split(/\W+/));
-  const hit = words => words.some(w => tokens.has(w));
-  if (hit(['the','is','are','what','how','where','when','hello','hi','weather','event','please'])) return 'en';
-  if (hit(['ist','sind','wie','was','wo','wann','hallo','bitte','wetter','können'])) return 'de';
-  if (hit(['come','dove','quando','ciao','grazie','prego','tempo','sono','cosa'])) return 'it';
-  if (hit(['est','sont','comment','où','quand','bonjour','merci','météo'])) return 'fr';
-  return 'hr';
-}
-
 /**
  * Log an inbound user message to the messages table.
+ * lang is detected upstream by parseMessage() and passed in.
  * @param {number} tenantId
  * @param {string} userPhone
  * @param {string} message
  * @param {'faq'|'weather'|'events'|'ai'} intent
+ * @param {string} lang  ISO 639-1 code, e.g. 'hr', 'en', 'de'
  */
-async function logMessage(tenantId, userPhone, message, intent) {
-  const lang = detectLang(message);
+async function logMessage(tenantId, userPhone, message, intent, lang = 'hr') {
   try {
     await pool.query(
       'INSERT INTO messages (tenant_id, user_phone, message, intent, lang) VALUES (?, ?, ?, ?, ?)',

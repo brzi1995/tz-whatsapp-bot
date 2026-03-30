@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getTenant, getMessages, saveMessages } = require('../db/sessions');
-const { chat } = require('../services/openai');
+const { chat, parseMessage } = require('../services/openai');
 const { logMessage, getFaqMatch, getUpcomingEvents, checkAndIncrementUsage } = require('../db/bot');
 
 const MULTILINGUAL_PROMPT = `You are a multilingual tourist assistant in Croatia.
@@ -35,25 +35,6 @@ async function formatReply(context, userMsg, model) {
   );
 }
 
-// Classify the user's message into an intent using OpenAI — works for any language.
-async function detectIntent(message, model) {
-  const result = await chat(
-    `Classify the user message into exactly one intent. Reply with only the label, nothing else.
-
-Intents:
-- weather_current: asking about current weather conditions
-- weather_tomorrow: asking about tomorrow's weather or forecast
-- weather_multi: asking about weather for multiple days (e.g. 3 days, 5 days)
-- events: asking about local events, activities, or things to do
-- faq: asking a specific question (hours, prices, location, how to get there, etc.)
-- other: everything else`,
-    [{ role: 'user', content: message }],
-    model
-  );
-  const intent = result.trim().toLowerCase().replace(/[^a-z_]/g, '');
-  const valid = ['weather_current', 'weather_tomorrow', 'weather_multi', 'events', 'faq', 'other'];
-  return valid.includes(intent) ? intent : 'other';
-}
 
 router.post('/webhook', async (req, res) => {
   console.log('[webhook] incoming body:', JSON.stringify(req.body));
@@ -81,22 +62,22 @@ router.post('/webhook', async (req, res) => {
     const trimmedMsg = userMsg.trim();
     const model = tenant.openai_model;
 
-    // 4. Human takeover — agent is handling this conversation manually
+    // 4. Parse message — single AI call for intent + language
+    const { intent, lang } = await parseMessage(trimmedMsg, model);
+    console.log(`[webhook] intent=${intent} lang=${lang}`);
+
+    // 5. Human takeover — agent is handling this conversation manually
     if (tenant.human_takeover) {
       console.log(`[webhook] human_takeover active for tenant ${tenant.id} — silencing bot`);
-      await logMessage(tenant.id, userPhone, trimmedMsg, 'ai');
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', lang);
       return res.send(emptyTwiml());
     }
-
-    // 5. Detect intent via OpenAI (language-agnostic)
-    const intent = await detectIntent(trimmedMsg, model);
-    console.log(`[webhook] intent: ${intent}`);
 
     // 6. FAQ
     if (intent === 'faq') {
       const faqAnswer = await getFaqMatch(tenant.id, trimmedMsg);
       if (faqAnswer) {
-        await logMessage(tenant.id, userPhone, trimmedMsg, 'faq');
+        await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', lang);
         const reply = await formatReply(`Answer the user's question using this information:\n${faqAnswer}`, trimmedMsg, model);
         console.log(`[webhook] FAQ reply: "${reply}"`);
         return res.send(twiml(reply));
@@ -106,7 +87,7 @@ router.post('/webhook', async (req, res) => {
 
     // 7. Weather
     if (intent === 'weather_current' || intent === 'weather_tomorrow' || intent === 'weather_multi') {
-      await logMessage(tenant.id, userPhone, trimmedMsg, 'weather');
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'weather', lang);
 
       const apiKey = process.env.OPENWEATHER_API_KEY;
       console.log(`[webhook] OPENWEATHER_API_KEY loaded: ${apiKey ? 'yes (' + apiKey.slice(0, 4) + '...)' : 'NO — key missing'}`);
@@ -232,7 +213,7 @@ router.post('/webhook', async (req, res) => {
 
     // 8. Events
     if (intent === 'events') {
-      await logMessage(tenant.id, userPhone, trimmedMsg, 'events');
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'events', lang);
 
       const events = await getUpcomingEvents(tenant.id);
       if (!events.length) {
@@ -268,7 +249,7 @@ router.post('/webhook', async (req, res) => {
     );
     console.log(`[webhook] AI reply: "${reply}"`);
 
-    await logMessage(tenant.id, userPhone, trimmedMsg, 'ai');
+    await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', lang);
 
     res.send(twiml(reply));
     console.log(`[webhook] TwiML sent to ${userPhone}`);

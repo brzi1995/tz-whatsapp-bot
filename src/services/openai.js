@@ -24,4 +24,32 @@ async function chat(systemPrompt, messages, model = 'gpt-4o-mini') {
   return response.choices[0].message.content.trim();
 }
 
-module.exports = { chat };
+const VALID_LANGS   = ['hr','en','de','it','fr'];
+const VALID_INTENTS = ['weather_current','weather_tomorrow','weather_multi','events','faq','other'];
+
+/**
+ * Single AI call that returns both detected language and intent.
+ * Falls back to { lang: 'en', intent: 'other' } on any failure.
+ */
+async function parseMessage(message, model = 'gpt-4o-mini') {
+  try {
+    const response = await getClient().chat.completions.create({
+      model,
+      response_format: { type: 'json_object' },
+      messages: [{
+        role: 'user',
+        content: `Analyze this message and return JSON:\n{"lang":"hr|en|de|it","intent":"weather_current|weather_tomorrow|weather_multi|events|faq|other"}\nMessage: ${message}`,
+      }],
+    });
+    const parsed = JSON.parse(response.choices[0].message.content.trim());
+    return {
+      lang:   VALID_LANGS.includes(parsed.lang)     ? parsed.lang   : 'hr',
+      intent: VALID_INTENTS.includes(parsed.intent) ? parsed.intent : 'other',
+    };
+  } catch (err) {
+    console.error('[openai] parseMessage failed:', err.message);
+    return { lang: 'en', intent: 'other' };
+  }
+}
+
+module.exports = { chat, parseMessage };
