@@ -54,7 +54,11 @@ router.post('/webhook', async (req, res) => {
   } catch (err) {
     console.error('[webhook] error:', err.message);
     console.error(err.stack);
-    res.send(emptyTwiml());
+    const isQuota = err.status === 429 || err.code === 'insufficient_quota';
+    res.send(twiml(isQuota
+      ? 'Trenutno ne mogu odgovoriti — privremena tehnička pogreška. Pokušajte malo kasnije.'
+      : 'Došlo je do greške. Pokušajte ponovo.'
+    ));
   }
 });
 
