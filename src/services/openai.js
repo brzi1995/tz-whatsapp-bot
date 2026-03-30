@@ -24,4 +24,23 @@ async function chat(systemPrompt, messages, model = 'gpt-4o-mini') {
   return response.choices[0].message.content.trim();
 }
 
-module.exports = { chat };
+const LANG_NAMES = { en: 'English', de: 'German', it: 'Italian', fr: 'French', hr: 'Croatian' };
+
+/**
+ * Translate text to the target language using OpenAI.
+ * Returns the original text unchanged when langCode is 'hr'.
+ */
+async function translate(text, langCode, model = 'gpt-4o-mini') {
+  if (langCode === 'hr') return text;
+  const lang = LANG_NAMES[langCode] || langCode;
+  const response = await getClient().chat.completions.create({
+    model,
+    messages: [
+      { role: 'system', content: `Translate the following text to ${lang}. Return only the translated text, preserving any URLs and numbers exactly as they are.` },
+      { role: 'user', content: text },
+    ],
+  });
+  return response.choices[0].message.content.trim();
+}
+
+module.exports = { chat, translate };

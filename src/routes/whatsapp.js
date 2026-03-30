@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getTenant, getMessages, saveMessages } = require('../db/sessions');
-const { chat } = require('../services/openai');
+const { chat, translate } = require('../services/openai');
 const { logMessage, getFaqMatch, getUpcomingEvents, checkAndIncrementUsage } = require('../db/bot');
 
 function escapeXml(str) {
@@ -19,6 +19,18 @@ function twiml(message) {
 
 function emptyTwiml() {
   return '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
+}
+
+// Detect user language from message text. Returns ISO 639-1 code.
+function detectLang(text) {
+  if (/[čćžšđČĆŽŠĐ]/.test(text)) return 'hr'; // Croatian diacritics = strong signal
+  const tokens = new Set(text.toLowerCase().split(/\W+/));
+  const hit = (words) => words.some(w => tokens.has(w));
+  if (hit(['the','is','are','what','how','where','when','hello','hi','weather','event','can','please','tell','want','need'])) return 'en';
+  if (hit(['ist','sind','wie','was','wo','wann','bitte','hallo','wetter','können','gibt'])) return 'de';
+  if (hit(['come','dove','quando','ciao','grazie','prego','tempo','sono','cosa'])) return 'it';
+  if (hit(['est','sont','comment','où','quand','bonjour','merci','météo','puis'])) return 'fr';
+  return 'hr';
 }
 
 router.post('/webhook', async (req, res) => {
@@ -46,6 +58,16 @@ router.post('/webhook', async (req, res) => {
 
     const trimmedMsg = userMsg.trim();
 
+    const lang = detectLang(trimmedMsg);
+    console.log(`[webhook] detected language: ${lang}`);
+
+    // Translate a Croatian string to the user's language (no-op if already Croatian)
+    async function say(text) {
+      if (lang === 'hr') return text;
+      try { return await translate(text, lang, tenant.openai_model); }
+      catch (e) { console.warn('[webhook] translation failed, using Croatian:', e.message); return text; }
+    }
+
     // 4. Human takeover — agent is handling this conversation manually
     if (tenant.human_takeover) {
       console.log(`[webhook] human_takeover active for tenant ${tenant.id} — silencing bot`);
@@ -57,7 +79,7 @@ router.post('/webhook', async (req, res) => {
     const faqAnswer = await getFaqMatch(tenant.id, trimmedMsg);
     if (faqAnswer) {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'faq');
-      return res.send(twiml(faqAnswer));
+      return res.send(twiml(await say(faqAnswer)));
     }
 
     // 6. Weather check
@@ -83,14 +105,14 @@ router.post('/webhook', async (req, res) => {
       // More than 5 days — OpenWeather free tier only covers 5 days, send static link
       if (isMultiDay && requestedDays > 5) {
         console.log(`[webhook] ${requestedDays} days requested — returning static link`);
-        return res.send(twiml(
+        return res.send(twiml(await say(
           `Detaljna prognoza za duži period dostupna je ovdje:\n` +
           `https://weather.com/hr-HR/vrijeme/10dana/l/Brela+Splitsko+dalmatinska+%C5%BEupanija`
-        ));
+        )));
       }
 
       if (!apiKey) {
-        return res.send(twiml('Servis za vremenske podatke trenutno nije dostupan.'));
+        return res.send(twiml(await say('Servis za vremenske podatke trenutno nije dostupan.')));
       }
 
       try {
@@ -103,7 +125,7 @@ router.post('/webhook', async (req, res) => {
 
           if (!forecastRes.ok) {
             console.warn(`[webhook] forecast error ${forecastRes.status}:`, data.message);
-            return res.send(twiml(fallback));
+            return res.send(twiml(await say(fallback)));
           }
 
           const days = [];
@@ -121,11 +143,11 @@ router.post('/webhook', async (req, res) => {
             }
           }
 
-          if (!days.length) return res.send(twiml(fallback));
+          if (!days.length) return res.send(twiml(await say(fallback)));
 
           const weatherText = `Prognoza za ${city} (${requestedDays} dana):\n` + days.join('\n');
           console.log(`[webhook] multi-day forecast OK: ${days.length} days`);
-          return res.send(twiml(weatherText));
+          return res.send(twiml(await say(weatherText)));
 
         } else if (isForecast) {
           // Tomorrow forecast
@@ -136,7 +158,7 @@ router.post('/webhook', async (req, res) => {
 
           if (!forecastRes.ok) {
             console.warn(`[webhook] forecast error ${forecastRes.status}:`, data.message);
-            return res.send(twiml(fallback));
+            return res.send(twiml(await say(fallback)));
           }
 
           const tomorrow = new Date();
@@ -146,13 +168,13 @@ router.post('/webhook', async (req, res) => {
           const entry = data.list.find(e => e.dt_txt.startsWith(tomorrowDate) && e.dt_txt.includes('12:00'))
                      || data.list.find(e => e.dt_txt.startsWith(tomorrowDate));
 
-          if (!entry) return res.send(twiml('Prognoza za sutra trenutno nije dostupna.'));
+          if (!entry) return res.send(twiml(await say('Prognoza za sutra trenutno nije dostupna.')));
 
           const temp = Math.round(entry.main.temp);
           const desc = entry.weather[0]?.description || '';
           const weatherText = `Sutra u ${city} se očekuje ${temp}°C, ${desc}.`;
           console.log(`[webhook] tomorrow forecast OK: "${weatherText}"`);
-          return res.send(twiml(weatherText));
+          return res.send(twiml(await say(weatherText)));
 
         } else {
           // Current weather
@@ -163,14 +185,14 @@ router.post('/webhook', async (req, res) => {
 
           if (!weatherRes.ok) {
             console.warn(`[webhook] weather error ${weatherRes.status}:`, data.message);
-            return res.send(twiml(fallback));
+            return res.send(twiml(await say(fallback)));
           }
 
           const temp = Math.round(data.main.temp);
           const desc = data.weather[0]?.description || '';
           const weatherText = `U ${city} je trenutno ${temp}°C, ${desc}.`;
           console.log(`[webhook] weather OK: "${weatherText}"`);
-          return res.send(twiml(weatherText));
+          return res.send(twiml(await say(weatherText)));
         }
 
       } catch (weatherErr) {
@@ -185,7 +207,7 @@ router.post('/webhook', async (req, res) => {
 
       const events = await getUpcomingEvents(tenant.id);
       if (!events.length) {
-        return res.send(twiml('Trenutno nema nadolazećih događaja.'));
+        return res.send(twiml(await say('Trenutno nema nadolazećih događaja.')));
       }
 
       const lines = events.map((ev, i) => {
@@ -195,7 +217,7 @@ router.post('/webhook', async (req, res) => {
         return line;
       });
 
-      return res.send(twiml('Nadolazeći događaji:\n' + lines.join('\n\n')));
+      return res.send(twiml(await say('Nadolazeći događaji:\n' + lines.join('\n\n'))));
     }
 
     // 8. AI usage rate limit
@@ -203,14 +225,15 @@ router.post('/webhook', async (req, res) => {
     if (!usage.allowed) {
       console.log(`[webhook] AI rate limit reached for ${userPhone} on tenant ${tenant.id}`);
       const city = tenant.city || 'Brela';
-      return res.send(twiml(`Za dodatna pitanja javit će vam se zaposlenik TZ ${city}.`));
+      return res.send(twiml(await say(`Za dodatna pitanja javit će vam se zaposlenik TZ ${city}.`)));
     }
 
     // 9. AI response
     const messages = await getMessages(tenant.id, userPhone);
     messages.push({ role: 'user', content: trimmedMsg });
 
-    const reply = await chat(tenant.system_prompt, messages, tenant.openai_model);
+    const langInstruction = lang !== 'hr' ? '\n\nAlways reply in the same language the user is writing in.' : '';
+    const reply = await chat(tenant.system_prompt + langInstruction, messages, tenant.openai_model);
     console.log(`[webhook] reply: "${reply}"`);
     messages.push({ role: 'assistant', content: reply });
 
