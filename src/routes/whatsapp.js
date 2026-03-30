@@ -29,7 +29,7 @@ router.post('/webhook', async (req, res) => {
       console.warn(`[webhook] no tenant configured for number: ${tenantPhone}`);
       return;
     }
-    console.log(`[webhook] tenant matched: ${tenant.name}`);
+    console.log(`[webhook] tenant matched: ${tenant.name} | prompt length: ${tenant.system_prompt?.length ?? 0} | preview: "${tenant.system_prompt?.substring(0, 80)}"`);
 
     const messages = await getMessages(tenant.id, userPhone);
     messages.push({ role: 'user', content: userMsg.trim() });
