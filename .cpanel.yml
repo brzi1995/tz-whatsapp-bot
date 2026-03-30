@@ -2,5 +2,4 @@
 deployment:
   tasks:
     - cp -r . /home/splitwed/tz-bot
-    - cd /home/splitwed/tz-bot && npm install --omit=dev
     - mkdir -p /home/splitwed/tz-bot/tmp && touch /home/splitwed/tz-bot/tmp/restart.txt
