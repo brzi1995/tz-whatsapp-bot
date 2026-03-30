@@ -62,27 +62,75 @@ router.post('/webhook', async (req, res) => {
 
     // 6. Weather check
     const msgLower = trimmedMsg.toLowerCase();
-    const isForecast = msgLower.includes('sutra') || msgLower.includes('prognoza');
-    const isWeather  = msgLower.includes('vrijeme');
 
-    if (isForecast || isWeather) {
+    // Detect "X dana" pattern (e.g. "3 dana", "10 dana")
+    const daysMatch = msgLower.match(/(\d+)\s*dana/);
+    const requestedDays = daysMatch ? parseInt(daysMatch[1], 10) : 0;
+
+    const isMultiDay = requestedDays > 0;
+    const isForecast = !isMultiDay && (msgLower.includes('sutra') || msgLower.includes('prognoza'));
+    const isWeather  = !isMultiDay && !isForecast && msgLower.includes('vrijeme');
+
+    if (isMultiDay || isForecast || isWeather) {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'weather');
 
       const apiKey = process.env.OPENWEATHER_API_KEY;
       console.log(`[webhook] OPENWEATHER_API_KEY loaded: ${apiKey ? 'yes (' + apiKey.slice(0, 4) + '...)' : 'NO — key missing'}`);
 
+      const city = tenant.city || 'Brela';
+      const fallback = 'Trenutno ne mogu dohvatiti podatke o vremenu. Pokušajte malo kasnije.';
+
+      // More than 5 days — OpenWeather free tier only covers 5 days, send static link
+      if (isMultiDay && requestedDays > 5) {
+        console.log(`[webhook] ${requestedDays} days requested — returning static link`);
+        return res.send(twiml(
+          `Detaljna prognoza za duži period dostupna je ovdje:\n` +
+          `https://weather.com/hr-HR/vrijeme/10dana/l/Brela+Splitsko+dalmatinska+%C5%BEupanija`
+        ));
+      }
+
       if (!apiKey) {
         return res.send(twiml('Servis za vremenske podatke trenutno nije dostupan.'));
       }
 
-      const city = tenant.city || 'Brela';
-      const fallback = 'Trenutno ne mogu dohvatiti podatke o vremenu. Pokušajte malo kasnije.';
-
       try {
-        if (isForecast) {
-          // Forecast: find tomorrow's entry closest to 12:00
+        if (isMultiDay) {
+          // Multi-day forecast (2–5 days): one summary per day at ~12:00
           const url = `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric&lang=hr`;
-          console.log(`[webhook] fetching forecast for city: ${city}`);
+          console.log(`[webhook] fetching ${requestedDays}-day forecast for city: ${city}`);
+          const forecastRes = await fetch(url);
+          const data = await forecastRes.json();
+
+          if (!forecastRes.ok) {
+            console.warn(`[webhook] forecast error ${forecastRes.status}:`, data.message);
+            return res.send(twiml(fallback));
+          }
+
+          const days = [];
+          for (let i = 1; i <= requestedDays; i++) {
+            const d = new Date();
+            d.setDate(d.getDate() + i);
+            const dateStr = d.toISOString().slice(0, 10);
+            const entry = data.list.find(e => e.dt_txt.startsWith(dateStr) && e.dt_txt.includes('12:00'))
+                       || data.list.find(e => e.dt_txt.startsWith(dateStr));
+            if (entry) {
+              const temp = Math.round(entry.main.temp);
+              const desc = entry.weather[0]?.description || '';
+              const label = d.toLocaleDateString('hr-HR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+              days.push(`${label}: ${temp}°C, ${desc}`);
+            }
+          }
+
+          if (!days.length) return res.send(twiml(fallback));
+
+          const weatherText = `Prognoza za ${city} (${requestedDays} dana):\n` + days.join('\n');
+          console.log(`[webhook] multi-day forecast OK: ${days.length} days`);
+          return res.send(twiml(weatherText));
+
+        } else if (isForecast) {
+          // Tomorrow forecast
+          const url = `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric&lang=hr`;
+          console.log(`[webhook] fetching tomorrow forecast for city: ${city}`);
           const forecastRes = await fetch(url);
           const data = await forecastRes.json();
 
@@ -93,20 +141,17 @@ router.post('/webhook', async (req, res) => {
 
           const tomorrow = new Date();
           tomorrow.setDate(tomorrow.getDate() + 1);
-          const tomorrowDate = tomorrow.toISOString().slice(0, 10); // YYYY-MM-DD
+          const tomorrowDate = tomorrow.toISOString().slice(0, 10);
 
-          // data.list entries have dt_txt like "2024-06-15 12:00:00"
           const entry = data.list.find(e => e.dt_txt.startsWith(tomorrowDate) && e.dt_txt.includes('12:00'))
                      || data.list.find(e => e.dt_txt.startsWith(tomorrowDate));
 
-          if (!entry) {
-            return res.send(twiml('Prognoza za sutra trenutno nije dostupna.'));
-          }
+          if (!entry) return res.send(twiml('Prognoza za sutra trenutno nije dostupna.'));
 
           const temp = Math.round(entry.main.temp);
           const desc = entry.weather[0]?.description || '';
           const weatherText = `Sutra u ${city} se očekuje ${temp}°C, ${desc}.`;
-          console.log(`[webhook] forecast OK: "${weatherText}"`);
+          console.log(`[webhook] tomorrow forecast OK: "${weatherText}"`);
           return res.send(twiml(weatherText));
 
         } else {
