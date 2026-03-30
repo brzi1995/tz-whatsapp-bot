@@ -1,0 +1,35 @@
+<%- include('partials/head', { title: 'Uredi dogadaj' }) %>
+<%- include('partials/sidebar', { activePage: 'events' }) %>
+
+<main class="content">
+  <a href="/admin/events" class="back-link">&#8592; Natrag na dogadaje</a>
+  <h1>Uredi dogadaj</h1>
+
+  <div class="add-form" style="max-width:620px">
+    <form method="POST" action="/admin/events/<%= event.id %>/edit">
+      <label>Naziv</label>
+      <input type="text" name="title" value="<%= event.title %>" required>
+
+      <div class="form-row">
+        <div>
+          <label>Datum</label>
+          <input type="date" name="date" value="<%= event.date ? new Date(event.date).toISOString().slice(0,10) : '' %>">
+        </div>
+        <div>
+          <label>Lokacija</label>
+          <input type="text" name="location_link" value="<%= event.location_link || '' %>" placeholder="https://osm.org/...">
+        </div>
+      </div>
+
+      <label>Opis</label>
+      <textarea name="description" rows="4"><%= event.description || '' %></textarea>
+
+      <div style="display:flex;gap:10px">
+        <button type="submit" class="btn btn-primary">Spremi promjene</button>
+        <a href="/admin/events" class="btn btn-secondary">Odustani</a>
+      </div>
+    </form>
+  </div>
+</main>
+
+<%- include('partials/foot') %>

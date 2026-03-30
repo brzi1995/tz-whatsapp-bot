@@ -1,0 +1,80 @@
+<%- include('partials/head', { title: 'Dashboard' }) %>
+<%- include('partials/sidebar', { activePage: 'dashboard' }) %>
+
+<main class="content">
+  <h1>Dashboard</h1>
+
+  <div class="cards">
+    <div class="card">
+      <div class="num"><%= totalUsers %></div>
+      <div class="label">Ukupno korisnika</div>
+    </div>
+    <div class="card">
+      <div class="num"><%= totalMessages %></div>
+      <div class="label">Ukupno poruka</div>
+    </div>
+  </div>
+
+  <div class="chart-wrap">
+    <h2>Poruke po danu — posljednjih 7 dana</h2>
+    <canvas id="msgChart" height="90"></canvas>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+  (function () {
+    // Build a full 7-day array so days with 0 messages still appear
+    const today = new Date();
+    const labels = [];
+    const dataMap = {};
+
+    <% perDay.forEach(function(row) {
+      const d = row.day instanceof Date ? row.day.toISOString().slice(0,10) : String(row.day).slice(0,10);
+    %>
+    dataMap['<%= d %>'] = <%= row.count %>;
+    <% }); %>
+
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      labels.push(key.slice(5)); // MM-DD
+      if (!dataMap[key]) dataMap[key] = 0;
+    }
+
+    const values = labels.map(function(l) {
+      // labels are MM-DD, rebuild full key
+      const year = today.getFullYear();
+      const fullKey = year + '-' + l;
+      return dataMap[fullKey] || 0;
+    });
+
+    new Chart(document.getElementById('msgChart'), {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Poruke',
+          data: values,
+          backgroundColor: 'rgba(59,130,246,0.75)',
+          borderRadius: 5,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: { precision: 0 },
+            grid: { color: '#f1f5f9' }
+          },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+  })();
+</script>
+
+<%- include('partials/foot') %>

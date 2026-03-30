@@ -1,0 +1,32 @@
+<nav class="sidebar">
+  <div class="logo">
+    TZ Admin
+    <span>Tourist board portal</span>
+  </div>
+  <button class="hamburger" onclick="toggleSidebar()" aria-label="Toggle menu">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="sidebar-nav" id="sidebar-nav">
+    <a href="/admin/dashboard" class="<%= typeof activePage !== 'undefined' && activePage === 'dashboard' ? 'active' : '' %>">
+      <span class="nav-icon">&#9783;</span> Dashboard
+    </a>
+    <a href="/admin/faq" class="<%= typeof activePage !== 'undefined' && activePage === 'faq' ? 'active' : '' %>">
+      <span class="nav-icon">&#10068;</span> FAQ
+    </a>
+    <a href="/admin/events" class="<%= typeof activePage !== 'undefined' && activePage === 'events' ? 'active' : '' %>">
+      <span class="nav-icon">&#128197;</span> Dogadaji
+    </a>
+    <a href="/admin/conversations" class="<%= typeof activePage !== 'undefined' && activePage === 'conversations' ? 'active' : '' %>">
+      <span class="nav-icon">&#128172;</span> Razgovori
+    </a>
+    <div class="sidebar-footer">
+      <a href="/admin/logout">&#8592; Odjava</a>
+    </div>
+  </div>
+</nav>
+<script>
+  function toggleSidebar() {
+    const nav = document.getElementById('sidebar-nav');
+    nav.classList.toggle('open');
+  }
+</script>

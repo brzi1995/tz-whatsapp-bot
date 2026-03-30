@@ -1,0 +1,51 @@
+<%- include('partials/head', { title: 'FAQ' }) %>
+<%- include('partials/sidebar', { activePage: 'faq' }) %>
+
+<main class="content">
+  <h1>FAQ</h1>
+
+  <div class="add-form">
+    <h2>Dodaj novi FAQ unos</h2>
+    <form method="POST" action="/admin/faq">
+      <label>Pitanje</label>
+      <input type="text" name="question" placeholder="Npr. Kada je otvorena plaza?" required>
+      <label>Odgovor</label>
+      <textarea name="answer" rows="3" placeholder="Unesite odgovor..." required></textarea>
+      <button type="submit" class="btn btn-primary">Dodaj</button>
+    </form>
+  </div>
+
+  <% if (faqs.length === 0) { %>
+    <div class="empty">Nema FAQ unosa. Dodajte prvi unos gore.</div>
+  <% } else { %>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Pitanje</th>
+          <th>Odgovor</th>
+          <th style="width:130px">Akcije</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% faqs.forEach(function(f, i) { %>
+        <tr>
+          <td style="color:#94a3b8"><%= i + 1 %></td>
+          <td><strong><%= f.question %></strong></td>
+          <td style="color:#64748b; max-width:320px; word-break:break-word"><%= f.answer %></td>
+          <td>
+            <a href="/admin/faq/<%= f.id %>/edit" class="btn btn-secondary btn-sm">Uredi</a>
+            <form method="POST" action="/admin/faq/<%= f.id %>/delete" style="display:inline" onsubmit="return confirm('Obrisati ovaj unos?')">
+              <button type="submit" class="btn btn-danger btn-sm">Brisi</button>
+            </form>
+          </td>
+        </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+  <% } %>
+</main>
+
+<%- include('partials/foot') %>

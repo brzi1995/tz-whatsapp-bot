@@ -1,0 +1,65 @@
+<%- include('partials/head', { title: 'Dogadaji' }) %>
+<%- include('partials/sidebar', { activePage: 'events' }) %>
+
+<main class="content">
+  <h1>Dogadaji</h1>
+
+  <div class="add-form">
+    <h2>Dodaj novi dogadaj</h2>
+    <form method="POST" action="/admin/events">
+      <div class="form-row">
+        <div>
+          <label>Naziv</label>
+          <input type="text" name="title" placeholder="Npr. Ljetni festival" required>
+        </div>
+        <div>
+          <label>Datum</label>
+          <input type="date" name="date">
+        </div>
+      </div>
+      <label>Lokacija</label>
+      <input type="text" name="location_link" placeholder="Npr. https://osm.org/...">
+      <label>Opis</label>
+      <textarea name="description" rows="2" placeholder="Kratki opis dogadaja..."></textarea>
+      <button type="submit" class="btn btn-primary">Dodaj dogadaj</button>
+    </form>
+  </div>
+
+  <% if (events.length === 0) { %>
+    <div class="empty">Nema dogadaja. Dodajte prvi gore.</div>
+  <% } else { %>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Naziv</th>
+          <th>Datum</th>
+          <th>Lokacija</th>
+          <th>Opis</th>
+          <th style="width:130px">Akcije</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% events.forEach(function(ev) {
+          const dateStr = ev.date ? new Date(ev.date).toLocaleDateString('hr-HR') : '—';
+        %>
+        <tr>
+          <td><strong><%= ev.title %></strong></td>
+          <td style="white-space:nowrap;color:#64748b"><%= dateStr %></td>
+          <td style="color:#64748b"><%= ev.location_link ? '<a href="' + ev.location_link + '" target="_blank">Link</a>' : '—' %></td>
+          <td style="color:#64748b;max-width:240px;word-break:break-word"><%= ev.description || '—' %></td>
+          <td>
+            <a href="/admin/events/<%= ev.id %>/edit" class="btn btn-secondary btn-sm">Uredi</a>
+            <form method="POST" action="/admin/events/<%= ev.id %>/delete" style="display:inline" onsubmit="return confirm('Obrisati ovaj dogadaj?')">
+              <button type="submit" class="btn btn-danger btn-sm">Brisi</button>
+            </form>
+          </td>
+        </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+  <% } %>
+</main>
+
+<%- include('partials/foot') %>

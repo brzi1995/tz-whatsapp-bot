@@ -1,0 +1,40 @@
+<%- include('partials/head', { title: 'Razgovori' }) %>
+<%- include('partials/sidebar', { activePage: 'conversations' }) %>
+
+<main class="content">
+  <h1>Razgovori</h1>
+
+  <% if (conversations.length === 0) { %>
+    <div class="empty">Nema razgovora jos.</div>
+  <% } else { %>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Telefon</th>
+          <th>Broj poruka</th>
+          <th>Zadnja poruka</th>
+          <th style="width:100px">Pregled</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% conversations.forEach(function(c) {
+          const lastMsg = c.last_msg ? new Date(c.last_msg).toLocaleString('hr-HR') : '—';
+          const encodedPhone = encodeURIComponent(c.user_phone);
+        %>
+        <tr>
+          <td><strong><%= c.user_phone %></strong></td>
+          <td><span style="background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:12px;font-size:13px;font-weight:600"><%= c.msg_count %></span></td>
+          <td style="color:#64748b;font-size:13px"><%= lastMsg %></td>
+          <td>
+            <a href="/admin/conversations/<%= encodedPhone %>" class="btn btn-secondary btn-sm">Otvori</a>
+          </td>
+        </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+  <% } %>
+</main>
+
+<%- include('partials/foot') %>

@@ -1,0 +1,57 @@
+<%- include('partials/head', { title: 'Razgovor' }) %>
+<%- include('partials/sidebar', { activePage: 'conversations' }) %>
+
+<main class="content">
+  <a href="/admin/conversations" class="back-link">&#8592; Natrag na razgovore</a>
+  <h1 style="word-break:break-all"><%= userPhone %></h1>
+
+  <div class="takeover-bar">
+    <span>Status preuzimanja:</span>
+    <span class="badge <%= takeover ? 'badge-on' : 'badge-off' %>">
+      <%= takeover ? 'Aktivno' : 'Neaktivno' %>
+    </span>
+    <button onclick="toggleTakeover()" id="to-btn" class="btn <%= takeover ? 'btn-danger' : 'btn-primary' %>">
+      <%= takeover ? 'Deaktivirati preuzimanje' : 'Preuzeti razgovor' %>
+    </button>
+  </div>
+
+  <% if (messages.length === 0) { %>
+    <div class="empty">Nema poruka u ovom razgovoru.</div>
+  <% } else { %>
+  <div class="chat">
+    <% messages.forEach(function(msg) {
+      const isBot = msg.role === 'assistant' || msg.sender === 'bot';
+      const bubbleClass = isBot ? 'bot' : 'user';
+      const timeStr = msg.created_at ? new Date(msg.created_at).toLocaleString('hr-HR') : '';
+    %>
+    <div class="bubble <%= bubbleClass %>">
+      <%= msg.content || msg.body || '' %>
+      <% if (timeStr) { %>
+        <div class="meta"><%= timeStr %></div>
+      <% } %>
+    </div>
+    <% }); %>
+  </div>
+  <% } %>
+</main>
+
+<script>
+  async function toggleTakeover() {
+    const btn = document.getElementById('to-btn');
+    btn.disabled = true;
+    try {
+      const r = await fetch('/admin/takeover/<%= tenantId %>', { method: 'POST' });
+      if (r.ok) {
+        location.reload();
+      } else {
+        alert('Greska pri promjeni statusa.');
+        btn.disabled = false;
+      }
+    } catch (e) {
+      alert('Mrežna greška.');
+      btn.disabled = false;
+    }
+  }
+</script>
+
+<%- include('partials/foot') %>
