@@ -50,13 +50,14 @@ CREATE TABLE IF NOT EXISTS events (
   FOREIGN KEY (tenant_id) REFERENCES tenants(id)
 );
 
--- All inbound messages with intent classification
+-- All inbound messages with intent classification and detected language
 CREATE TABLE IF NOT EXISTS messages (
   id          INT AUTO_INCREMENT PRIMARY KEY,
   tenant_id   INT         NOT NULL,
   user_phone  VARCHAR(50) NOT NULL,
   message     TEXT        NOT NULL,
   intent      ENUM('faq','weather','events','ai') NOT NULL,
+  lang        VARCHAR(10) NOT NULL DEFAULT 'hr',
   created_at  TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (tenant_id) REFERENCES tenants(id)
 );

@@ -126,10 +126,36 @@ router.get('/dashboard', requireAuth, async (req, res) => {
       [tenantId]
     );
 
+    const [intents] = await pool.query(
+      `SELECT intent, COUNT(*) AS count
+       FROM messages WHERE tenant_id = ?
+       GROUP BY intent ORDER BY count DESC`,
+      [tenantId]
+    );
+
+    const [languages] = await pool.query(
+      `SELECT COALESCE(lang, 'hr') AS lang, COUNT(*) AS count
+       FROM messages WHERE tenant_id = ?
+       GROUP BY lang ORDER BY count DESC`,
+      [tenantId]
+    );
+
+    const [[timeOfDay]] = await pool.query(
+      `SELECT
+         SUM(HOUR(created_at) BETWEEN 6  AND 11) AS morning,
+         SUM(HOUR(created_at) BETWEEN 12 AND 17) AS afternoon,
+         SUM(HOUR(created_at) BETWEEN 18 AND 23) AS evening
+       FROM messages WHERE tenant_id = ?`,
+      [tenantId]
+    );
+
     res.render('dashboard', {
-      totalUsers: totalUsersRow.total,
+      totalUsers:    totalUsersRow.total,
       totalMessages: totalMsgsRow.total,
       perDay,
+      intents,
+      languages,
+      timeOfDay,
     });
   } catch (err) {
     console.error('[admin] dashboard error:', err.message);
