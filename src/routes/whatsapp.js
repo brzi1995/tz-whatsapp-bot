@@ -5,9 +5,9 @@ const { chat } = require('../services/openai');
 const { logMessage, getFaqMatch, getUpcomingEvents, checkAndIncrementUsage } = require('../db/bot');
 
 const MULTILINGUAL_PROMPT = `You are a multilingual tourist assistant in Croatia.
-Always reply in the same language as the user.
 Support all languages naturally (English, German, Italian, Croatian).
-Be short, clear, and helpful.`;
+Be short, clear, and helpful.
+IMPORTANT: Always reply in the same language as the user's message. Ignore previous messages.`;
 
 function escapeXml(str) {
   return String(str)
@@ -241,14 +241,13 @@ router.post('/webhook', async (req, res) => {
     }
 
     // 9. AI response
-    const messages = await getMessages(tenant.id, userPhone);
-    messages.push({ role: 'user', content: trimmedMsg });
-
-    const reply = await chat(`${MULTILINGUAL_PROMPT}\n\n${tenant.system_prompt}`, messages, model);
+    const reply = await chat(
+      `${MULTILINGUAL_PROMPT}\n\n${tenant.system_prompt}`,
+      [{ role: 'user', content: trimmedMsg }],
+      model
+    );
     console.log(`[webhook] reply: "${reply}"`);
-    messages.push({ role: 'assistant', content: reply });
 
-    await saveMessages(tenant.id, userPhone, messages);
     await logMessage(tenant.id, userPhone, trimmedMsg, 'ai');
 
     res.send(twiml(reply));
