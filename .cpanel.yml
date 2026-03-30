@@ -1,5 +1,5 @@
 ---
 deployment:
   tasks:
-    - cp -r . /home/splitwed/tz-bot
+    - /bin/cp -r src app.js package.json package-lock.json schema.sql .htaccess /home/splitwed/tz-bot/
     - mkdir -p /home/splitwed/tz-bot/tmp && touch /home/splitwed/tz-bot/tmp/restart.txt
