@@ -35,6 +35,26 @@ async function formatReply(context, userMsg, model) {
   );
 }
 
+// Classify the user's message into an intent using OpenAI — works for any language.
+async function detectIntent(message, model) {
+  const result = await chat(
+    `Classify the user message into exactly one intent. Reply with only the label, nothing else.
+
+Intents:
+- weather_current: asking about current weather conditions
+- weather_tomorrow: asking about tomorrow's weather or forecast
+- weather_multi: asking about weather for multiple days (e.g. 3 days, 5 days)
+- events: asking about local events, activities, or things to do
+- faq: asking a specific question (hours, prices, location, how to get there, etc.)
+- other: everything else`,
+    [{ role: 'user', content: message }],
+    model
+  );
+  const intent = result.trim().toLowerCase().replace(/[^a-z_]/g, '');
+  const valid = ['weather_current', 'weather_tomorrow', 'weather_multi', 'events', 'faq', 'other'];
+  return valid.includes(intent) ? intent : 'other';
+}
+
 router.post('/webhook', async (req, res) => {
   console.log('[webhook] incoming body:', JSON.stringify(req.body));
   res.type('text/xml');
@@ -68,26 +88,24 @@ router.post('/webhook', async (req, res) => {
       return res.send(emptyTwiml());
     }
 
-    // 5. FAQ check
-    const faqAnswer = await getFaqMatch(tenant.id, trimmedMsg);
-    if (faqAnswer) {
-      await logMessage(tenant.id, userPhone, trimmedMsg, 'faq');
-      const reply = await formatReply(`Answer the user's question using this information:\n${faqAnswer}`, trimmedMsg, model);
-      console.log(`[webhook] FAQ reply: "${reply}"`);
-      return res.send(twiml(reply));
+    // 5. Detect intent via OpenAI (language-agnostic)
+    const intent = await detectIntent(trimmedMsg, model);
+    console.log(`[webhook] intent: ${intent}`);
+
+    // 6. FAQ
+    if (intent === 'faq') {
+      const faqAnswer = await getFaqMatch(tenant.id, trimmedMsg);
+      if (faqAnswer) {
+        await logMessage(tenant.id, userPhone, trimmedMsg, 'faq');
+        const reply = await formatReply(`Answer the user's question using this information:\n${faqAnswer}`, trimmedMsg, model);
+        console.log(`[webhook] FAQ reply: "${reply}"`);
+        return res.send(twiml(reply));
+      }
+      // No FAQ match — fall through to AI
     }
 
-    // 6. Weather check
-    const msgLower = trimmedMsg.toLowerCase();
-
-    const daysMatch = msgLower.match(/(\d+)\s*dana/);
-    const requestedDays = daysMatch ? parseInt(daysMatch[1], 10) : 0;
-
-    const isMultiDay = requestedDays > 0;
-    const isForecast = !isMultiDay && (msgLower.includes('sutra') || msgLower.includes('prognoza'));
-    const isWeather  = !isMultiDay && !isForecast && msgLower.includes('vrijeme');
-
-    if (isMultiDay || isForecast || isWeather) {
+    // 7. Weather
+    if (intent === 'weather_current' || intent === 'weather_tomorrow' || intent === 'weather_multi') {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'weather');
 
       const apiKey = process.env.OPENWEATHER_API_KEY;
@@ -95,31 +113,33 @@ router.post('/webhook', async (req, res) => {
 
       const city = tenant.city || 'Brela';
 
-      // More than 5 days — OpenWeather free tier limit, return static link via OpenAI
-      if (isMultiDay && requestedDays > 5) {
-        console.log(`[webhook] ${requestedDays} days requested — returning static link`);
-        const reply = await formatReply(
-          `Tell the user that a detailed long-range forecast is available at this link (keep the URL exactly as-is):\nhttps://weather.com/hr-HR/vrijeme/10dana/l/Brela+Splitsko+dalmatinska+%C5%BEupanija`,
-          trimmedMsg, model
-        );
-        return res.send(twiml(reply));
-      }
-
       if (!apiKey) {
         const reply = await formatReply('Tell the user the weather service is temporarily unavailable.', trimmedMsg, model);
         return res.send(twiml(reply));
       }
 
       try {
-        if (isMultiDay) {
+        if (intent === 'weather_multi') {
+          // Extract number of days from message; default to 3 if not found
+          const daysMatch = trimmedMsg.match(/\d+/);
+          const requestedDays = daysMatch ? Math.min(parseInt(daysMatch[0], 10), 5) : 3;
+
+          if (daysMatch && parseInt(daysMatch[0], 10) > 5) {
+            const reply = await formatReply(
+              `Tell the user a detailed long-range forecast is available at this link (keep URL exactly as-is):\nhttps://weather.com/hr-HR/vrijeme/10dana/l/Brela+Splitsko+dalmatinska+%C5%BEupanija`,
+              trimmedMsg, model
+            );
+            return res.send(twiml(reply));
+          }
+
           const url = `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric`;
-          console.log(`[webhook] fetching ${requestedDays}-day forecast for city: ${city}`);
+          console.log(`[webhook] fetching ${requestedDays}-day forecast for: ${city}`);
           const forecastRes = await fetch(url);
           const data = await forecastRes.json();
 
           if (!forecastRes.ok) {
             console.warn(`[webhook] forecast error ${forecastRes.status}:`, data.message);
-            const reply = await formatReply('Tell the user the weather forecast is temporarily unavailable.', trimmedMsg, model);
+            const reply = await formatReply('Tell the user the forecast is temporarily unavailable.', trimmedMsg, model);
             return res.send(twiml(reply));
           }
 
@@ -138,20 +158,19 @@ router.post('/webhook', async (req, res) => {
           }
 
           if (!days.length) {
-            const reply = await formatReply('Tell the user the weather forecast is temporarily unavailable.', trimmedMsg, model);
+            const reply = await formatReply('Tell the user the forecast is temporarily unavailable.', trimmedMsg, model);
             return res.send(twiml(reply));
           }
 
-          console.log(`[webhook] multi-day forecast OK: ${days.length} days`);
           const reply = await formatReply(
             `Format this ${requestedDays}-day weather forecast for ${city} as a short list:\n${days.join('\n')}`,
             trimmedMsg, model
           );
           return res.send(twiml(reply));
 
-        } else if (isForecast) {
+        } else if (intent === 'weather_tomorrow') {
           const url = `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric`;
-          console.log(`[webhook] fetching tomorrow forecast for city: ${city}`);
+          console.log(`[webhook] fetching tomorrow forecast for: ${city}`);
           const forecastRes = await fetch(url);
           const data = await forecastRes.json();
 
@@ -169,7 +188,7 @@ router.post('/webhook', async (req, res) => {
                      || data.list.find(e => e.dt_txt.startsWith(tomorrowDate));
 
           if (!entry) {
-            const reply = await formatReply('Tell the user the tomorrow forecast is not available yet.', trimmedMsg, model);
+            const reply = await formatReply('Tell the user the tomorrow forecast is not yet available.', trimmedMsg, model);
             return res.send(twiml(reply));
           }
 
@@ -183,8 +202,9 @@ router.post('/webhook', async (req, res) => {
           return res.send(twiml(reply));
 
         } else {
+          // weather_current
           const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric`;
-          console.log(`[webhook] fetching current weather for city: ${city}`);
+          console.log(`[webhook] fetching current weather for: ${city}`);
           const weatherRes = await fetch(url);
           const data = await weatherRes.json();
 
@@ -210,8 +230,8 @@ router.post('/webhook', async (req, res) => {
       }
     }
 
-    // 7. Events check
-    if (msgLower.includes('događaj') || msgLower.includes('dogadjaj') || msgLower.includes('event')) {
+    // 8. Events
+    if (intent === 'events') {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'events');
 
       const events = await getUpcomingEvents(tenant.id);
@@ -232,7 +252,7 @@ router.post('/webhook', async (req, res) => {
       return res.send(twiml(reply));
     }
 
-    // 8. AI usage rate limit
+    // 9. AI usage rate limit
     const usage = await checkAndIncrementUsage(tenant.id, userPhone);
     if (!usage.allowed) {
       console.log(`[webhook] AI rate limit reached for ${userPhone} on tenant ${tenant.id}`);
@@ -240,13 +260,13 @@ router.post('/webhook', async (req, res) => {
       return res.send(twiml(`For further questions, a TZ ${city} staff member will contact you.`));
     }
 
-    // 9. AI response
+    // 10. AI response (intent === 'other' or FAQ with no match)
     const reply = await chat(
       `${MULTILINGUAL_PROMPT}\n\n${tenant.system_prompt}`,
       [{ role: 'user', content: trimmedMsg }],
       model
     );
-    console.log(`[webhook] reply: "${reply}"`);
+    console.log(`[webhook] AI reply: "${reply}"`);
 
     await logMessage(tenant.id, userPhone, trimmedMsg, 'ai');
 
