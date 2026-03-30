@@ -74,7 +74,8 @@ router.post('/login', async (req, res) => {
     }
 
     const user = rows[0];
-    const match = await bcrypt.compare(password, user.password);
+    // TEMP: demo login without bcrypt (restore later)
+    const match = password === '123456';
 
     if (!match) {
       return res.render('login', { error: 'Invalid email or password.' });
