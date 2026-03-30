@@ -62,36 +62,75 @@ router.post('/webhook', async (req, res) => {
 
     // 6. Weather check
     const msgLower = trimmedMsg.toLowerCase();
-    if (msgLower.includes('vrijeme')) {
+    const isForecast = msgLower.includes('sutra') || msgLower.includes('prognoza');
+    const isWeather  = msgLower.includes('vrijeme');
+
+    if (isForecast || isWeather) {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'weather');
 
       const apiKey = process.env.OPENWEATHER_API_KEY;
       console.log(`[webhook] OPENWEATHER_API_KEY loaded: ${apiKey ? 'yes (' + apiKey.slice(0, 4) + '...)' : 'NO — key missing'}`);
 
-      if (apiKey) {
-        try {
-          const city = tenant.city || 'Brela';
+      if (!apiKey) {
+        return res.send(twiml('Servis za vremenske podatke trenutno nije dostupan.'));
+      }
+
+      const city = tenant.city || 'Brela';
+      const fallback = 'Trenutno ne mogu dohvatiti podatke o vremenu. Pokušajte malo kasnije.';
+
+      try {
+        if (isForecast) {
+          // Forecast: find tomorrow's entry closest to 12:00
+          const url = `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric&lang=hr`;
+          console.log(`[webhook] fetching forecast for city: ${city}`);
+          const forecastRes = await fetch(url);
+          const data = await forecastRes.json();
+
+          if (!forecastRes.ok) {
+            console.warn(`[webhook] forecast error ${forecastRes.status}:`, data.message);
+            return res.send(twiml(fallback));
+          }
+
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const tomorrowDate = tomorrow.toISOString().slice(0, 10); // YYYY-MM-DD
+
+          // data.list entries have dt_txt like "2024-06-15 12:00:00"
+          const entry = data.list.find(e => e.dt_txt.startsWith(tomorrowDate) && e.dt_txt.includes('12:00'))
+                     || data.list.find(e => e.dt_txt.startsWith(tomorrowDate));
+
+          if (!entry) {
+            return res.send(twiml('Prognoza za sutra trenutno nije dostupna.'));
+          }
+
+          const temp = Math.round(entry.main.temp);
+          const desc = entry.weather[0]?.description || '';
+          const weatherText = `Sutra u ${city} se očekuje ${temp}°C, ${desc}.`;
+          console.log(`[webhook] forecast OK: "${weatherText}"`);
+          return res.send(twiml(weatherText));
+
+        } else {
+          // Current weather
           const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric&lang=hr`;
-          console.log(`[webhook] fetching weather for city: ${city}`);
+          console.log(`[webhook] fetching current weather for city: ${city}`);
           const weatherRes = await fetch(url);
           const data = await weatherRes.json();
 
-          if (weatherRes.ok) {
-            const temp = Math.round(data.main.temp);
-            const desc = data.weather[0]?.description || '';
-            const weatherText = `U ${city} je trenutno ${temp}°C, ${desc}.`;
-            console.log(`[webhook] weather OK: "${weatherText}"`);
-            return res.send(twiml(weatherText));
-          } else {
-            console.warn(`[webhook] OpenWeatherMap error ${weatherRes.status}:`, data.message);
-            return res.send(twiml(`Trenutno ne mogu dohvatiti podatke o vremenu. Pokušajte malo kasnije.`));
+          if (!weatherRes.ok) {
+            console.warn(`[webhook] weather error ${weatherRes.status}:`, data.message);
+            return res.send(twiml(fallback));
           }
-        } catch (weatherErr) {
-          console.error('[webhook] weather fetch exception:', weatherErr.message);
-          return res.send(twiml(`Trenutno ne mogu dohvatiti podatke o vremenu. Pokušajte malo kasnije.`));
+
+          const temp = Math.round(data.main.temp);
+          const desc = data.weather[0]?.description || '';
+          const weatherText = `U ${city} je trenutno ${temp}°C, ${desc}.`;
+          console.log(`[webhook] weather OK: "${weatherText}"`);
+          return res.send(twiml(weatherText));
         }
-      } else {
-        return res.send(twiml(`Servis za vremenske podatke trenutno nije dostupan.`));
+
+      } catch (weatherErr) {
+        console.error('[webhook] weather fetch exception:', weatherErr.message);
+        return res.send(twiml(fallback));
       }
     }
 
