@@ -5,7 +5,7 @@ const { chat } = require('../services/openai');
 const { logMessage, getFaqMatch, getUpcomingEvents, checkAndIncrementUsage } = require('../db/bot');
 
 const MULTILINGUAL_PROMPT = `You are a multilingual tourist assistant in Croatia.
-Always detect the user's language and reply in the same language.
+Always reply in the same language as the user.
 Support all languages naturally (English, German, Italian, Croatian).
 Be short, clear, and helpful.`;
 
