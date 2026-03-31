@@ -428,12 +428,12 @@ router.get('/conversations', requireAuth, async (req, res) => {
       `SELECT m.user_phone,
               MAX(m.created_at) AS last_msg,
               COUNT(*) AS msg_count,
-              COALESCE(wu.human_takeover, 0) AS human_takeover
+              MAX(COALESCE(wu.human_takeover, 0)) AS human_takeover
        FROM messages m
        LEFT JOIN whatsapp_users wu
          ON wu.tenant_id = m.tenant_id AND wu.phone = m.user_phone
        WHERE m.tenant_id = ?
-       GROUP BY m.user_phone, wu.human_takeover
+       GROUP BY m.user_phone
        ORDER BY last_msg DESC`,
       [tenantId]
     );
