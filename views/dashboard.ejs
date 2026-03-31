@@ -75,7 +75,7 @@
       <a href="/admin/events" class="btn btn-secondary btn-sm">Upravljaj</a>
     </div>
     <p style="font-size:12px;color:var(--muted);margin-bottom:16px;padding-left:26px">Najvažniji događaji koje preporučujemo turistima</p>
-    <% if (!featuredEvents.length) { %>
+    <% if (!featuredEvents || !featuredEvents.length) { %>
       <div style="text-align:center;padding:20px 0;color:#94a3b8;font-size:13px">
         Trenutno nema izdvojenih događaja — označite ih u <a href="/admin/events" style="color:var(--blue);text-decoration:none;font-weight:600">listi događaja</a>
       </div>

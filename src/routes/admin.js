@@ -155,10 +155,11 @@ router.get('/dashboard', requireAuth, async (req, res) => {
       [tenantId]
     );
 
-    const [[tenant]] = await pool.query(
+    const [tenantRows] = await pool.query(
       'SELECT human_takeover FROM tenants WHERE id = ?',
       [tenantId]
     );
+    const humanTakeover = tenantRows.length ? Boolean(tenantRows[0].human_takeover) : false;
 
     let featuredEvents = [];
     try {
@@ -166,7 +167,7 @@ router.get('/dashboard', requireAuth, async (req, res) => {
         'SELECT id, title, date, description FROM events WHERE tenant_id = ? AND date >= CURDATE() AND featured = 1 ORDER BY date ASC LIMIT 3',
         [tenantId]
       );
-      featuredEvents = fevRows;
+      featuredEvents = fevRows || [];
     } catch (_) {}
 
     // Derive human-readable insights from existing data — no AI calls
@@ -219,8 +220,8 @@ router.get('/dashboard', requireAuth, async (req, res) => {
       languages,
       timeOfDay,
       insights,
-      humanTakeover: Boolean(tenant?.human_takeover),
-      featuredEvents,
+      humanTakeover,
+      featuredEvents: featuredEvents || [],
       tenantId,
     });
   } catch (err) {
