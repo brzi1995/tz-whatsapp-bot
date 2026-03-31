@@ -84,13 +84,17 @@ router.post('/login', async (req, res) => {
       return res.render('login', { error: 'Invalid email or password.' });
     }
 
+    console.log('LOGIN ROWS:', rows);
+    console.log('LOGIN USER:', user);
+    console.log('SESSION:', req.session);
+
     req.session.userId = user.id;
     req.session.tenantId = user.tenant_id;
 
     return res.redirect('/admin/dashboard');
   } catch (err) {
-    console.error('[admin] login error:', err);
-    return res.render('login', { error: 'Server error. Please try again.' });
+    console.error('[admin] login error FULL:', err);
+    return res.status(500).send(err.stack);
   }
 });
 
