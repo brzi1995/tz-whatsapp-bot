@@ -425,12 +425,15 @@ router.get('/conversations', requireAuth, async (req, res) => {
 
   try {
     const [rows] = await pool.query(
-      `SELECT user_phone,
-              MAX(created_at) AS last_msg,
-              COUNT(*) AS msg_count
-       FROM messages
-       WHERE tenant_id = ?
-       GROUP BY user_phone
+      `SELECT m.user_phone,
+              MAX(m.created_at) AS last_msg,
+              COUNT(*) AS msg_count,
+              COALESCE(wu.human_takeover, 0) AS human_takeover
+       FROM messages m
+       LEFT JOIN whatsapp_users wu
+         ON wu.tenant_id = m.tenant_id AND wu.phone = m.user_phone
+       WHERE m.tenant_id = ?
+       GROUP BY m.user_phone, wu.human_takeover
        ORDER BY last_msg DESC`,
       [tenantId]
     );

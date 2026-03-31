@@ -246,9 +246,9 @@ router.post('/webhook', async (req, res) => {
     // 4. PER-USER TAKEOVER CHECK — ONLY path that skips AI; affects only this user
     if (currentUser && currentUser.human_takeover) {
       console.log(`[webhook] AI SKIPPED — per-user takeover active for ${userPhone}`);
-      await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', 'hr');
-      console.log('[webhook] FINAL RESPONSE SENT — empty (per-user takeover)');
-      return res.send(emptyTwiml());
+      try { await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', 'hr'); } catch (_) {}
+      console.log('[webhook] FINAL RESPONSE SENT — takeover active (team reply)');
+      return res.send(twiml('Our team will reply shortly 😊'));
     }
 
     // 5. GENERATE RESPONSE — AI called for every non-takeover message
