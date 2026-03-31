@@ -59,12 +59,12 @@
         <div style="font-size:12px;color:var(--muted);margin-top:2px"><%= (messages || []).length %> poruka</div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <span id="to-badge" style="padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;background:<%= takeover ? '#f0fdf4' : '#f1f5f9' %>;color:<%= takeover ? '#16a34a' : '#64748b' %>">
-          <%= takeover ? '🤝 Operater odgovara' : '🤖 Bot odgovara' %>
+        <span id="takeoverBadge" style="padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;background:<%= takeover ? '#fef2f2' : '#f0fdf4' %>;color:<%= takeover ? '#dc2626' : '#16a34a' %>">
+          <%= takeover ? '🔴 Human takeover' : '🟢 Bot active' %>
         </span>
-        <button id="to-btn" class="btn btn-sm" onclick="toggleTakeover()"
-                style="background:<%= takeover ? '#16a34a' : '#64748b' %>;color:#fff">
-          <%= takeover ? 'Deaktiviraj' : 'Preuzmi razgovor' %>
+        <button id="takeoverBtn" class="btn btn-sm"
+                style="background:<%= takeover ? '#dc2626' : '#2563eb' %>;color:#fff">
+          <%= takeover ? '🤖 Return to bot' : '🧑 Take over' %>
         </button>
       </div>
     </div>
@@ -110,29 +110,41 @@
   const chatEl = document.getElementById('chat-messages');
   if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
 
-  async function toggleTakeover() {
-    const btn   = document.getElementById('to-btn');
-    const badge = document.getElementById('to-badge');
+  // Phone encoded at render time — used in fetch URL at runtime
+  const userPhone = '<%= encodeURIComponent(userPhone || "") %>';
+
+  // Local state — mirrors DB value, updated from API response (no page reload)
+  let humanTakeover = <%= takeover ? 1 : 0 %>;
+
+  document.getElementById('takeoverBtn').addEventListener('click', async () => {
+    const btn   = document.getElementById('takeoverBtn');
+    const badge = document.getElementById('takeoverBadge');
     btn.disabled = true;
     btn.style.opacity = '0.6';
+
     try {
-      const r    = await fetch('/admin/conversations/<%= encodeURIComponent(userPhone || '') %>/takeover', { method: 'POST' });
-      const data = await r.json();
+      const res  = await fetch(`/admin/conversations/${userPhone}/takeover`, { method: 'POST' });
+      const data = await res.json();
+
       if (data.success) {
-        const on = data.human_takeover;
-        badge.style.background = on ? '#f0fdf4' : '#f1f5f9';
-        badge.style.color      = on ? '#16a34a'  : '#64748b';
-        badge.textContent      = on ? '🤝 Operater odgovara' : '🤖 Bot odgovara';
-        btn.style.background   = on ? '#16a34a'  : '#64748b';
-        btn.textContent        = on ? 'Deaktiviraj' : 'Preuzmi razgovor';
+        humanTakeover = data.human_takeover;
+
+        // Update button
+        btn.textContent       = humanTakeover ? '🤖 Return to bot' : '🧑 Take over';
+        btn.style.background  = humanTakeover ? '#dc2626' : '#2563eb';
+
+        // Update badge
+        badge.textContent       = humanTakeover ? '🔴 Human takeover' : '🟢 Bot active';
+        badge.style.background  = humanTakeover ? '#fef2f2' : '#f0fdf4';
+        badge.style.color       = humanTakeover ? '#dc2626' : '#16a34a';
       }
     } catch (e) {
-      alert('Mrežna greška.');
+      alert('Network error — please try again.');
     } finally {
       btn.disabled = false;
       btn.style.opacity = '1';
     }
-  }
+  });
 </script>
 
 <%- include('partials/foot') %>
