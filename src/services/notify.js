@@ -9,14 +9,11 @@ const notifiedUsers = new Set();
 
 /**
  * Returns true when the admin should be alerted about this message.
- * Three conditions (any one is enough):
- *   A. intent === 'other'  — bot couldn't classify the message
- *   B. message contains help-seeking keywords
- *   C. bot response contains known fallback phrases
+ * Only fires for explicit help requests — NOT for every general question.
+ *   A. message contains help-seeking keywords
+ *   B. bot response contains known fallback phrases
  */
 function shouldNotifyAdmin(message, intent, response) {
-  if (intent === 'other') return true;
-
   const msg = (message || '').toLowerCase();
   const keywords = ['agent', 'covjek', 'čovjek', 'osoba', 'help', 'kontakt', 'razgovor', 'pricati', 'pričati'];
   if (keywords.some(k => msg.includes(k))) return true;

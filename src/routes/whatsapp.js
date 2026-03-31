@@ -266,7 +266,7 @@ router.post('/webhook', async (req, res) => {
 
     // 4. Single AI call — detects lang + intent AND generates the reply for non-event/weather cases
     const { lang, intent, response: aiResponse } = await parseMessage(trimmedMsg, tenant.system_prompt, model);
-    console.log(`[webhook] intent=${intent} lang=${lang}`);
+    console.log(`[webhook] intent=${intent} lang=${lang} aiResponse=${aiResponse ? '"' + aiResponse.slice(0, 60) + '…"' : '(empty)'}`);
 
     // 5. Human takeover — agent is handling this conversation manually
     if (tenant.human_takeover) {
@@ -442,13 +442,11 @@ router.post('/webhook', async (req, res) => {
       // No help keyword — fall through and use the AI response generated in step 4
     }
 
-    // 10. AI usage rate limit (applies to FAQ-with-no-match reaching this point)
+    // 10. AI usage rate limit — per user/day cap; does NOT trigger tenant-wide takeover
     const usage = await checkAndIncrementUsage(tenant.id, userPhone);
     if (!usage.allowed) {
-      console.log(`[webhook] AI rate limit reached for ${userPhone} on tenant ${tenant.id}`);
+      console.log(`[webhook] AI rate limit reached for ${userPhone} — sending fallback, bot stays active`);
       await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', lang);
-      await setHumanTakeover(tenant.id);
-      await sendHandoverEmail(userPhone, trimmedMsg);
       return res.send(twiml(fallbackReply(lang)));
     }
 
