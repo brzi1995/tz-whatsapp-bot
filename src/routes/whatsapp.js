@@ -211,6 +211,7 @@ function emptyTwiml() {
 }
 
 router.post('/webhook', async (req, res) => {
+  console.log('WEBHOOK HIT');
   console.log('[webhook] incoming body:', JSON.stringify(req.body));
   res.type('text/xml');
 
@@ -295,9 +296,11 @@ router.post('/webhook', async (req, res) => {
 
       // Notify admin BEFORE sending Twilio reply — awaited so it completes before response
       try {
+        console.log('ADMIN NOTIFICATION TRIGGERED');
         await sendAdminNotification(tenant.id, userPhone, trimmedMsg);
+        console.log('ADMIN NOTIFICATION SENT');
       } catch (notifyErr) {
-        console.error('[webhook] sendAdminNotification threw unexpectedly:', notifyErr.message);
+        console.error('ADMIN NOTIFICATION ERROR', notifyErr);
       }
       await sendHandoverEmail(userPhone, trimmedMsg).catch(() => {});
 
