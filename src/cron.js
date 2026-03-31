@@ -1,11 +1,14 @@
 const pool = require('./db/index');
 const { sendMessage } = require('./services/twilio');
-
-const OPT_IN_PROMPT = 'Ako želiš, mogu ti slati obavijesti o događajima 😊\nNapiši DA ili NE';
+const { generateOptInMessage } = require('./services/openai');
 
 async function runOptInOutreach() {
+  // Cache generated messages per language within this run to avoid redundant AI calls
+  const msgCache = new Map();
+
   try {
     const [tenants] = await pool.query('SELECT id, phone_number FROM tenants');
+
     for (const tenant of tenants) {
       try {
         const [users] = await pool.query(
@@ -14,16 +17,34 @@ async function runOptInOutreach() {
            AND last_message_at < NOW() - INTERVAL 5 MINUTE`,
           [tenant.id]
         );
+
         for (const user of users) {
           try {
-            await sendMessage(user.phone, tenant.phone_number, OPT_IN_PROMPT);
+            // Get user's last detected language from the messages table
+            const [langRows] = await pool.query(
+              `SELECT lang FROM messages
+               WHERE tenant_id = ? AND user_phone = ?
+               ORDER BY created_at DESC LIMIT 1`,
+              [tenant.id, user.phone]
+            );
+            const lang = (langRows && langRows[0] && langRows[0].lang) || 'hr';
+
+            // Generate (or reuse cached) opt-in message for this language
+            if (!msgCache.has(lang)) {
+              const generated = await generateOptInMessage(lang);
+              msgCache.set(lang, generated);
+              console.log(`[cron] generated opt-in message for lang=${lang}: "${generated}"`);
+            }
+            const optInMsg = msgCache.get(lang);
+
+            await sendMessage(user.phone, tenant.phone_number, optInMsg);
             await pool.query(
               'UPDATE whatsapp_users SET asked_opt_in = 1 WHERE tenant_id = ? AND phone = ?',
               [tenant.id, user.phone]
             );
-            console.log(`[cron] opt-in prompt sent to ${user.phone} for tenant ${tenant.id}`);
-          } catch (sendErr) {
-            console.error(`[cron] send error for ${user.phone}:`, sendErr.message);
+            console.log(`[cron] opt-in prompt (${lang}) sent to ${user.phone} for tenant ${tenant.id}`);
+          } catch (userErr) {
+            console.error(`[cron] error for user ${user.phone}:`, userErr.message);
           }
         }
       } catch (tenantErr) {

@@ -81,4 +81,37 @@ Always reply in the same language as the user.`,
   }
 }
 
-module.exports = { chat, parseMessage };
+/**
+ * Generate a short opt-in notification message in the user's language.
+ * Instructs the user to reply DA (yes) or NE (no) — those words are what
+ * the webhook handler checks for, so they must stay fixed.
+ * Falls back to Croatian if OpenAI is unavailable.
+ *
+ * @param {string} lang  ISO 639-1 code detected from the user's messages
+ * @returns {Promise<string>}
+ */
+async function generateOptInMessage(lang = 'hr') {
+  try {
+    const result = await getClient().chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content:
+            `You are a friendly WhatsApp tourist bot assistant. ` +
+            `Write a single short message (2 sentences max) asking the tourist if they want to receive event notifications. ` +
+            `Write it entirely in the language with ISO 639-1 code "${lang}". ` +
+            `The message must end by asking them to reply with exactly "DA" or "NE" — keep those two words unchanged. ` +
+            `Use a friendly emoji. Return ONLY the message text, nothing else.`,
+        },
+        { role: 'user', content: 'Write the opt-in message.' },
+      ],
+    });
+    return result.choices[0].message.content.trim();
+  } catch (err) {
+    console.error('[openai] generateOptInMessage failed:', err.message);
+    return 'Ako želiš, mogu ti slati obavijesti o događajima 😊\nNapiši DA ili NE';
+  }
+}
+
+module.exports = { chat, parseMessage, generateOptInMessage };
