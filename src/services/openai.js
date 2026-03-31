@@ -25,7 +25,11 @@ async function chat(systemPrompt, messages, model = 'gpt-4o-mini') {
 }
 
 const VALID_LANGS   = ['hr','en','de','it','fr'];
-const VALID_INTENTS = ['weather_current','weather_tomorrow','weather_multi','events','faq','other'];
+const VALID_INTENTS = [
+  'weather_current','weather_tomorrow','weather_multi',
+  'events_today','events_tomorrow','events_week','events',
+  'faq','other',
+];
 
 /**
  * Single AI call that returns both detected language and intent.
@@ -38,7 +42,22 @@ async function parseMessage(message, model = 'gpt-4o-mini') {
       response_format: { type: 'json_object' },
       messages: [{
         role: 'user',
-        content: `Analyze this message and return JSON:\n{"lang":"hr|en|de|it","intent":"weather_current|weather_tomorrow|weather_multi|events|faq|other"}\nMessage: ${message}`,
+        content: `Detect the language and intent of this tourist message. Return JSON only.
+
+{"lang":"hr|en|de|it|fr","intent":"weather_current|weather_tomorrow|weather_multi|events_today|events_tomorrow|events_week|events|faq|other"}
+
+Intent rules:
+- events_today: what to do today / today's events / što raditi danas / eventi oggi / Veranstaltungen heute
+- events_tomorrow: what to do tomorrow / tomorrow's events / što raditi sutra / domani / morgen
+- events_week: this week / weekend events / ovaj tjedan / diese Woche / cette semaine
+- events: events in general (no specific time)
+- weather_current: current weather now
+- weather_tomorrow: tomorrow's weather forecast
+- weather_multi: multi-day weather forecast
+- faq: general question about the destination
+- other: anything else
+
+Message: ${message}`,
       }],
     });
     const parsed = JSON.parse(response.choices[0].message.content.trim());

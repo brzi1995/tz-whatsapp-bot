@@ -2,7 +2,96 @@ const express = require('express');
 const router = express.Router();
 const { getTenant, getMessages, saveMessages } = require('../db/sessions');
 const { chat, parseMessage } = require('../services/openai');
-const { logMessage, getFaqMatch, getUpcomingEvents, checkAndIncrementUsage } = require('../db/bot');
+const { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, setHumanTakeover } = require('../db/bot');
+const { sendHandoverEmail } = require('../services/email');
+
+// Messages that need no AI response — short acknowledgements across all supported languages
+const TRIVIAL = new Set([
+  'ok', 'okay', 'k', 'yes', 'no', 'yep', 'nope', 'thanks', 'thx', 'ty', 'np',
+  'da', 'ne', 'hvala', 'bok',
+  'ja', 'nein', 'danke', 'super',
+  'si', 'grazie',
+  'oui', 'non', 'merci',
+]);
+
+const FALLBACK_MSG = {
+  hr: 'Rado ćemo vam pomoći 😊 Naš tim će vam uskoro odgovoriti.',
+  default: "We'll be happy to help 😊 Our team will respond shortly.",
+};
+function fallbackReply(lang) {
+  return FALLBACK_MSG[lang] || FALLBACK_MSG.default;
+}
+
+// Language-aware labels and empty-state messages for time-specific event queries
+const EVENT_LABELS = {
+  hr: {
+    today:    '📅 Događaji za danas:',
+    tomorrow: '📅 Događaji za sutra:',
+    week:     '📅 Događaji ovaj tjedan:',
+    empty: {
+      today:    'Danas nema planiranih događaja. Svratite u TZ ured za više informacija! 😊',
+      tomorrow: 'Sutra nema planiranih događaja. Svratite u TZ ured za više informacija! 😊',
+      week:     'Ovaj tjedan nema planiranih događaja. Svratite u TZ ured za više informacija! 😊',
+    },
+  },
+  en: {
+    today:    '📅 Events today:',
+    tomorrow: '📅 Events tomorrow:',
+    week:     '📅 Events this week:',
+    empty: {
+      today:    'No events planned for today. Drop by the tourist office for more info! 😊',
+      tomorrow: 'No events planned for tomorrow. Drop by the tourist office for more info! 😊',
+      week:     'No events planned this week. Drop by the tourist office for more info! 😊',
+    },
+  },
+  de: {
+    today:    '📅 Veranstaltungen heute:',
+    tomorrow: '📅 Veranstaltungen morgen:',
+    week:     '📅 Veranstaltungen diese Woche:',
+    empty: {
+      today:    'Heute sind keine Veranstaltungen geplant. Besuchen Sie das Tourismusbüro! 😊',
+      tomorrow: 'Morgen sind keine Veranstaltungen geplant. Besuchen Sie das Tourismusbüro! 😊',
+      week:     'Diese Woche sind keine Veranstaltungen. Besuchen Sie das Tourismusbüro! 😊',
+    },
+  },
+  it: {
+    today:    '📅 Eventi oggi:',
+    tomorrow: '📅 Eventi domani:',
+    week:     '📅 Eventi questa settimana:',
+    empty: {
+      today:    "Nessun evento previsto per oggi. Passa dall'ufficio turistico! 😊",
+      tomorrow: "Nessun evento previsto per domani. Passa dall'ufficio turistico! 😊",
+      week:     "Nessun evento questa settimana. Passa dall'ufficio turistico! 😊",
+    },
+  },
+  fr: {
+    today:    "📅 Événements aujourd'hui:",
+    tomorrow: '📅 Événements demain:',
+    week:     '📅 Événements cette semaine:',
+    empty: {
+      today:    "Aucun événement prévu aujourd'hui. Passez à l'office de tourisme! 😊",
+      tomorrow: "Aucun événement prévu demain. Passez à l'office de tourisme! 😊",
+      week:     "Aucun événement cette semaine. Passez à l'office de tourisme! 😊",
+    },
+  },
+};
+
+function formatEventsList(events, period, lang) {
+  const labels = EVENT_LABELS[lang] || EVENT_LABELS.en;
+  if (!events.length) {
+    return labels.empty[period] || labels.empty.today;
+  }
+  const header = labels[period] || labels.today;
+  const lines = events.map((ev, i) => {
+    const d = ev.date instanceof Date ? ev.date : new Date(ev.date);
+    const dateStr = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.`;
+    let line = `\n\n${i + 1}. ${ev.title} (${dateStr})`;
+    if (ev.description) line += `\n   ${ev.description}`;
+    if (ev.location_link) line += `\n   📍 ${ev.location_link}`;
+    return line;
+  });
+  return header + lines.join('');
+}
 
 const MULTILINGUAL_PROMPT = `You are a multilingual tourist assistant in Croatia.
 Support all languages naturally (English, German, Italian, Croatian).
@@ -61,6 +150,12 @@ router.post('/webhook', async (req, res) => {
 
     const trimmedMsg = userMsg.trim();
     const model = tenant.openai_model;
+
+    // 3.5. Short / trivial messages — no AI call, no response needed
+    if (trimmedMsg.length < 4 || TRIVIAL.has(trimmedMsg.toLowerCase())) {
+      console.log(`[webhook] trivial message ignored: "${trimmedMsg}"`);
+      return res.send(emptyTwiml());
+    }
 
     // 4. Parse message — single AI call for intent + language
     const { intent, lang } = await parseMessage(trimmedMsg, model);
@@ -211,7 +306,15 @@ router.post('/webhook', async (req, res) => {
       }
     }
 
-    // 8. Events
+    // 8. Events — time-specific (no AI call) or general (AI-formatted)
+    if (intent === 'events_today' || intent === 'events_tomorrow' || intent === 'events_week') {
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'events', lang);
+      const period = intent === 'events_today' ? 'today' : intent === 'events_tomorrow' ? 'tomorrow' : 'week';
+      const events = await getEventsByPeriod(tenant.id, period);
+      console.log(`[webhook] events_${period}: ${events.length} found`);
+      return res.send(twiml(formatEventsList(events, period, lang)));
+    }
+
     if (intent === 'events') {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'events', lang);
 
@@ -233,15 +336,26 @@ router.post('/webhook', async (req, res) => {
       return res.send(twiml(reply));
     }
 
-    // 9. AI usage rate limit
+    // 9. 'other' intent — human handover (no AI call wasted)
+    if (intent === 'other') {
+      console.log(`[webhook] intent=other — triggering human handover for tenant ${tenant.id}`);
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', lang);
+      await setHumanTakeover(tenant.id);
+      await sendHandoverEmail(userPhone, trimmedMsg);
+      return res.send(twiml(fallbackReply(lang)));
+    }
+
+    // 10. AI usage rate limit (applies to FAQ-with-no-match reaching this point)
     const usage = await checkAndIncrementUsage(tenant.id, userPhone);
     if (!usage.allowed) {
       console.log(`[webhook] AI rate limit reached for ${userPhone} on tenant ${tenant.id}`);
-      const city = tenant.city || 'Brela';
-      return res.send(twiml(`For further questions, a TZ ${city} staff member will contact you.`));
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', lang);
+      await setHumanTakeover(tenant.id);
+      await sendHandoverEmail(userPhone, trimmedMsg);
+      return res.send(twiml(fallbackReply(lang)));
     }
 
-    // 10. AI response (intent === 'other' or FAQ with no match)
+    // 11. AI response (FAQ with no match — last resort)
     const reply = await chat(
       `${MULTILINGUAL_PROMPT}\n\n${tenant.system_prompt}`,
       [{ role: 'user', content: trimmedMsg }],

@@ -133,12 +133,18 @@ router.get('/dashboard', requireAuth, async (req, res) => {
       [tenantId]
     );
 
-    const [languages] = await pool.query(
-      `SELECT COALESCE(lang, 'hr') AS lang, COUNT(*) AS count
-       FROM messages WHERE tenant_id = ?
-       GROUP BY lang ORDER BY count DESC`,
-      [tenantId]
-    );
+    let languages = [];
+    try {
+      const [langRows] = await pool.query(
+        `SELECT COALESCE(lang, 'hr') AS lang, COUNT(*) AS count
+         FROM messages WHERE tenant_id = ?
+         GROUP BY lang ORDER BY count DESC`,
+        [tenantId]
+      );
+      languages = langRows;
+    } catch (_) {
+      // lang column may not exist yet — safe fallback
+    }
 
     const [[timeOfDay]] = await pool.query(
       `SELECT

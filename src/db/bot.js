@@ -116,4 +116,46 @@ async function checkAndIncrementUsage(tenantId, userPhone) {
   }
 }
 
-module.exports = { logMessage, getFaqMatch, getUpcomingEvents, checkAndIncrementUsage };
+/**
+ * Return events for a specific time period (today / tomorrow / week).
+ * Period SQL conditions are hardcoded — no user input in the query.
+ * @param {number} tenantId
+ * @param {'today'|'tomorrow'|'week'} period
+ * @returns {Promise<Array>}
+ */
+async function getEventsByPeriod(tenantId, period) {
+  const conditions = {
+    today:    'date = CURDATE()',
+    tomorrow: 'date = CURDATE() + INTERVAL 1 DAY',
+    week:     'date BETWEEN CURDATE() AND CURDATE() + INTERVAL 7 DAY',
+  };
+  const condition = conditions[period] || conditions.today;
+  try {
+    const [rows] = await pool.query(
+      `SELECT title, description, date, location_link
+       FROM events
+       WHERE tenant_id = ? AND ${condition}
+       ORDER BY date ASC LIMIT 10`,
+      [tenantId]
+    );
+    return rows;
+  } catch (err) {
+    console.error('[bot] getEventsByPeriod error:', err.message);
+    return [];
+  }
+}
+
+/**
+ * Activate human takeover for a tenant (bot goes silent for that tenant).
+ * @param {number} tenantId
+ */
+async function setHumanTakeover(tenantId) {
+  try {
+    await pool.query('UPDATE tenants SET human_takeover = 1 WHERE id = ?', [tenantId]);
+    console.log(`[bot] human_takeover activated for tenant ${tenantId}`);
+  } catch (err) {
+    console.error('[bot] setHumanTakeover error:', err.message);
+  }
+}
+
+module.exports = { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, setHumanTakeover };

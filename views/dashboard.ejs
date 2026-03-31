@@ -136,10 +136,10 @@
     <!-- Intent distribution -->
     <div class="chart-wrap" style="margin-bottom:0">
       <div class="chart-header">
-        <h2>Namjere poruka</h2>
+        <h2>Najčešći interesi turista</h2>
         <span class="chart-badge">Po tipu</span>
       </div>
-      <% const intentLabels = { faq:'FAQ', weather:'Vrijeme', events:'Događaji', ai:'AI chat' };
+      <% const intentLabels = { faq:'Opće informacije', weather:'Vrijeme', weather_current:'Vrijeme', weather_tomorrow:'Vrijeme', weather_multi:'Vrijeme', events:'Događaji', ai:'Ostalo', other:'Ostalo', fallback:'Ostalo' };
          const intentColors = { faq:'#2563eb', weather:'#0ea5e9', events:'#16a34a', ai:'#7c3aed' };
          const intentTotal  = intents.reduce((s,r) => s + Number(r.count), 0) || 1;
       %>
