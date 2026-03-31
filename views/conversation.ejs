@@ -97,7 +97,7 @@
 
   <!-- Reply form -->
   <div class="chat-footer">
-    <form method="POST" action="/admin/conversations/<%= encodeURIComponent(userPhone || '') %>/reply">
+    <form method="POST" action="/admin/conversations/<%= encodeURIComponent((userPhone || '').replace('whatsapp:', '')) %>/reply">
       <input type="text" name="message" placeholder="Upiši odgovor..." required autocomplete="off">
       <button type="submit" class="btn btn-primary">Pošalji</button>
     </form>
@@ -111,7 +111,7 @@
   if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
 
   // Phone encoded at render time — used in fetch URL at runtime
-  const userPhone = '<%= encodeURIComponent(userPhone || "") %>';
+  const userPhone = '<%= encodeURIComponent((userPhone || "").replace("whatsapp:", "")) %>';
 
   // Local state — mirrors DB value, updated from API response (no page reload)
   let humanTakeover = <%= takeover ? 1 : 0 %>;

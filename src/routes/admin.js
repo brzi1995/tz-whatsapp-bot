@@ -459,7 +459,7 @@ router.get('/conversations', requireAuth, async (req, res) => {
 // GET /admin/conversations/:phone
 router.get('/conversations/:phone', requireAuth, async (req, res) => {
   const tenantId = req.session.tenantId;
-  const userPhone = req.params.phone;
+  const userPhone = 'whatsapp:' + req.params.phone;
 
   try {
     const [messages] = await pool.query(
@@ -490,7 +490,7 @@ router.get('/conversations/:phone', requireAuth, async (req, res) => {
 // POST /admin/conversations/:phone/takeover — toggle per-user takeover
 router.post('/conversations/:phone/takeover', requireAuth, async (req, res) => {
   const tenantId  = req.session.tenantId;
-  const userPhone = req.params.phone;
+  const userPhone = 'whatsapp:' + req.params.phone;
 
   try {
     await pool.query(
@@ -517,7 +517,7 @@ router.post('/conversations/:phone/takeover', requireAuth, async (req, res) => {
 // POST /admin/conversations/:phone/reply
 router.post('/conversations/:phone/reply', requireAuth, async (req, res) => {
   const tenantId = req.session.tenantId;
-  const userPhone = req.params.phone;
+  const userPhone = 'whatsapp:' + req.params.phone;
   const message = (req.body.message || '').trim();
 
   if (!message) {

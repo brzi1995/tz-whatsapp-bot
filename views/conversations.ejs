@@ -14,7 +14,7 @@
       <% conversations.forEach(function(c) {
            const lastMsg    = c.last_msg ? new Date(c.last_msg).toLocaleString('hr-HR') : '—';
            const cleanPhone = (c.user_phone || '').replace('whatsapp:', '');
-           const encoded    = encodeURIComponent(c.user_phone || '');
+           const encoded    = encodeURIComponent((c.user_phone || '').replace('whatsapp:', ''));
            const inTakeover = Boolean(c.human_takeover);
       %>
       <a href="/admin/conversations/<%= encoded %>" style="text-decoration:none;display:block">
