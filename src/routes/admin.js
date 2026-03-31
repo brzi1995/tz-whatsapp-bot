@@ -129,12 +129,17 @@ router.get('/dashboard', requireAuth, async (req, res) => {
     );
     const timeOfDay = (todRows && todRows[0]) || { morning: 0, afternoon: 0, evening: 0 };
 
-    const [tenantRows] = await pool.query(
-      'SELECT human_takeover FROM tenants WHERE id = ?',
-      [tenantId]
-    );
-    const tenant = (tenantRows && tenantRows[0]) || null;
-    const humanTakeover = tenant ? Boolean(tenant.human_takeover) : false;
+    let humanTakeover = false;
+    try {
+      const [tenantRows] = await pool.query(
+        'SELECT human_takeover FROM tenants WHERE id = ?',
+        [tenantId]
+      );
+      const tenant = (tenantRows && tenantRows[0]) || null;
+      humanTakeover = tenant ? Boolean(tenant.human_takeover) : false;
+    } catch (err) {
+      console.error('TENANT human_takeover ERROR:', err.message);
+    }
 
     let featuredEvents = [];
     try {
@@ -437,11 +442,15 @@ router.get('/conversations', requireAuth, async (req, res) => {
        ORDER BY last_msg DESC`,
       [tenantId]
     );
-    const conversations = rows.map(u => ({ ...u, human_takeover: u.human_takeover || 0 }));
+    const safeRows = Array.isArray(rows) ? rows : [];
+    const conversations = safeRows.map(u => ({
+      ...u,
+      human_takeover: u?.human_takeover || 0,
+    }));
     res.render('conversations', { conversations });
   } catch (err) {
-    console.error('[admin] conversations list error:', err.message);
-    res.status(500).send('Server error');
+    console.error('DB ERROR:', err);
+    return res.status(500).send('Database error');
   }
 });
 
