@@ -487,16 +487,22 @@ router.get('/conversations/:phone', requireAuth, async (req, res) => {
 // POST /admin/conversations/:phone/takeover — toggle per-user takeover
 router.post('/conversations/:phone/takeover', requireAuth, async (req, res) => {
   const tenantId  = req.session.tenantId;
-  const cleanPhone = req.params.phone; // whatsapp_users.phone has NO whatsapp: prefix
+  const cleanPhone = req.params.phone.replace('whatsapp:', '');
+  console.log('Takeover update for:', cleanPhone);
 
   try {
-    await pool.query(
-      'UPDATE whatsapp_users SET human_takeover = NOT human_takeover WHERE tenant_id = ? AND phone = ?',
+    const [result] = await pool.query(
+      "UPDATE whatsapp_users SET human_takeover = NOT human_takeover WHERE tenant_id = ? AND REPLACE(phone, 'whatsapp:', '') = ?",
       [tenantId, cleanPhone]
     );
 
+    if (result.affectedRows === 0) {
+      console.log(`[admin] takeover: no row found for ${cleanPhone}`);
+      return res.status(404).json({ success: false, error: 'User not found in whatsapp_users' });
+    }
+
     const [rows] = await pool.query(
-      'SELECT human_takeover FROM whatsapp_users WHERE tenant_id = ? AND phone = ?',
+      "SELECT human_takeover FROM whatsapp_users WHERE tenant_id = ? AND REPLACE(phone, 'whatsapp:', '') = ?",
       [tenantId, cleanPhone]
     );
     const user = (rows && rows[0]) || null;
