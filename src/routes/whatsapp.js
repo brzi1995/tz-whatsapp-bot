@@ -214,95 +214,104 @@ router.post('/webhook', async (req, res) => {
   res.type('text/xml');
 
   try {
-    // 1. Extract fields
+    // 1. Extract + validate — the only exits that don't require a reply
     const { From: userPhone, To: tenantPhone, Body: userMsg } = req.body || {};
     console.log(`[webhook] From=${userPhone} To=${tenantPhone} Body="${userMsg}"`);
 
-    // 2. Validate fields
     if (!userMsg?.trim() || !userPhone || !tenantPhone) {
       console.warn('[webhook] missing required fields');
       return res.send(emptyTwiml());
     }
 
-    // 3. Resolve tenant
+    const trimmedMsg = userMsg.trim();
+    const lowerMsg   = trimmedMsg.toLowerCase();
+
+    // 2. Resolve tenant
     const tenant = await getTenant(tenantPhone);
     if (!tenant) {
       console.warn(`[webhook] no tenant for number: ${tenantPhone}`);
       return res.send(emptyTwiml());
     }
-    console.log(`[webhook] tenant: ${tenant.name} | prompt length: ${tenant.system_prompt?.length ?? 0}`);
+    console.log(`[webhook] tenant: ${tenant.name}`);
 
-    const trimmedMsg = userMsg.trim();
-    const model = tenant.openai_model;
+    // 3. Upsert user — fire-and-forget, never blocks message flow
+    upsertWhatsappUser(tenant.id, userPhone).catch(err =>
+      console.error('[webhook] upsertWhatsappUser error:', err.message));
 
-    // 3.1. Upsert user — insert on first message, update last_message_at on every message
-    try {
-      await upsertWhatsappUser(tenant.id, userPhone);
-    } catch (upsertErr) {
-      console.error('[webhook] upsertWhatsappUser error:', upsertErr.message);
+    // 4. TAKEOVER CHECK — the ONLY path that skips AI
+    if (tenant.human_takeover) {
+      console.log(`[webhook] AI SKIPPED — human takeover active for tenant ${tenant.id}`);
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', 'hr');
+      console.log('[webhook] FINAL RESPONSE SENT — empty (takeover)');
+      return res.send(emptyTwiml());
     }
 
-    // 3.2. Handle opt-in response (da/ne) — must run before trivial filter
-    const lowerMsg = trimmedMsg.toLowerCase();
+    // 5. GENERATE RESPONSE — AI called for every non-takeover message
+    const model = tenant.openai_model;
+    console.log(`[webhook] AI CALLED — "${trimmedMsg}"`);
+    const { lang, intent, response: aiResponse } = await parseMessage(trimmedMsg, tenant.system_prompt, model);
+    console.log(`[webhook] intent=${intent} lang=${lang} response="${(aiResponse || '').slice(0, 80)}"`);
+
+    // 6. Admin notification — non-blocking, never stops flow
+    if (shouldNotifyAdmin(trimmedMsg, intent, aiResponse)) {
+      notifyAdmin(tenant.id, userPhone, trimmedMsg).catch(() => {});
+    }
+
+    // 7. Opt-in response (da/ne) — handled after AI so we have lang
     if (lowerMsg === 'da' || lowerMsg === 'ne') {
       try {
         const wu = await getWhatsappUser(tenant.id, userPhone);
         if (wu && wu.asked_opt_in) {
           const optIn = lowerMsg === 'da' ? 1 : 0;
           await setOptIn(tenant.id, userPhone, optIn);
-          await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', 'hr');
-          return res.send(twiml(optIn ? OPT_IN_CONFIRM.hr : OPT_OUT_CONFIRM.hr));
+          await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', lang);
+          const reply = optIn ? OPT_IN_CONFIRM.hr : OPT_OUT_CONFIRM.hr;
+          console.log('[webhook] FINAL RESPONSE SENT — opt-in');
+          return res.send(twiml(reply));
         }
       } catch (optErr) {
-        console.error('[webhook] opt-in handling error:', optErr.message);
+        console.error('[webhook] opt-in error:', optErr.message);
       }
     }
 
-    // 3.5. Short / trivial messages — no AI call, no response needed
-    if (trimmedMsg.length < 4 || TRIVIAL.has(trimmedMsg.toLowerCase())) {
-      console.log(`[webhook] trivial message ignored: "${trimmedMsg}"`);
+    // 8. Trivial short messages — AI was called, no reply needed
+    if (trimmedMsg.length < 4 || TRIVIAL.has(lowerMsg)) {
+      console.log(`[webhook] FINAL RESPONSE SENT — trivial (empty)`);
       return res.send(emptyTwiml());
     }
 
-    // 4. Single AI call — detects lang + intent AND generates the reply for non-event/weather cases
-    const { lang, intent, response: aiResponse } = await parseMessage(trimmedMsg, tenant.system_prompt, model);
-    console.log(`[webhook] intent=${intent} lang=${lang} aiResponse=${aiResponse ? '"' + aiResponse.slice(0, 60) + '…"' : '(empty)'}`);
-
-    // 5. Human takeover — agent is handling this conversation manually
-    if (tenant.human_takeover) {
-      console.log(`[webhook] human_takeover active for tenant ${tenant.id} — silencing bot`);
-      await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', lang);
-      return res.send(emptyTwiml());
+    // 9. Explicit help request → trigger human handover
+    if (intent === 'other') {
+      const HELP_KEYWORDS = ['help', 'agent', 'čovjek', 'covjek', 'osoba', 'pomoć', 'pomoc', 'kontakt', 'human', 'person'];
+      if (HELP_KEYWORDS.some(kw => lowerMsg.includes(kw))) {
+        await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', lang);
+        await setHumanTakeover(tenant.id);
+        await sendHandoverEmail(userPhone, trimmedMsg);
+        console.log('[webhook] FINAL RESPONSE SENT — human handover');
+        return res.send(twiml(fallbackReply(lang)));
+      }
     }
 
-    // 5.5. Smart admin notification — fires once per user, never blocks bot response
-    if (shouldNotifyAdmin(trimmedMsg, intent, aiResponse)) {
-      notifyAdmin(tenant.id, userPhone, trimmedMsg).catch(() => {});
-    }
-
-    // 6. FAQ — return DB answer directly; no match falls through to aiResponse
+    // 10. FAQ — DB answer if match, AI response if no match (falls through)
     if (intent === 'faq') {
       const faqAnswer = await getFaqMatch(tenant.id, trimmedMsg);
       if (faqAnswer) {
         await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', lang);
-        console.log(`[webhook] FAQ match found`);
+        console.log('[webhook] FINAL RESPONSE SENT — FAQ');
         return res.send(twiml(faqAnswer));
       }
-      // No FAQ match — fall through to aiResponse
     }
 
-    // 7. Weather — real data from OpenWeather API, language-aware templates (no extra AI call)
+    // 11. Weather — real-time data from OpenWeather API
     if (intent === 'weather_current' || intent === 'weather_tomorrow' || intent === 'weather_multi') {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'weather', lang);
 
       const apiKey = process.env.OPENWEATHER_API_KEY;
-      console.log(`[webhook] OPENWEATHER_API_KEY loaded: ${apiKey ? 'yes (' + apiKey.slice(0, 4) + '...)' : 'NO — key missing'}`);
-
-      const city = tenant.city || 'Brela';
-      // Pass lang to OpenWeather so descriptions come back in the user's language
+      const city   = tenant.city || 'Brela';
       const owLang = ['hr','en','de','it','fr'].includes(lang) ? lang : 'en';
 
       if (!apiKey) {
+        console.log('[webhook] FINAL RESPONSE SENT — weather (no API key)');
         return res.send(twiml(WEATHER_UNAVAILABLE[lang] || WEATHER_UNAVAILABLE.en));
       }
 
@@ -312,16 +321,16 @@ router.post('/webhook', async (req, res) => {
           const requestedDays = daysMatch ? Math.min(parseInt(daysMatch[0], 10), 5) : 3;
 
           if (daysMatch && parseInt(daysMatch[0], 10) > 5) {
+            console.log('[webhook] FINAL RESPONSE SENT — weather long-range link');
             return res.send(twiml(FORECAST_LONG_RANGE[lang] || FORECAST_LONG_RANGE.en));
           }
 
           const url = `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric&lang=${owLang}`;
-          console.log(`[webhook] fetching ${requestedDays}-day forecast for: ${city}`);
           const forecastRes = await fetch(url);
           const data = await forecastRes.json();
 
           if (!forecastRes.ok) {
-            console.warn(`[webhook] forecast error ${forecastRes.status}:`, data.message);
+            console.log('[webhook] FINAL RESPONSE SENT — forecast unavailable');
             return res.send(twiml(FORECAST_UNAVAILABLE[lang] || FORECAST_UNAVAILABLE.en));
           }
 
@@ -340,20 +349,21 @@ router.post('/webhook', async (req, res) => {
           }
 
           if (!days.length) {
+            console.log('[webhook] FINAL RESPONSE SENT — forecast unavailable (no data)');
             return res.send(twiml(FORECAST_UNAVAILABLE[lang] || FORECAST_UNAVAILABLE.en));
           }
 
           const label = { hr: 'Prognoza', en: 'Forecast', de: 'Vorhersage', it: 'Previsioni', fr: 'Prévisions' }[lang] || 'Forecast';
+          console.log('[webhook] FINAL RESPONSE SENT — weather multi-day');
           return res.send(twiml(`🌤️ ${city} — ${label}:\n${days.join('\n')}`));
 
         } else if (intent === 'weather_tomorrow') {
           const url = `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric&lang=${owLang}`;
-          console.log(`[webhook] fetching tomorrow forecast for: ${city}`);
           const forecastRes = await fetch(url);
           const data = await forecastRes.json();
 
           if (!forecastRes.ok) {
-            console.warn(`[webhook] forecast error ${forecastRes.status}:`, data.message);
+            console.log('[webhook] FINAL RESPONSE SENT — tomorrow forecast unavailable');
             return res.send(twiml(FORECAST_UNAVAILABLE[lang] || FORECAST_UNAVAILABLE.en));
           }
 
@@ -364,57 +374,58 @@ router.post('/webhook', async (req, res) => {
                      || data.list.find(e => e.dt_txt.startsWith(tomorrowDate));
 
           if (!entry) {
+            console.log('[webhook] FINAL RESPONSE SENT — tomorrow forecast unavailable (no entry)');
             return res.send(twiml(FORECAST_UNAVAILABLE[lang] || FORECAST_UNAVAILABLE.en));
           }
 
           const temp = Math.round(entry.main.temp);
           const desc = entry.weather[0]?.description || '';
-          console.log(`[webhook] tomorrow forecast OK: ${temp}°C, ${desc}`);
           const label = { hr: 'Sutra', en: 'Tomorrow', de: 'Morgen', it: 'Domani', fr: 'Demain' }[lang] || 'Tomorrow';
+          console.log('[webhook] FINAL RESPONSE SENT — weather tomorrow');
           return res.send(twiml(`🌤️ ${city} — ${label}: ${temp}°C, ${desc}`));
 
         } else {
           // weather_current
           const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric&lang=${owLang}`;
-          console.log(`[webhook] fetching current weather for: ${city}`);
           const weatherRes = await fetch(url);
           const data = await weatherRes.json();
 
           if (!weatherRes.ok) {
-            console.warn(`[webhook] weather error ${weatherRes.status}:`, data.message);
+            console.log('[webhook] FINAL RESPONSE SENT — current weather unavailable');
             return res.send(twiml(WEATHER_UNAVAILABLE[lang] || WEATHER_UNAVAILABLE.en));
           }
 
           const temp = Math.round(data.main.temp);
           const desc = data.weather[0]?.description || '';
-          console.log(`[webhook] weather OK: ${temp}°C, ${desc}`);
           const label = { hr: 'Trenutno', en: 'Now', de: 'Jetzt', it: 'Ora', fr: 'Maintenant' }[lang] || 'Now';
+          console.log('[webhook] FINAL RESPONSE SENT — weather current');
           return res.send(twiml(`🌤️ ${city} — ${label}: ${temp}°C, ${desc}`));
         }
 
       } catch (weatherErr) {
         console.error('[webhook] weather fetch exception:', weatherErr.message);
+        console.log('[webhook] FINAL RESPONSE SENT — weather exception fallback');
         return res.send(twiml(WEATHER_UNAVAILABLE[lang] || WEATHER_UNAVAILABLE.en));
       }
     }
 
-    // 8. Events — time-specific (no AI call) or general (AI-formatted)
+    // 12. Events — DB-driven
     if (intent === 'events_today' || intent === 'events_tomorrow' || intent === 'events_week') {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'events', lang);
       const period = intent === 'events_today' ? 'today' : intent === 'events_tomorrow' ? 'tomorrow' : 'week';
       const events = await getEventsByPeriod(tenant.id, period);
-      console.log(`[webhook] events_${period}: ${events.length} found`);
+      console.log(`[webhook] FINAL RESPONSE SENT — events (${period}, ${events.length} found)`);
       return res.send(twiml(formatEventsList(events, period, lang)));
     }
 
     if (intent === 'events') {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'events', lang);
-
       const events = await getUpcomingEvents(tenant.id);
       if (!events.length) {
+        console.log('[webhook] FINAL RESPONSE SENT — events (empty)');
         return res.send(twiml(NO_EVENTS[lang] || NO_EVENTS.en));
       }
-
+      const header = EVENTS_HEADER[lang] || EVENTS_HEADER.en;
       const lines = events.map(ev => {
         const dateStr = new Date(ev.date).toISOString().slice(0, 10);
         let line = `• ${ev.title} (${dateStr})`;
@@ -422,46 +433,29 @@ router.post('/webhook', async (req, res) => {
         if (ev.location_link) line += `\n  📍 ${ev.location_link}`;
         return line;
       }).join('\n');
-
-      console.log(`[webhook] events found: ${events.length}`);
-      const header = EVENTS_HEADER[lang] || EVENTS_HEADER.en;
+      console.log(`[webhook] FINAL RESPONSE SENT — events (${events.length} found)`);
       return res.send(twiml(`${header}\n\n${lines}`));
     }
 
-    // 9. 'other' intent — only trigger human handover on explicit help requests
-    if (intent === 'other') {
-      const HELP_KEYWORDS = ['help', 'agent', 'čovjek', 'covjek', 'osoba', 'pomoć', 'pomoc', 'kontakt', 'human', 'person'];
-      const needsHuman = HELP_KEYWORDS.some(kw => trimmedMsg.toLowerCase().includes(kw));
-      if (needsHuman) {
-        console.log(`[webhook] intent=other + help keyword — triggering human handover for tenant ${tenant.id}`);
-        await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', lang);
-        await setHumanTakeover(tenant.id);
-        await sendHandoverEmail(userPhone, trimmedMsg);
-        return res.send(twiml(fallbackReply(lang)));
-      }
-      // No help keyword — fall through and use the AI response generated in step 4
-    }
-
-    // 10. AI usage rate limit — per user/day cap; does NOT trigger tenant-wide takeover
+    // 13. Rate limit — per user/day, does NOT trigger takeover
     const usage = await checkAndIncrementUsage(tenant.id, userPhone);
     if (!usage.allowed) {
-      console.log(`[webhook] AI rate limit reached for ${userPhone} — sending fallback, bot stays active`);
       await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', lang);
+      console.log('[webhook] FINAL RESPONSE SENT — rate limited');
       return res.send(twiml(fallbackReply(lang)));
     }
 
-    // 11. Use the AI response already generated in step 4 — no second call needed
+    // 14. AI response — default for faq-no-match, other-no-keyword, anything else
     const reply = aiResponse || fallbackReply(lang);
-    console.log(`[webhook] AI reply: "${reply}"`);
-
     await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', lang);
-
+    console.log(`[webhook] FINAL RESPONSE SENT — AI ("${reply.slice(0, 60)}")`);
     res.send(twiml(reply));
-    console.log(`[webhook] TwiML sent to ${userPhone}`);
+
   } catch (err) {
     console.error('[webhook] error:', err.message);
     console.error(err.stack);
     const isQuota = err.status === 429 || err.code === 'insufficient_quota';
+    console.log('[webhook] FINAL RESPONSE SENT — error fallback');
     res.send(twiml(isQuota
       ? 'Service temporarily unavailable. Please try again later.'
       : 'An error occurred. Please try again.'
