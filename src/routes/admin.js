@@ -118,15 +118,15 @@ router.get('/dashboard', requireAuth, async (req, res) => {
       'SELECT COUNT(DISTINCT user_phone) AS total FROM messages WHERE tenant_id = ?',
       [tenantId]
     );
-    const totalUsersRow = usersRows && usersRows.length ? usersRows[0] : { total: 0 };
+    const totalUsersRow = (usersRows && usersRows[0]) || { total: 0 };
 
     const [msgsRows] = await pool.query(
       'SELECT COUNT(*) AS total FROM messages WHERE tenant_id = ?',
       [tenantId]
     );
-    const totalMsgsRow = msgsRows && msgsRows.length ? msgsRows[0] : { total: 0 };
+    const totalMsgsRow = (msgsRows && msgsRows[0]) || { total: 0 };
 
-    const [perDay] = await pool.query(
+    const [perDayRows] = await pool.query(
       `SELECT DATE(created_at) AS day, COUNT(*) AS count
        FROM messages
        WHERE tenant_id = ? AND created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
@@ -134,13 +134,15 @@ router.get('/dashboard', requireAuth, async (req, res) => {
        ORDER BY day ASC`,
       [tenantId]
     );
+    const perDay = perDayRows || [];
 
-    const [intents] = await pool.query(
+    const [intentRows] = await pool.query(
       `SELECT intent, COUNT(*) AS count
        FROM messages WHERE tenant_id = ?
        GROUP BY intent ORDER BY count DESC`,
       [tenantId]
     );
+    const intents = intentRows || [];
 
     let languages = [];
     try {
@@ -150,7 +152,7 @@ router.get('/dashboard', requireAuth, async (req, res) => {
          GROUP BY lang ORDER BY count DESC`,
         [tenantId]
       );
-      languages = langRows;
+      languages = langRows || [];
     } catch (_) {
       // lang column may not exist yet — safe fallback
     }
@@ -163,13 +165,14 @@ router.get('/dashboard', requireAuth, async (req, res) => {
        FROM messages WHERE tenant_id = ?`,
       [tenantId]
     );
-    const timeOfDay = todRows && todRows.length ? todRows[0] : { morning: 0, afternoon: 0, evening: 0 };
+    const timeOfDay = (todRows && todRows[0]) || { morning: 0, afternoon: 0, evening: 0 };
 
     const [tenantRows] = await pool.query(
       'SELECT human_takeover FROM tenants WHERE id = ?',
       [tenantId]
     );
-    const humanTakeover = tenantRows.length ? Boolean(tenantRows[0].human_takeover) : false;
+    const tenant = (tenantRows && tenantRows[0]) || null;
+    const humanTakeover = tenant ? Boolean(tenant.human_takeover) : false;
 
     let featuredEvents = [];
     try {
@@ -223,20 +226,20 @@ router.get('/dashboard', requireAuth, async (req, res) => {
     }
 
     res.render('dashboard', {
-      totalUsers:    totalUsersRow.total,
-      totalMessages: totalMsgsRow.total,
+      totalUsers:    totalUsersRow.total || 0,
+      totalMessages: totalMsgsRow.total  || 0,
       perDay,
       intents,
       languages,
       timeOfDay,
       insights,
       humanTakeover,
-      featuredEvents: featuredEvents || [],
+      featuredEvents,
       tenantId,
     });
   } catch (err) {
-    console.error('[admin] dashboard error:', err.message);
-    res.status(500).send('Server error');
+    console.error('DASHBOARD ERROR FULL:', err);
+    return res.status(500).send('<pre>' + err.stack + '</pre>');
   }
 });
 
