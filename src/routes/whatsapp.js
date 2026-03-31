@@ -428,13 +428,18 @@ router.post('/webhook', async (req, res) => {
       return res.send(twiml(`${header}\n\n${lines}`));
     }
 
-    // 9. 'other' intent — human handover (no AI call wasted)
+    // 9. 'other' intent — only trigger human handover on explicit help requests
     if (intent === 'other') {
-      console.log(`[webhook] intent=other — triggering human handover for tenant ${tenant.id}`);
-      await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', lang);
-      await setHumanTakeover(tenant.id);
-      await sendHandoverEmail(userPhone, trimmedMsg);
-      return res.send(twiml(fallbackReply(lang)));
+      const HELP_KEYWORDS = ['help', 'agent', 'čovjek', 'covjek', 'osoba', 'pomoć', 'pomoc', 'kontakt', 'human', 'person'];
+      const needsHuman = HELP_KEYWORDS.some(kw => trimmedMsg.toLowerCase().includes(kw));
+      if (needsHuman) {
+        console.log(`[webhook] intent=other + help keyword — triggering human handover for tenant ${tenant.id}`);
+        await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', lang);
+        await setHumanTakeover(tenant.id);
+        await sendHandoverEmail(userPhone, trimmedMsg);
+        return res.send(twiml(fallbackReply(lang)));
+      }
+      // No help keyword — fall through and use the AI response generated in step 4
     }
 
     // 10. AI usage rate limit (applies to FAQ-with-no-match reaching this point)
