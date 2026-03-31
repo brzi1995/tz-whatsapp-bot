@@ -437,7 +437,8 @@ router.get('/conversations', requireAuth, async (req, res) => {
        ORDER BY last_msg DESC`,
       [tenantId]
     );
-    res.render('conversations', { conversations: rows });
+    const conversations = rows.map(u => ({ ...u, human_takeover: u.human_takeover || 0 }));
+    res.render('conversations', { conversations });
   } catch (err) {
     console.error('[admin] conversations list error:', err.message);
     res.status(500).send('Server error');
