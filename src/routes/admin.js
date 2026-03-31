@@ -201,18 +201,20 @@ router.get('/dashboard', requireAuth, async (req, res) => {
       }
     }
 
-    res.render('dashboard', {
-      totalUsers:    totalUsersRow.total || 0,
-      totalMessages: totalMsgsRow.total  || 0,
-      perDay,
-      intents,
-      languages,
-      timeOfDay,
-      insights,
-      activeUserTakeovers,
-      featuredEvents,
+    const safeData = {
+      totalUsers:          totalUsersRow.total || 0,
+      totalMessages:       totalMsgsRow.total  || 0,
+      perDay:              Array.isArray(perDay)         ? perDay         : [],
+      intents:             Array.isArray(intents)        ? intents        : [],
+      languages:           Array.isArray(languages)      ? languages      : [],
+      timeOfDay:           timeOfDay || { morning: 0, afternoon: 0, evening: 0 },
+      insights:            Array.isArray(insights)       ? insights       : [],
+      activeUserTakeovers: activeUserTakeovers || 0,
+      featuredEvents:      Array.isArray(featuredEvents) ? featuredEvents : [],
+      humanTakeover:       humanTakeover || false,
       tenantId,
-    });
+    };
+    res.render('dashboard', safeData);
   } catch (err) {
     console.error('DASHBOARD ERROR FULL:', err);
     return res.status(500).send('<pre>' + err.stack + '</pre>');

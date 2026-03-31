@@ -1,5 +1,18 @@
 <%- include('partials/head', { title: 'Dashboard' }) %>
 <%- include('partials/sidebar', { activePage: 'dashboard' }) %>
+<%
+  if (locals.humanTakeover   === undefined) locals.humanTakeover   = false;
+  if (locals.tenantId        === undefined) locals.tenantId        = 0;
+  if (locals.totalUsers      === undefined) locals.totalUsers      = 0;
+  if (locals.totalMessages   === undefined) locals.totalMessages   = 0;
+  if (locals.perDay          === undefined) locals.perDay          = [];
+  if (locals.intents         === undefined) locals.intents         = [];
+  if (locals.languages       === undefined) locals.languages       = [];
+  if (locals.insights        === undefined) locals.insights        = [];
+  if (locals.featuredEvents  === undefined) locals.featuredEvents  = [];
+  if (locals.activeUserTakeovers === undefined) locals.activeUserTakeovers = 0;
+  if (locals.timeOfDay       === undefined) locals.timeOfDay       = { morning: 0, afternoon: 0, evening: 0 };
+%>
 
 <main class="content">
   <div class="page-header">
