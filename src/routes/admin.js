@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../db/index');
 const bcrypt = require('bcryptjs');
 const { requireAuth } = require('../middleware/auth');
+const { sendMessage } = require('../services/twilio');
 
 /**
  * POST /admin/takeover/:tenantId
@@ -498,6 +499,42 @@ router.get('/conversations/:phone', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[admin] conversation detail error:', err.message);
     res.status(500).send('Server error');
+  }
+});
+
+// POST /admin/conversations/:phone/reply
+router.post('/conversations/:phone/reply', requireAuth, async (req, res) => {
+  const tenantId = req.session.tenantId;
+  const userPhone = req.params.phone;
+  const message = (req.body.message || '').trim();
+
+  if (!message) {
+    return res.redirect(`/admin/conversations/${encodeURIComponent(userPhone)}`);
+  }
+
+  try {
+    // Get tenant's Twilio number to use as the from address
+    const [tenantRows] = await pool.query(
+      'SELECT phone_number FROM tenants WHERE id = ?',
+      [tenantId]
+    );
+    const tenant = (tenantRows && tenantRows[0]) || null;
+    if (!tenant) return res.status(404).send('Tenant not found');
+
+    // Send WhatsApp message via Twilio
+    await sendMessage(userPhone, tenant.phone_number, message);
+
+    // Log the admin reply in the messages table
+    await pool.query(
+      'INSERT INTO messages (tenant_id, user_phone, message, intent, lang) VALUES (?, ?, ?, ?, ?)',
+      [tenantId, userPhone, message, 'admin_reply', 'hr']
+    );
+
+    console.log(`[admin] reply sent to ${userPhone} by tenant ${tenantId}`);
+    res.redirect(`/admin/conversations/${encodeURIComponent(userPhone)}`);
+  } catch (err) {
+    console.error('[admin] reply error:', err);
+    res.status(500).send('Greška pri slanju poruke: ' + err.message);
   }
 });
 

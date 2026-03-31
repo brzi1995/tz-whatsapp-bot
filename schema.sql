@@ -60,11 +60,14 @@ CREATE TABLE IF NOT EXISTS messages (
   tenant_id   INT         NOT NULL,
   user_phone  VARCHAR(50) NOT NULL,
   message     TEXT        NOT NULL,
-  intent      ENUM('faq','weather','events','ai','fallback') NOT NULL,
+  intent      ENUM('faq','weather','events','ai','fallback','admin_reply') NOT NULL,
   lang        VARCHAR(10) NOT NULL DEFAULT 'hr',
   created_at  TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (tenant_id) REFERENCES tenants(id)
 );
+
+-- Migration for existing installs (safe to run once):
+-- ALTER TABLE messages MODIFY COLUMN intent ENUM('faq','weather','events','ai','fallback','admin_reply') NOT NULL;
 
 -- Per-user daily AI usage cap (max 5 AI calls / user / day)
 CREATE TABLE IF NOT EXISTS usage (
