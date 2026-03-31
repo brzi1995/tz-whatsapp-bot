@@ -2,10 +2,13 @@
 <%- include('partials/sidebar', { activePage: 'events' }) %>
 
 <main class="content">
-  <h1>Dogadaji</h1>
+  <div class="page-header">
+    <h1>Događaji</h1>
+    <p>Upravljajte događajima koje bot šalje turistima</p>
+  </div>
 
   <div class="add-form">
-    <h2>Dodaj novi dogadaj</h2>
+    <h2>Dodaj novi događaj</h2>
     <form method="POST" action="/admin/events">
       <div class="form-row">
         <div>
@@ -20,13 +23,19 @@
       <label>Lokacija</label>
       <input type="text" name="location_link" placeholder="Npr. https://osm.org/...">
       <label>Opis</label>
-      <textarea name="description" rows="2" placeholder="Kratki opis dogadaja..."></textarea>
-      <button type="submit" class="btn btn-primary">Dodaj dogadaj</button>
+      <textarea name="description" rows="2" placeholder="Kratki opis događaja..."></textarea>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;margin:0">
+          <input type="checkbox" name="featured" value="1" style="width:auto;margin:0;accent-color:var(--blue)">
+          ⭐ Istakni događaj <span style="font-size:12px;font-weight:400;color:var(--muted)">(bot ga šalje kao prioritet)</span>
+        </label>
+        <button type="submit" class="btn btn-primary">Dodaj događaj</button>
+      </div>
     </form>
   </div>
 
   <% if (events.length === 0) { %>
-    <div class="empty">Nema dogadaja. Dodajte prvi gore.</div>
+    <div class="empty">Nema događaja. Dodajte prvi gore.</div>
   <% } else { %>
   <div class="table-wrap">
     <table>
@@ -34,24 +43,38 @@
         <tr>
           <th>Naziv</th>
           <th>Datum</th>
+          <th>Istaknuto</th>
           <th>Lokacija</th>
           <th>Opis</th>
-          <th style="width:130px">Akcije</th>
+          <th style="width:150px">Akcije</th>
         </tr>
       </thead>
       <tbody>
         <% events.forEach(function(ev) {
           const dateStr = ev.date ? new Date(ev.date).toLocaleDateString('hr-HR') : '—';
         %>
-        <tr>
-          <td><strong><%= ev.title %></strong></td>
+        <tr style="<%= ev.featured ? 'background:#fffdf5' : '' %>">
+          <td>
+            <strong><%= ev.title %></strong>
+            <% if (ev.featured) { %>
+            <span style="display:inline-block;margin-left:7px;font-size:10px;font-weight:700;background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:20px;vertical-align:middle">🔥 Izdvojeno</span>
+            <% } %>
+          </td>
           <td style="white-space:nowrap;color:#64748b"><%= dateStr %></td>
+          <td>
+            <form method="POST" action="/admin/events/<%= ev.id %>/toggle-featured" style="display:inline">
+              <button type="submit" class="btn btn-sm" title="<%= ev.featured ? 'Ukloni isticanje' : 'Istakni ovaj događaj' %>"
+                      style="background:<%= ev.featured ? '#fef3c7' : '#f1f5f9' %>;color:<%= ev.featured ? '#d97706' : '#94a3b8' %>;border:1px solid <%= ev.featured ? '#fde68a' : '#e2e8f0' %>">
+                <%= ev.featured ? '⭐' : '☆' %>
+              </button>
+            </form>
+          </td>
           <td style="color:#64748b"><%= ev.location_link ? '<a href="' + ev.location_link + '" target="_blank">Link</a>' : '—' %></td>
           <td style="color:#64748b;max-width:240px;word-break:break-word"><%= ev.description || '—' %></td>
           <td>
             <a href="/admin/events/<%= ev.id %>/edit" class="btn btn-secondary btn-sm">Uredi</a>
-            <form method="POST" action="/admin/events/<%= ev.id %>/delete" style="display:inline" onsubmit="return confirm('Obrisati ovaj dogadaj?')">
-              <button type="submit" class="btn btn-danger btn-sm">Brisi</button>
+            <form method="POST" action="/admin/events/<%= ev.id %>/delete" style="display:inline" onsubmit="return confirm('Obrisati ovaj događaj?')">
+              <button type="submit" class="btn btn-danger btn-sm">Briši</button>
             </form>
           </td>
         </tr>

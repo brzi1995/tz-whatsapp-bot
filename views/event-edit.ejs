@@ -24,6 +24,11 @@
       <label>Opis</label>
       <textarea name="description" rows="4"><%= event.description || '' %></textarea>
 
+      <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;margin-bottom:18px">
+        <input type="checkbox" name="featured" value="1" <%= event.featured ? 'checked' : '' %> style="width:auto;margin:0;accent-color:var(--blue)">
+        ⭐ Istakni događaj <span style="font-size:12px;font-weight:400;color:var(--muted)">(bot ga šalje kao prioritet)</span>
+      </label>
+
       <div style="display:flex;gap:10px">
         <button type="submit" class="btn btn-primary">Spremi promjene</button>
         <a href="/admin/events" class="btn btn-secondary">Odustani</a>

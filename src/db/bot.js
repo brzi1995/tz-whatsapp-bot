@@ -62,6 +62,12 @@ async function getFaqMatch(tenantId, userMessage) {
  */
 async function getUpcomingEvents(tenantId) {
   try {
+    // Featured events take priority (max 3); fall back to all upcoming
+    const [featured] = await pool.query(
+      'SELECT title, description, date, location_link FROM events WHERE tenant_id = ? AND date >= CURDATE() AND featured = 1 ORDER BY date ASC LIMIT 3',
+      [tenantId]
+    );
+    if (featured.length) return featured;
     const [rows] = await pool.query(
       'SELECT title, description, date, location_link FROM events WHERE tenant_id = ? AND date >= CURDATE() ORDER BY date ASC LIMIT 5',
       [tenantId]
@@ -131,6 +137,15 @@ async function getEventsByPeriod(tenantId, period) {
   };
   const condition = conditions[period] || conditions.today;
   try {
+    // Featured events take priority for the given period (max 3)
+    const [featured] = await pool.query(
+      `SELECT title, description, date, location_link
+       FROM events
+       WHERE tenant_id = ? AND featured = 1 AND ${condition}
+       ORDER BY date ASC LIMIT 3`,
+      [tenantId]
+    );
+    if (featured.length) return featured;
     const [rows] = await pool.query(
       `SELECT title, description, date, location_link
        FROM events
@@ -173,11 +188,14 @@ const WEATHER_WORDS = new Set([
 ]);
 
 const EVENT_RESPONSES = {
-  hr: { header: 'Evo što se događa:\n\n', empty: 'Trenutno nema događaja.' },
-  en: { header: 'Here are some events:\n\n', empty: 'No events found.' },
-  de: { header: 'Hier sind einige Veranstaltungen:\n\n', empty: 'Keine Veranstaltungen gefunden.' },
-  it: { header: 'Ecco alcuni eventi:\n\n', empty: 'Nessun evento trovato.' },
-  fr: { header: 'Voici quelques événements:\n\n', empty: 'Aucun événement trouvé.' },
+  hr: { header: 'Evo što se događa:\n\n', empty: 'Za sada nema prijavljenih događaja, ali je destinacija puna sadržaja! 🌟\n\n• Prošetajte starom gradskom jezgrom\n• Posjetite lokalne plaže i uvale\n• Isprobajte lokalne restorane i konobe' },
+  en: { header: 'Here are some events:\n\n', empty: 'No events scheduled right now, but there\'s plenty to explore! 🌟\n\n• Stroll through the historic old town\n• Discover local beaches and coves\n• Try the local restaurants and taverns' },
+  de: { header: 'Hier sind einige Veranstaltungen:\n\n', empty: 'Derzeit keine Veranstaltungen geplant, aber es gibt viel zu entdecken! 🌟\n\n• Schlendern Sie durch die historische Altstadt\n• Entdecken Sie lokale Strände und Buchten\n• Probieren Sie die lokalen Restaurants und Tavernen' },
+  it: { header: 'Ecco alcuni eventi:\n\n', empty: 'Nessun evento in programma al momento, ma c\'è tanto da esplorare! 🌟\n\n• Passeggia per il centro storico\n• Scopri le spiagge e le calette locali\n• Prova i ristoranti e le taverne locali' },
+  fr: { header: 'Voici quelques événements:\n\n', empty: 'Pas d\'événements prévus pour l\'instant, mais il y a beaucoup à explorer ! 🌟\n\n• Promenez-vous dans la vieille ville historique\n• Découvrez les plages et criques locales\n• Goûtez aux restaurants et tavernes locaux' },
+  sv: { header: 'Här är några evenemang:\n\n', empty: 'Inga evenemang planerade just nu, men det finns mycket att utforska! 🌟\n\n• Promenera genom den historiska gamla stan\n• Upptäck lokala stränder och vikar\n• Prova de lokala restaurangerna och krogarnas mat' },
+  no: { header: 'Her er noen arrangementer:\n\n', empty: 'Ingen arrangementer planlagt akkurat nå, men det er mye å utforske! 🌟\n\n• Ta en tur gjennom den historiske gamlebyen\n• Oppdag lokale strender og viker\n• Prøv de lokale restaurantene og tavernene' },
+  cs: { header: 'Zde jsou některé události:\n\n', empty: 'Momentálně nejsou naplánované žádné události, ale je tu spoustu k prozkoumání! 🌟\n\n• Projděte se historickým starým městem\n• Objevte místní pláže a zátoky\n• Vyzkoušejte místní restaurace a krčmy' },
 };
 
 /**

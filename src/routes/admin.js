@@ -155,6 +155,20 @@ router.get('/dashboard', requireAuth, async (req, res) => {
       [tenantId]
     );
 
+    const [[tenant]] = await pool.query(
+      'SELECT human_takeover FROM tenants WHERE id = ?',
+      [tenantId]
+    );
+
+    let featuredEvents = [];
+    try {
+      const [fevRows] = await pool.query(
+        'SELECT id, title, date, description FROM events WHERE tenant_id = ? AND date >= CURDATE() AND featured = 1 ORDER BY date ASC LIMIT 3',
+        [tenantId]
+      );
+      featuredEvents = fevRows;
+    } catch (_) {}
+
     // Derive human-readable insights from existing data — no AI calls
     const insights = [];
     const hasData = intents.reduce((s, r) => s + Number(r.count), 0) > 0;
@@ -205,6 +219,9 @@ router.get('/dashboard', requireAuth, async (req, res) => {
       languages,
       timeOfDay,
       insights,
+      humanTakeover: Boolean(tenant?.human_takeover),
+      featuredEvents,
+      tenantId,
     });
   } catch (err) {
     console.error('[admin] dashboard error:', err.message);
@@ -326,12 +343,12 @@ router.get('/events', requireAuth, async (req, res) => {
 // POST /admin/events
 router.post('/events', requireAuth, async (req, res) => {
   const tenantId = req.session.tenantId;
-  const { title, description, date, location_link } = req.body;
+  const { title, description, date, location_link, featured } = req.body;
 
   try {
     await pool.query(
-      'INSERT INTO events (tenant_id, title, description, date, location_link) VALUES (?, ?, ?, ?, ?)',
-      [tenantId, title, description || null, date || null, location_link || null]
+      'INSERT INTO events (tenant_id, title, description, date, location_link, featured) VALUES (?, ?, ?, ?, ?, ?)',
+      [tenantId, title, description || null, date || null, location_link || null, featured ? 1 : 0]
     );
     res.redirect('/admin/events');
   } catch (err) {
@@ -380,16 +397,33 @@ router.get('/events/:id/edit', requireAuth, async (req, res) => {
 router.post('/events/:id/edit', requireAuth, async (req, res) => {
   const tenantId = req.session.tenantId;
   const id = parseInt(req.params.id, 10);
-  const { title, description, date, location_link } = req.body;
+  const { title, description, date, location_link, featured } = req.body;
 
   try {
     await pool.query(
-      'UPDATE events SET title = ?, description = ?, date = ?, location_link = ? WHERE id = ? AND tenant_id = ?',
-      [title, description || null, date || null, location_link || null, id, tenantId]
+      'UPDATE events SET title = ?, description = ?, date = ?, location_link = ?, featured = ? WHERE id = ? AND tenant_id = ?',
+      [title, description || null, date || null, location_link || null, featured ? 1 : 0, id, tenantId]
     );
     res.redirect('/admin/events');
   } catch (err) {
     console.error('[admin] events edit post error:', err.message);
+    res.status(500).send('Server error');
+  }
+});
+
+// POST /admin/events/:id/toggle-featured
+router.post('/events/:id/toggle-featured', requireAuth, async (req, res) => {
+  const tenantId = req.session.tenantId;
+  const id = parseInt(req.params.id, 10);
+
+  try {
+    await pool.query(
+      'UPDATE events SET featured = NOT featured WHERE id = ? AND tenant_id = ?',
+      [id, tenantId]
+    );
+    res.redirect('/admin/events');
+  } catch (err) {
+    console.error('[admin] events toggle-featured error:', err.message);
     res.status(500).send('Server error');
   }
 });

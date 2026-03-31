@@ -7,6 +7,26 @@
     <p>Pregled aktivnosti vašeg WhatsApp bota</p>
   </div>
 
+  <!-- Human Takeover -->
+  <div style="background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow-sm);padding:16px 22px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div id="takeover-icon" style="width:40px;height:40px;border-radius:10px;background:<%= humanTakeover ? '#f0fdf4' : '#eff6ff' %>;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0"><%= humanTakeover ? '🤝' : '🤖' %></div>
+      <div>
+        <div style="font-size:14px;font-weight:600;color:var(--text)">Status bota</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:1px">Prebacite na operatera kada trebate ručno preuzeti razgovor</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <span id="takeover-badge" style="padding:5px 13px;border-radius:20px;font-size:12px;font-weight:700;background:<%= humanTakeover ? '#f0fdf4' : '#f1f5f9' %>;color:<%= humanTakeover ? '#16a34a' : '#64748b' %>">
+        <%= humanTakeover ? '🤝 Operater odgovara' : '🤖 Bot odgovara' %>
+      </span>
+      <button id="takeover-btn" class="btn"
+              onclick="toggleTakeover(<%= tenantId %>)" style="background:<%= humanTakeover ? '#16a34a' : '#64748b' %>;color:#fff;min-width:160px">
+        <%= humanTakeover ? 'Deaktiviraj' : 'Aktiviraj takeover' %>
+      </button>
+    </div>
+  </div>
+
   <!-- AI Insights -->
   <div style="background:linear-gradient(135deg,#1e3a5f 0%,#1e40af 100%);border-radius:14px;padding:22px 28px;margin-bottom:28px;color:#fff;box-shadow:0 4px 20px rgba(37,99,235,.25)">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
@@ -27,6 +47,7 @@
     <% } %>
   </div>
 
+  <!-- Stat cards -->
   <div class="cards">
     <div class="stat-card">
       <div class="stat-card-top">
@@ -44,12 +65,137 @@
     </div>
   </div>
 
+  <!-- Featured Events -->
+  <div style="background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow-sm);padding:22px 26px;margin-bottom:28px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:18px">🔥</span>
+        <span style="font-size:15px;font-weight:700;color:var(--text)">Izdvojeni događaji</span>
+      </div>
+      <a href="/admin/events" class="btn btn-secondary btn-sm">Upravljaj</a>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:16px;padding-left:26px">Najvažniji događaji koje preporučujemo turistima</p>
+    <% if (!featuredEvents.length) { %>
+      <div style="text-align:center;padding:20px 0;color:#94a3b8;font-size:13px">
+        Trenutno nema izdvojenih događaja — označite ih u <a href="/admin/events" style="color:var(--blue);text-decoration:none;font-weight:600">listi događaja</a>
+      </div>
+    <% } else { %>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <% featuredEvents.forEach(function(ev) {
+         const dateStr = ev.date ? new Date(ev.date).toLocaleDateString('hr-HR') : '—';
+      %>
+      <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;background:#fffbeb;border-radius:10px;border:1px solid #fde68a">
+        <span style="font-size:20px;flex-shrink:0">📅</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:14px;color:var(--text)"><%= ev.title %></div>
+          <% if (ev.description) { %>
+          <div style="font-size:12px;color:var(--muted);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><%= ev.description %></div>
+          <% } %>
+        </div>
+        <div style="font-size:12px;font-weight:600;color:#92400e;background:#fef3c7;padding:3px 9px;border-radius:20px;white-space:nowrap"><%= dateStr %></div>
+      </div>
+      <% }); %>
+    </div>
+    <% } %>
+  </div>
+
+  <!-- Messages chart -->
   <div class="chart-wrap">
     <div class="chart-header">
       <h2>Poruke po danu</h2>
       <span class="chart-badge">Posljednjih 7 dana</span>
     </div>
     <canvas id="msgChart" height="80"></canvas>
+  </div>
+
+  <!-- Analytics row -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin-bottom:28px">
+
+    <!-- Intent distribution -->
+    <div class="chart-wrap" style="margin-bottom:0">
+      <div class="chart-header">
+        <h2>Najčešći interesi turista</h2>
+        <span class="chart-badge">Po tipu</span>
+      </div>
+      <% const intentLabels = { faq:'Opće informacije', weather:'Vrijeme', weather_current:'Vrijeme', weather_tomorrow:'Vrijeme', weather_multi:'Vrijeme', events:'Događaji', ai:'Ostalo', other:'Ostalo', fallback:'Ostalo' };
+         const intentColors = { faq:'#2563eb', weather:'#0ea5e9', events:'#16a34a', ai:'#7c3aed' };
+         const intentTotal  = intents.reduce((s,r) => s + Number(r.count), 0) || 1;
+      %>
+      <% if (!intents.length) { %>
+        <p style="color:#94a3b8;font-size:13px;padding-top:8px">Nema podataka.</p>
+      <% } else { intents.forEach(function(r) {
+           const pct = Math.round(Number(r.count) / intentTotal * 100);
+           const col = intentColors[r.intent] || '#64748b';
+           const lbl = intentLabels[r.intent]  || r.intent;
+      %>
+        <div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+            <span style="font-weight:600;color:#374151"><%= lbl %></span>
+            <span style="color:#64748b"><%= r.count %> (<%= pct %>%)</span>
+          </div>
+          <div style="background:#f1f5f9;border-radius:20px;height:7px;overflow:hidden">
+            <div style="width:<%= pct %>%;height:100%;background:<%= col %>;border-radius:20px"></div>
+          </div>
+        </div>
+      <% }); } %>
+    </div>
+
+    <!-- Language distribution -->
+    <div class="chart-wrap" style="margin-bottom:0">
+      <div class="chart-header">
+        <h2>Jezici</h2>
+        <span class="chart-badge">Distribucija</span>
+      </div>
+      <% const langLabels = { hr:'🇭🇷 Hrvatski', en:'🇬🇧 English', de:'🇩🇪 Deutsch', it:'🇮🇹 Italiano', fr:'🇫🇷 Français', sv:'🇸🇪 Svenska', no:'🇳🇴 Norsk', cs:'🇨🇿 Čeština' };
+         const langTotal  = languages.reduce((s,r) => s + Number(r.count), 0) || 1;
+      %>
+      <% if (!languages.length) { %>
+        <p style="color:#94a3b8;font-size:13px;padding-top:8px">Nema podataka.</p>
+      <% } else { languages.forEach(function(r) {
+           const pct = Math.round(Number(r.count) / langTotal * 100);
+           const lbl = langLabels[r.lang] || r.lang;
+      %>
+        <div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+            <span style="font-weight:600;color:#374151"><%= lbl %></span>
+            <span style="color:#64748b"><%= r.count %> (<%= pct %>%)</span>
+          </div>
+          <div style="background:#f1f5f9;border-radius:20px;height:7px;overflow:hidden">
+            <div style="width:<%= pct %>%;height:100%;background:#2563eb;border-radius:20px"></div>
+          </div>
+        </div>
+      <% }); } %>
+    </div>
+
+    <!-- Activity by time of day -->
+    <div class="chart-wrap" style="margin-bottom:0">
+      <div class="chart-header">
+        <h2>Aktivnost</h2>
+        <span class="chart-badge">Po dobu dana</span>
+      </div>
+      <% const tod = timeOfDay || {};
+         const todTotal = (Number(tod.morning)||0) + (Number(tod.afternoon)||0) + (Number(tod.evening)||0) || 1;
+         const todSlots = [
+           { label:'Jutro',        icon:'🌅', key:'morning',   val: Number(tod.morning)||0,   color:'#f59e0b' },
+           { label:'Poslijepodne', icon:'☀️', key:'afternoon', val: Number(tod.afternoon)||0, color:'#2563eb' },
+           { label:'Večer',        icon:'🌙', key:'evening',   val: Number(tod.evening)||0,   color:'#7c3aed' },
+         ];
+      %>
+      <% todSlots.forEach(function(s) {
+           const pct = Math.round(s.val / todTotal * 100);
+      %>
+        <div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+            <span style="font-weight:600;color:#374151"><%= s.icon %> <%= s.label %></span>
+            <span style="color:#64748b"><%= s.val %></span>
+          </div>
+          <div style="background:#f1f5f9;border-radius:20px;height:7px;overflow:hidden">
+            <div style="width:<%= pct %>%;height:100%;background:<%= s.color %>;border-radius:20px"></div>
+          </div>
+        </div>
+      <% }); %>
+    </div>
+
   </div>
 </main>
 
@@ -128,96 +274,32 @@
       }
     });
   })();
+
+  async function toggleTakeover(tenantId) {
+    const btn = document.getElementById('takeover-btn');
+    const badge = document.getElementById('takeover-badge');
+    btn.disabled = true;
+    btn.style.opacity = '0.6';
+    try {
+      const res = await fetch(`/admin/takeover/${tenantId}`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        const on = data.human_takeover;
+        const icon = document.getElementById('takeover-icon');
+        badge.style.background  = on ? '#f0fdf4' : '#f1f5f9';
+        badge.style.color       = on ? '#16a34a' : '#64748b';
+        badge.textContent       = on ? '🤝 Operater odgovara' : '🤖 Bot odgovara';
+        btn.style.background    = on ? '#16a34a' : '#64748b';
+        btn.textContent         = on ? 'Deaktiviraj' : 'Aktiviraj takeover';
+        if (icon) { icon.textContent = on ? '🤝' : '🤖'; icon.style.background = on ? '#f0fdf4' : '#eff6ff'; }
+      }
+    } catch (e) {
+      alert('Greška pri promjeni statusa. Pokušajte ponovo.');
+    } finally {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+    }
+  }
 </script>
-
-  <!-- Analytics row -->
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-bottom:28px">
-
-    <!-- Intent distribution -->
-    <div class="chart-wrap" style="margin-bottom:0">
-      <div class="chart-header">
-        <h2>Najčešći interesi turista</h2>
-        <span class="chart-badge">Po tipu</span>
-      </div>
-      <% const intentLabels = { faq:'Opće informacije', weather:'Vrijeme', weather_current:'Vrijeme', weather_tomorrow:'Vrijeme', weather_multi:'Vrijeme', events:'Događaji', ai:'Ostalo', other:'Ostalo', fallback:'Ostalo' };
-         const intentColors = { faq:'#2563eb', weather:'#0ea5e9', events:'#16a34a', ai:'#7c3aed' };
-         const intentTotal  = intents.reduce((s,r) => s + Number(r.count), 0) || 1;
-      %>
-      <% if (!intents.length) { %>
-        <p style="color:#94a3b8;font-size:13px;padding-top:8px">Nema podataka.</p>
-      <% } else { intents.forEach(function(r) {
-           const pct = Math.round(Number(r.count) / intentTotal * 100);
-           const col = intentColors[r.intent] || '#64748b';
-           const lbl = intentLabels[r.intent]  || r.intent;
-      %>
-        <div style="margin-bottom:10px">
-          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
-            <span style="font-weight:600;color:#374151"><%= lbl %></span>
-            <span style="color:#64748b"><%= r.count %> (<%= pct %>%)</span>
-          </div>
-          <div style="background:#f1f5f9;border-radius:20px;height:7px;overflow:hidden">
-            <div style="width:<%= pct %>%;height:100%;background:<%= col %>;border-radius:20px"></div>
-          </div>
-        </div>
-      <% }); } %>
-    </div>
-
-    <!-- Language distribution -->
-    <div class="chart-wrap" style="margin-bottom:0">
-      <div class="chart-header">
-        <h2>Jezici</h2>
-        <span class="chart-badge">Distribucija</span>
-      </div>
-      <% const langLabels = { hr:'🇭🇷 Hrvatski', en:'🇬🇧 English', de:'🇩🇪 Deutsch', it:'🇮🇹 Italiano', fr:'🇫🇷 Français' };
-         const langTotal  = languages.reduce((s,r) => s + Number(r.count), 0) || 1;
-      %>
-      <% if (!languages.length) { %>
-        <p style="color:#94a3b8;font-size:13px;padding-top:8px">Nema podataka.</p>
-      <% } else { languages.forEach(function(r) {
-           const pct = Math.round(Number(r.count) / langTotal * 100);
-           const lbl = langLabels[r.lang] || r.lang;
-      %>
-        <div style="margin-bottom:10px">
-          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
-            <span style="font-weight:600;color:#374151"><%= lbl %></span>
-            <span style="color:#64748b"><%= r.count %> (<%= pct %>%)</span>
-          </div>
-          <div style="background:#f1f5f9;border-radius:20px;height:7px;overflow:hidden">
-            <div style="width:<%= pct %>%;height:100%;background:#2563eb;border-radius:20px"></div>
-          </div>
-        </div>
-      <% }); } %>
-    </div>
-
-    <!-- Activity by time of day -->
-    <div class="chart-wrap" style="margin-bottom:0">
-      <div class="chart-header">
-        <h2>Aktivnost</h2>
-        <span class="chart-badge">Po dobu dana</span>
-      </div>
-      <% const tod = timeOfDay || {};
-         const todTotal = (Number(tod.morning)||0) + (Number(tod.afternoon)||0) + (Number(tod.evening)||0) || 1;
-         const todSlots = [
-           { label:'Jutro',      icon:'🌅', key:'morning',   val: Number(tod.morning)||0,   color:'#f59e0b' },
-           { label:'Poslijepodne', icon:'☀️', key:'afternoon', val: Number(tod.afternoon)||0, color:'#2563eb' },
-           { label:'Večer',      icon:'🌙', key:'evening',   val: Number(tod.evening)||0,   color:'#7c3aed' },
-         ];
-      %>
-      <% todSlots.forEach(function(s) {
-           const pct = Math.round(s.val / todTotal * 100);
-      %>
-        <div style="margin-bottom:10px">
-          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
-            <span style="font-weight:600;color:#374151"><%= s.icon %> <%= s.label %></span>
-            <span style="color:#64748b"><%= s.val %></span>
-          </div>
-          <div style="background:#f1f5f9;border-radius:20px;height:7px;overflow:hidden">
-            <div style="width:<%= pct %>%;height:100%;background:<%= s.color %>;border-radius:20px"></div>
-          </div>
-        </div>
-      <% }); %>
-    </div>
-
-  </div>
 
 <%- include('partials/foot') %>

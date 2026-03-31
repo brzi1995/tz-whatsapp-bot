@@ -16,10 +16,16 @@ const TRIVIAL = new Set([
 
 const FALLBACK_MSG = {
   hr: 'Rado ćemo vam pomoći 😊 Naš tim će vam uskoro odgovoriti.',
-  default: "We'll be happy to help 😊 Our team will respond shortly.",
+  en: "We'll be happy to help 😊 Our team will respond shortly.",
+  de: 'Wir helfen Ihnen gerne 😊 Unser Team meldet sich in Kürze.',
+  it: 'Saremo lieti di aiutarvi 😊 Il nostro team risponderà a breve.',
+  fr: 'Nous serons heureux de vous aider 😊 Notre équipe vous répondra bientôt.',
+  sv: 'Vi hjälper gärna 😊 Vårt team återkommer snart.',
+  no: 'Vi hjelper gjerne 😊 Teamet vårt svarer snart.',
+  cs: 'Rádi vám pomůžeme 😊 Náš tým se vám brzy ozve.',
 };
 function fallbackReply(lang) {
-  return FALLBACK_MSG[lang] || FALLBACK_MSG.default;
+  return FALLBACK_MSG[lang] || FALLBACK_MSG.en;
 }
 
 // Language-aware labels and empty-state messages for time-specific event queries
