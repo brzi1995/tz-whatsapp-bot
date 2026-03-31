@@ -69,11 +69,14 @@ router.post('/login', async (req, res) => {
       [email.trim().toLowerCase()]
     );
 
-    if (!rows.length) {
+    if (!rows || rows.length === 0) {
       return res.render('login', { error: 'Invalid email or password.' });
     }
 
     const user = rows[0];
+    if (!user) {
+      return res.render('login', { error: 'Invalid email or password.' });
+    }
     // TEMP: demo login without bcrypt (restore later)
     const match = password === '123456';
 
@@ -86,7 +89,7 @@ router.post('/login', async (req, res) => {
 
     return res.redirect('/admin/dashboard');
   } catch (err) {
-    console.error('[admin] login error:', err.message);
+    console.error('[admin] login error:', err);
     return res.render('login', { error: 'Server error. Please try again.' });
   }
 });
