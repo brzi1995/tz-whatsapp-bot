@@ -29,9 +29,9 @@ const EVENT_LABELS = {
     tomorrow: '📅 Događaji za sutra:',
     week:     '📅 Događaji ovaj tjedan:',
     empty: {
-      today:    'Danas nema planiranih događaja. Svratite u TZ ured za više informacija! 😊',
-      tomorrow: 'Sutra nema planiranih događaja. Svratite u TZ ured za više informacija! 😊',
-      week:     'Ovaj tjedan nema planiranih događaja. Svratite u TZ ured za više informacija! 😊',
+      today:    'Danas nema organiziranih događaja, ali evo par ideja:\n• Prošetajte starim gradom\n• Posjetite jednu od plaža\n• Isprobajte lokalne restorane 😊',
+      tomorrow: 'Sutra nema organiziranih događaja, ali evo par ideja:\n• Prošetajte starim gradom\n• Posjetite jednu od plaža\n• Isprobajte lokalne restorane 😊',
+      week:     'Ovaj tjedan nema organiziranih događaja, ali evo par ideja:\n• Prošetajte starim gradom\n• Posjetite jednu od plaža\n• Isprobajte lokalne restorane 😊',
     },
   },
   en: {
@@ -39,9 +39,9 @@ const EVENT_LABELS = {
     tomorrow: '📅 Events tomorrow:',
     week:     '📅 Events this week:',
     empty: {
-      today:    'No events planned for today. Drop by the tourist office for more info! 😊',
-      tomorrow: 'No events planned for tomorrow. Drop by the tourist office for more info! 😊',
-      week:     'No events planned this week. Drop by the tourist office for more info! 😊',
+      today:    'No official events today, but here are some ideas:\n• Explore the old town and historic sites\n• Relax at one of the beautiful beaches\n• Discover local restaurants and cuisine 😊',
+      tomorrow: 'No official events tomorrow, but here are some ideas:\n• Explore the old town and historic sites\n• Relax at one of the beautiful beaches\n• Discover local restaurants and cuisine 😊',
+      week:     'No official events this week, but here are some ideas:\n• Explore the old town and historic sites\n• Relax at one of the beautiful beaches\n• Discover local restaurants and cuisine 😊',
     },
   },
   de: {
@@ -49,9 +49,9 @@ const EVENT_LABELS = {
     tomorrow: '📅 Veranstaltungen morgen:',
     week:     '📅 Veranstaltungen diese Woche:',
     empty: {
-      today:    'Heute sind keine Veranstaltungen geplant. Besuchen Sie das Tourismusbüro! 😊',
-      tomorrow: 'Morgen sind keine Veranstaltungen geplant. Besuchen Sie das Tourismusbüro! 😊',
-      week:     'Diese Woche sind keine Veranstaltungen. Besuchen Sie das Tourismusbüro! 😊',
+      today:    'Heute keine Veranstaltungen, aber hier ein paar Ideen:\n• Erkunden Sie die Altstadt und historische Stätten\n• Entspannen Sie an einem der schönen Strände\n• Entdecken Sie lokale Restaurants und die Küche 😊',
+      tomorrow: 'Morgen keine Veranstaltungen, aber hier ein paar Ideen:\n• Erkunden Sie die Altstadt und historische Stätten\n• Entspannen Sie an einem der schönen Strände\n• Entdecken Sie lokale Restaurants und die Küche 😊',
+      week:     'Diese Woche keine Veranstaltungen, aber hier ein paar Ideen:\n• Erkunden Sie die Altstadt und historische Stätten\n• Entspannen Sie an einem der schönen Strände\n• Entdecken Sie lokale Restaurants und die Küche 😊',
     },
   },
   it: {
@@ -59,9 +59,9 @@ const EVENT_LABELS = {
     tomorrow: '📅 Eventi domani:',
     week:     '📅 Eventi questa settimana:',
     empty: {
-      today:    "Nessun evento previsto per oggi. Passa dall'ufficio turistico! 😊",
-      tomorrow: "Nessun evento previsto per domani. Passa dall'ufficio turistico! 😊",
-      week:     "Nessun evento questa settimana. Passa dall'ufficio turistico! 😊",
+      today:    'Oggi nessun evento in programma, ma ecco alcune idee:\n• Esplora il centro storico e i luoghi d\'interesse\n• Rilassati su una delle splendide spiagge\n• Scopri i ristoranti locali e la cucina tipica 😊',
+      tomorrow: 'Domani nessun evento in programma, ma ecco alcune idee:\n• Esplora il centro storico e i luoghi d\'interesse\n• Rilassati su una delle splendide spiagge\n• Scopri i ristoranti locali e la cucina tipica 😊',
+      week:     'Questa settimana nessun evento, ma ecco alcune idee:\n• Esplora il centro storico e i luoghi d\'interesse\n• Rilassati su una delle splendide spiagge\n• Scopri i ristoranti locali e la cucina tipica 😊',
     },
   },
   fr: {
@@ -69,9 +69,39 @@ const EVENT_LABELS = {
     tomorrow: '📅 Événements demain:',
     week:     '📅 Événements cette semaine:',
     empty: {
-      today:    "Aucun événement prévu aujourd'hui. Passez à l'office de tourisme! 😊",
-      tomorrow: "Aucun événement prévu demain. Passez à l'office de tourisme! 😊",
-      week:     "Aucun événement cette semaine. Passez à l'office de tourisme! 😊",
+      today:    "Aucun événement officiel aujourd'hui, mais voici quelques idées:\n• Explorez la vieille ville et les sites historiques\n• Détendez-vous sur l'une des belles plages\n• Découvrez les restaurants locaux et la cuisine 😊",
+      tomorrow: "Aucun événement officiel demain, mais voici quelques idées:\n• Explorez la vieille ville et les sites historiques\n• Détendez-vous sur l'une des belles plages\n• Découvrez les restaurants locaux et la cuisine 😊",
+      week:     "Aucun événement officiel cette semaine, mais voici quelques idées:\n• Explorez la vieille ville et les sites historiques\n• Détendez-vous sur l'une des belles plages\n• Découvrez les restaurants locaux et la cuisine 😊",
+    },
+  },
+  sv: {
+    today:    '📅 Evenemang idag:',
+    tomorrow: '📅 Evenemang imorgon:',
+    week:     '📅 Evenemang denna vecka:',
+    empty: {
+      today:    'Inga evenemang idag, men här är några idéer:\n• Utforska gamla stan och historiska platser\n• Koppla av på en av de vackra stränderna\n• Upptäck lokala restauranger och köket 😊',
+      tomorrow: 'Inga evenemang imorgon, men här är några idéer:\n• Utforska gamla stan och historiska platser\n• Koppla av på en av de vackra stränderna\n• Upptäck lokala restauranger och köket 😊',
+      week:     'Inga evenemang denna vecka, men här är några idéer:\n• Utforska gamla stan och historiska platser\n• Koppla av på en av de vackra stränderna\n• Upptäck lokala restauranger och köket 😊',
+    },
+  },
+  no: {
+    today:    '📅 Arrangementer i dag:',
+    tomorrow: '📅 Arrangementer i morgen:',
+    week:     '📅 Arrangementer denne uken:',
+    empty: {
+      today:    'Ingen arrangementer i dag, men her er noen forslag:\n• Utforsk gamlebyen og historiske steder\n• Slapp av på en av de vakre strendene\n• Oppdag lokale restauranter og kjøkkenet 😊',
+      tomorrow: 'Ingen arrangementer i morgen, men her er noen forslag:\n• Utforsk gamlebyen og historiske steder\n• Slapp av på en av de vakre strendene\n• Oppdag lokale restauranter og kjøkkenet 😊',
+      week:     'Ingen arrangementer denne uken, men her er noen forslag:\n• Utforsk gamlebyen og historiske steder\n• Slapp av på en av de vakre strendene\n• Oppdag lokale restauranter og kjøkkenet 😊',
+    },
+  },
+  cs: {
+    today:    '📅 Akce dnes:',
+    tomorrow: '📅 Akce zítra:',
+    week:     '📅 Akce tento týden:',
+    empty: {
+      today:    'Dnes žádné akce, ale zde je pár tipů:\n• Prozkoumejte staré město a historická místa\n• Odpočiňte si na jedné z krásných pláží\n• Objevte místní restaurace a kuchyni 😊',
+      tomorrow: 'Zítra žádné akce, ale zde je pár tipů:\n• Prozkoumejte staré město a historická místa\n• Odpočiňte si na jedné z krásných pláží\n• Objevte místní restaurace a kuchyni 😊',
+      week:     'Tento týden žádné akce, ale zde je pár tipů:\n• Prozkoumejte staré město a historická místa\n• Odpočiňte si na jedné z krásných pláží\n• Objevte místní restaurace a kuchyni 😊',
     },
   },
 };
@@ -117,11 +147,14 @@ const FORECAST_LONG_RANGE = {
   fr: `Pour les prévisions à 10 jours:\n${FORECAST_LONG_RANGE_URL}`,
 };
 const NO_EVENTS = {
-  hr: 'Trenutno nema nadolazećih događaja. Svratite u TZ ured za više informacija! 😊',
-  en: 'No upcoming events at this time. Drop by the tourist office for more info! 😊',
-  de: 'Aktuell keine Veranstaltungen. Besuchen Sie das Tourismusbüro! 😊',
-  it: "Nessun evento in programma. Passa dall'ufficio turistico! 😊",
-  fr: "Aucun événement à venir. Passez à l'office de tourisme! 😊",
+  hr: 'Trenutno nema nadolazećih događaja, ali evo par ideja:\n• Prošetajte starim gradom\n• Posjetite jednu od plaža\n• Isprobajte lokalne restorane 😊',
+  en: 'No upcoming events at the moment, but here are some ideas:\n• Explore the old town and historic sites\n• Relax at one of the beautiful beaches\n• Discover local restaurants and cuisine 😊',
+  de: 'Aktuell keine Veranstaltungen, aber hier ein paar Ideen:\n• Erkunden Sie die Altstadt und historische Stätten\n• Entspannen Sie an einem der schönen Strände\n• Entdecken Sie lokale Restaurants und die Küche 😊',
+  it: 'Nessun evento in programma, ma ecco alcune idee:\n• Esplora il centro storico e i luoghi d\'interesse\n• Rilassati su una delle splendide spiagge\n• Scopri i ristoranti locali e la cucina tipica 😊',
+  fr: "Aucun événement à venir, mais voici quelques idées:\n• Explorez la vieille ville et les sites historiques\n• Détendez-vous sur l'une des belles plages\n• Découvrez les restaurants locaux et la cuisine 😊",
+  sv: 'Inga kommande evenemang, men här är några idéer:\n• Utforska gamla stan och historiska platser\n• Koppla av på en av de vackra stränderna\n• Upptäck lokala restauranger och köket 😊',
+  no: 'Ingen kommende arrangementer, men her er noen forslag:\n• Utforsk gamlebyen og historiske steder\n• Slapp av på en av de vakre strendene\n• Oppdag lokale restauranter og kjøkkenet 😊',
+  cs: 'Žádné nadcházející akce, ale zde je pár tipů:\n• Prozkoumejte staré město a historická místa\n• Odpočiňte si na jedné z krásných pláží\n• Objevte místní restaurace a kuchyni 😊',
 };
 const EVENTS_HEADER = {
   hr: '📅 Nadolazeći događaji:',

@@ -24,7 +24,7 @@ async function chat(systemPrompt, messages, model = 'gpt-4o-mini') {
   return response.choices[0].message.content.trim();
 }
 
-const VALID_LANGS   = ['hr', 'en', 'de', 'it', 'fr'];
+const VALID_LANGS   = ['hr', 'en', 'de', 'it', 'fr', 'sv', 'no', 'cs'];
 const VALID_INTENTS = [
   'weather_current', 'weather_tomorrow', 'weather_multi',
   'events_today', 'events_tomorrow', 'events_week', 'events',
@@ -52,7 +52,7 @@ async function parseMessage(message, systemPrompt, model = 'gpt-4o-mini') {
           content: `${systemPrompt}
 
 You must reply ONLY with valid JSON:
-{"lang":"hr|en|de|it|fr","intent":"events_today|events_tomorrow|events_week|events|weather_current|weather_tomorrow|weather_multi|faq|other","response":"your reply"}
+{"lang":"hr|en|de|it|fr|sv|no|cs","intent":"events_today|events_tomorrow|events_week|events|weather_current|weather_tomorrow|weather_multi|faq|other","response":"your reply"}
 
 Intent rules:
 - events_today/tomorrow/week: user asks about events for a specific day → set response to ""
