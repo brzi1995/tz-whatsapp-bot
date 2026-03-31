@@ -114,15 +114,17 @@ router.get('/dashboard', requireAuth, async (req, res) => {
   const tenantId = req.session.tenantId;
 
   try {
-    const [[totalUsersRow]] = await pool.query(
+    const [usersRows] = await pool.query(
       'SELECT COUNT(DISTINCT user_phone) AS total FROM messages WHERE tenant_id = ?',
       [tenantId]
     );
+    const totalUsersRow = usersRows && usersRows.length ? usersRows[0] : { total: 0 };
 
-    const [[totalMsgsRow]] = await pool.query(
+    const [msgsRows] = await pool.query(
       'SELECT COUNT(*) AS total FROM messages WHERE tenant_id = ?',
       [tenantId]
     );
+    const totalMsgsRow = msgsRows && msgsRows.length ? msgsRows[0] : { total: 0 };
 
     const [perDay] = await pool.query(
       `SELECT DATE(created_at) AS day, COUNT(*) AS count
@@ -153,7 +155,7 @@ router.get('/dashboard', requireAuth, async (req, res) => {
       // lang column may not exist yet — safe fallback
     }
 
-    const [[timeOfDay]] = await pool.query(
+    const [todRows] = await pool.query(
       `SELECT
          SUM(HOUR(created_at) BETWEEN 6  AND 11) AS morning,
          SUM(HOUR(created_at) BETWEEN 12 AND 17) AS afternoon,
@@ -161,6 +163,7 @@ router.get('/dashboard', requireAuth, async (req, res) => {
        FROM messages WHERE tenant_id = ?`,
       [tenantId]
     );
+    const timeOfDay = todRows && todRows.length ? todRows[0] : { morning: 0, afternoon: 0, evening: 0 };
 
     const [tenantRows] = await pool.query(
       'SELECT human_takeover FROM tenants WHERE id = ?',
@@ -297,10 +300,11 @@ router.get('/faq/:id/edit', requireAuth, async (req, res) => {
   const id = parseInt(req.params.id, 10);
 
   try {
-    const [[row]] = await pool.query(
+    const [faqRows] = await pool.query(
       'SELECT * FROM faq WHERE id = ? AND tenant_id = ?',
       [id, tenantId]
     );
+    const row = faqRows && faqRows.length ? faqRows[0] : null;
 
     if (!row) return res.status(404).send('Not found');
     res.render('faq-edit', { faq: row });
@@ -388,10 +392,11 @@ router.get('/events/:id/edit', requireAuth, async (req, res) => {
   const id = parseInt(req.params.id, 10);
 
   try {
-    const [[row]] = await pool.query(
+    const [eventRows] = await pool.query(
       'SELECT * FROM events WHERE id = ? AND tenant_id = ?',
       [id, tenantId]
     );
+    const row = eventRows && eventRows.length ? eventRows[0] : null;
 
     if (!row) return res.status(404).send('Not found');
     res.render('event-edit', { event: row });
@@ -475,10 +480,11 @@ router.get('/conversations/:phone', requireAuth, async (req, res) => {
       [tenantId, userPhone]
     );
 
-    const [[tenant]] = await pool.query(
+    const [convTenantRows] = await pool.query(
       'SELECT human_takeover FROM tenants WHERE id = ?',
       [tenantId]
     );
+    const tenant = convTenantRows && convTenantRows.length ? convTenantRows[0] : null;
 
     res.render('conversation', {
       messages,
