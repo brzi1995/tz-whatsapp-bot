@@ -487,23 +487,23 @@ router.get('/conversations/:phone', requireAuth, async (req, res) => {
 // POST /admin/conversations/:phone/takeover — toggle per-user takeover
 router.post('/conversations/:phone/takeover', requireAuth, async (req, res) => {
   const tenantId  = req.session.tenantId;
-  const userPhone = 'whatsapp:' + req.params.phone;
+  const cleanPhone = req.params.phone; // whatsapp_users.phone has NO whatsapp: prefix
 
   try {
     await pool.query(
       'UPDATE whatsapp_users SET human_takeover = NOT human_takeover WHERE tenant_id = ? AND phone = ?',
-      [tenantId, userPhone]
+      [tenantId, cleanPhone]
     );
 
     const [rows] = await pool.query(
       'SELECT human_takeover FROM whatsapp_users WHERE tenant_id = ? AND phone = ?',
-      [tenantId, userPhone]
+      [tenantId, cleanPhone]
     );
     const user = (rows && rows[0]) || null;
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
     const newValue = Boolean(user.human_takeover);
-    console.log(`[admin] per-user takeover for ${userPhone} set to ${newValue}`);
+    console.log(`[admin] per-user takeover for ${cleanPhone} set to ${newValue}`);
     return res.json({ success: true, human_takeover: newValue });
   } catch (err) {
     console.error('[admin] per-user takeover error:', err.message);
@@ -517,8 +517,10 @@ router.post('/conversations/:phone/reply', requireAuth, async (req, res) => {
   const userPhone = 'whatsapp:' + req.params.phone;
   const message = (req.body.message || '').trim();
 
+  const cleanPhone = req.params.phone; // URL-safe, no whatsapp: prefix
+
   if (!message) {
-    return res.redirect(`/admin/conversations/${encodeURIComponent(userPhone)}`);
+    return res.redirect('/admin/conversations/' + encodeURIComponent(cleanPhone));
   }
 
   try {
@@ -530,17 +532,17 @@ router.post('/conversations/:phone/reply', requireAuth, async (req, res) => {
     const tenant = (tenantRows && tenantRows[0]) || null;
     if (!tenant) return res.status(404).send('Tenant not found');
 
-    // Send WhatsApp message via Twilio
+    // Send WhatsApp message via Twilio (Twilio needs whatsapp: prefix)
     await sendMessage(userPhone, tenant.phone_number, message);
 
-    // Log the admin reply in the messages table
+    // Log the admin reply in the messages table (messages stores whatsapp: prefix)
     await pool.query(
       'INSERT INTO messages (tenant_id, user_phone, message, intent, lang) VALUES (?, ?, ?, ?, ?)',
       [tenantId, userPhone, message, 'admin_reply', 'hr']
     );
 
     console.log(`[admin] reply sent to ${userPhone} by tenant ${tenantId}`);
-    res.redirect(`/admin/conversations/${encodeURIComponent(userPhone)}`);
+    res.redirect('/admin/conversations/' + encodeURIComponent(cleanPhone));
   } catch (err) {
     console.error('[admin] reply error:', err);
     res.status(500).send('Greška pri slanju poruke: ' + err.message);
