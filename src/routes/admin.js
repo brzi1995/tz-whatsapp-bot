@@ -432,24 +432,16 @@ router.get('/conversations', requireAuth, async (req, res) => {
 
   try {
     const [rows] = await pool.query(
-      `SELECT m.user_phone,
-              MAX(m.created_at) AS last_msg,
-              COUNT(*) AS msg_count,
-              MAX(COALESCE(wu.human_takeover, 0)) AS human_takeover
-       FROM messages m
-       LEFT JOIN whatsapp_users wu
-         ON wu.tenant_id = m.tenant_id AND wu.phone = m.user_phone
-       WHERE m.tenant_id = ?
-       GROUP BY m.user_phone
+      `SELECT user_phone,
+              MAX(created_at) AS last_msg,
+              COUNT(*) AS msg_count
+       FROM messages
+       WHERE tenant_id = ?
+       GROUP BY user_phone
        ORDER BY last_msg DESC`,
       [tenantId]
     );
-    const safeRows = Array.isArray(rows) ? rows : [];
-    const conversations = safeRows.map(u => ({
-      ...u,
-      human_takeover: Number(u?.human_takeover || 0),
-    }));
-    res.render('conversations', { conversations });
+    res.render('conversations', { conversations: rows });
   } catch (err) {
     console.error('CONVERSATIONS FULL ERROR:', err);
     return res.render('conversations', { conversations: [] });
