@@ -1,0 +1,45 @@
+<%- include('partials/head', { title: 'Obavijesti' }) %>
+<%- include('partials/sidebar', { activePage: 'broadcast' }) %>
+
+<main class="content">
+  <div class="page-header">
+    <h1>📣 Broadcast obavijesti</h1>
+    <p>Pošalji WhatsApp poruku svim turistima koji su se prijavili za obavijesti</p>
+  </div>
+
+  <% if (sent !== null) { %>
+    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:var(--radius);padding:14px 18px;margin-bottom:20px;color:#15803d;font-weight:600">
+      ✅ Poruka uspješno poslana na <%= sent %> korisnika
+    </div>
+  <% } %>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-bottom:28px">
+    <div style="background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);padding:20px;box-shadow:var(--shadow-sm)">
+      <div style="font-size:13px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Prijavljeni korisnici</div>
+      <div style="font-size:32px;font-weight:800;color:var(--text)"><%= optedInCount %></div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">korisnika čeka tvoje poruke</div>
+    </div>
+  </div>
+
+  <% if (optedInCount === 0) { %>
+    <div style="background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);padding:32px;text-align:center;color:var(--muted)">
+      <div style="font-size:36px;margin-bottom:12px">📭</div>
+      <div style="font-size:15px;font-weight:600;margin-bottom:6px">Nema prijavljenih korisnika</div>
+      <div style="font-size:13px">Korisnici se automatski pitaju za pristanak nakon prve poruke botu.<br>Kad odgovore DA, pojavit će se ovdje.</div>
+    </div>
+  <% } else { %>
+    <div class="add-form">
+      <h2>Nova poruka</h2>
+      <form method="POST" action="/admin/broadcast">
+        <label>Poruka</label>
+        <textarea name="message" rows="5" placeholder="Upiši poruku za broadcast..." required style="resize:vertical"></textarea>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-top:4px">
+          <span style="font-size:12px;color:var(--muted)">Šalje se na <strong><%= optedInCount %></strong> korisnika</span>
+          <button type="submit" class="btn btn-primary">📣 Pošalji broadcast</button>
+        </div>
+      </form>
+    </div>
+  <% } %>
+</main>
+
+<%- include('partials/foot') %>

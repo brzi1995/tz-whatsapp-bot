@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getTenant, getMessages, saveMessages } = require('../db/sessions');
 const { parseMessage } = require('../services/openai');
-const { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, setHumanTakeover } = require('../db/bot');
+const { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, setHumanTakeover, upsertWhatsappUser, getWhatsappUser, setOptIn } = require('../db/bot');
 const { sendHandoverEmail } = require('../services/email');
 const { shouldNotifyAdmin, notifyAdmin } = require('../services/notify');
 
@@ -28,6 +28,27 @@ const FALLBACK_MSG = {
 function fallbackReply(lang) {
   return FALLBACK_MSG[lang] || FALLBACK_MSG.en;
 }
+
+const OPT_IN_CONFIRM = {
+  hr: 'Super! Obavijestit ćemo te o događajima 🎉',
+  en: 'Great! We\'ll notify you about events 🎉',
+  de: 'Super! Wir werden Sie über Veranstaltungen informieren 🎉',
+  it: 'Ottimo! Ti informeremo sugli eventi 🎉',
+  fr: 'Super! Nous vous informerons des événements 🎉',
+  sv: 'Bra! Vi meddelar dig om evenemang 🎉',
+  no: 'Flott! Vi varsler deg om arrangementer 🎉',
+  cs: 'Skvěle! Budeme vás informovat o akcích 🎉',
+};
+const OPT_OUT_CONFIRM = {
+  hr: 'U redu, nećeš dobivati obavijesti. Uvijek možeš pitati za pomoć! 😊',
+  en: 'Alright, you won\'t receive notifications. You can always ask for help! 😊',
+  de: 'In Ordnung, keine Benachrichtigungen. Du kannst jederzeit um Hilfe bitten! 😊',
+  it: 'Va bene, nessuna notifica. Puoi sempre chiedere aiuto! 😊',
+  fr: 'D\'accord, pas de notifications. Vous pouvez toujours demander de l\'aide! 😊',
+  sv: 'Okej, inga aviseringar. Du kan alltid be om hjälp! 😊',
+  no: 'Greit, ingen varsler. Du kan alltid be om hjelp! 😊',
+  cs: 'Dobře, žádná oznámení. Vždy můžete požádat o pomoc! 😊',
+};
 
 // Language-aware labels and empty-state messages for time-specific event queries
 const EVENT_LABELS = {
@@ -213,6 +234,29 @@ router.post('/webhook', async (req, res) => {
 
     const trimmedMsg = userMsg.trim();
     const model = tenant.openai_model;
+
+    // 3.1. Upsert user — insert on first message, update last_message_at on every message
+    try {
+      await upsertWhatsappUser(tenant.id, userPhone);
+    } catch (upsertErr) {
+      console.error('[webhook] upsertWhatsappUser error:', upsertErr.message);
+    }
+
+    // 3.2. Handle opt-in response (da/ne) — must run before trivial filter
+    const lowerMsg = trimmedMsg.toLowerCase();
+    if (lowerMsg === 'da' || lowerMsg === 'ne') {
+      try {
+        const wu = await getWhatsappUser(tenant.id, userPhone);
+        if (wu && wu.asked_opt_in) {
+          const optIn = lowerMsg === 'da' ? 1 : 0;
+          await setOptIn(tenant.id, userPhone, optIn);
+          await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', 'hr');
+          return res.send(twiml(optIn ? OPT_IN_CONFIRM.hr : OPT_OUT_CONFIRM.hr));
+        }
+      } catch (optErr) {
+        console.error('[webhook] opt-in handling error:', optErr.message);
+      }
+    }
 
     // 3.5. Short / trivial messages — no AI call, no response needed
     if (trimmedMsg.length < 4 || TRIVIAL.has(trimmedMsg.toLowerCase())) {

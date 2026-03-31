@@ -29,8 +29,13 @@ try {
   app.use(express.static(path.join(__dirname, 'public')));
   app.use('/admin', require('./src/routes/admin'));
 
+  const { startCron } = require('./src/cron');
+
   const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
+  app.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}`);
+    startCron();
+  });
 
   module.exports = app;
 } catch (err) {

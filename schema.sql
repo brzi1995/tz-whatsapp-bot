@@ -81,6 +81,22 @@ CREATE TABLE IF NOT EXISTS usage (
 );
 
 -- -------------------------------------------------------------------------
+-- Phase 3 — WhatsApp opt-in & broadcast
+-- -------------------------------------------------------------------------
+
+-- One row per (tenant, tourist phone). Tracks opt-in consent and activity.
+CREATE TABLE IF NOT EXISTS whatsapp_users (
+  id              INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id       INT         NOT NULL,
+  phone           VARCHAR(50) NOT NULL,
+  opt_in          TINYINT(1)  NOT NULL DEFAULT 0,
+  asked_opt_in    TINYINT(1)  NOT NULL DEFAULT 0,
+  last_message_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY unique_user (tenant_id, phone),
+  FOREIGN KEY (tenant_id) REFERENCES tenants(id)
+);
+
+-- -------------------------------------------------------------------------
 -- Phase 2 — Admin dashboard
 -- -------------------------------------------------------------------------
 

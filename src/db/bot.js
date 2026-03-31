@@ -265,4 +265,41 @@ async function setHumanTakeover(tenantId) {
   }
 }
 
-module.exports = { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, setHumanTakeover, detectLang, detectEventPeriod, getEventsFormatted };
+// ---------------------------------------------------------------------------
+// WhatsApp users — opt-in tracking
+// ---------------------------------------------------------------------------
+
+/**
+ * Insert a new user or update last_message_at on every inbound message.
+ */
+async function upsertWhatsappUser(tenantId, phone) {
+  await pool.query(
+    `INSERT INTO whatsapp_users (tenant_id, phone, last_message_at)
+     VALUES (?, ?, NOW())
+     ON DUPLICATE KEY UPDATE last_message_at = NOW()`,
+    [tenantId, phone]
+  );
+}
+
+/**
+ * Return { opt_in, asked_opt_in } for the user, or null if not found.
+ */
+async function getWhatsappUser(tenantId, phone) {
+  const [rows] = await pool.query(
+    'SELECT opt_in, asked_opt_in FROM whatsapp_users WHERE tenant_id = ? AND phone = ?',
+    [tenantId, phone]
+  );
+  return (rows && rows[0]) || null;
+}
+
+/**
+ * Set opt_in = value (1 or 0) for the user.
+ */
+async function setOptIn(tenantId, phone, value) {
+  await pool.query(
+    'UPDATE whatsapp_users SET opt_in = ? WHERE tenant_id = ? AND phone = ?',
+    [value, tenantId, phone]
+  );
+}
+
+module.exports = { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, setHumanTakeover, detectLang, detectEventPeriod, getEventsFormatted, upsertWhatsappUser, getWhatsappUser, setOptIn };

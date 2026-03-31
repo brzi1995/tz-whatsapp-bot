@@ -538,4 +538,64 @@ router.post('/conversations/:phone/reply', requireAuth, async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Broadcast
+// ---------------------------------------------------------------------------
+
+// GET /admin/broadcast
+router.get('/broadcast', requireAuth, async (req, res) => {
+  const tenantId = req.session.tenantId;
+  try {
+    const [countRows] = await pool.query(
+      'SELECT COUNT(*) AS total FROM whatsapp_users WHERE tenant_id = ? AND opt_in = 1',
+      [tenantId]
+    );
+    const optedInCount = (countRows && countRows[0] && countRows[0].total) || 0;
+    res.render('broadcast', { optedInCount, sent: null, error: null });
+  } catch (err) {
+    console.error('[admin] broadcast get error:', err.message);
+    res.status(500).send('Server error');
+  }
+});
+
+// POST /admin/broadcast
+router.post('/broadcast', requireAuth, async (req, res) => {
+  const tenantId = req.session.tenantId;
+  const message = (req.body.message || '').trim();
+
+  if (!message) return res.redirect('/admin/broadcast');
+
+  try {
+    const [tenantRows] = await pool.query('SELECT phone_number FROM tenants WHERE id = ?', [tenantId]);
+    const tenant = (tenantRows && tenantRows[0]) || null;
+    if (!tenant) return res.status(404).send('Tenant not found');
+
+    const [users] = await pool.query(
+      'SELECT phone FROM whatsapp_users WHERE tenant_id = ? AND opt_in = 1',
+      [tenantId]
+    );
+
+    let sentCount = 0;
+    for (const user of users) {
+      try {
+        await sendMessage(user.phone, tenant.phone_number, message);
+        sentCount++;
+      } catch (sendErr) {
+        console.error(`[admin] broadcast send error for ${user.phone}:`, sendErr.message);
+      }
+    }
+
+    const [countRows] = await pool.query(
+      'SELECT COUNT(*) AS total FROM whatsapp_users WHERE tenant_id = ? AND opt_in = 1',
+      [tenantId]
+    );
+    const optedInCount = (countRows && countRows[0] && countRows[0].total) || 0;
+
+    res.render('broadcast', { optedInCount, sent: sentCount, error: null });
+  } catch (err) {
+    console.error('[admin] broadcast post error:', err.message);
+    res.status(500).send('Server error');
+  }
+});
+
 module.exports = router;
