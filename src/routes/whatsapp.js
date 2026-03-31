@@ -237,21 +237,14 @@ router.post('/webhook', async (req, res) => {
     console.log(`[webhook] tenant: ${tenant.name}`);
 
     // 3. Upsert user — ensure record exists before any per-user checks
-    // whatsapp_users.phone stores WITHOUT whatsapp: prefix
-    const cleanUserPhone = userPhone.replace('whatsapp:', '');
-    try { await upsertWhatsappUser(tenant.id, cleanUserPhone); } catch (_) {}
+    try { await upsertWhatsappUser(tenant.id, userPhone); } catch (_) {}
 
     // 3.5. Fetch current user state (takeover flag, opt-in state)
     let currentUser = null;
-    try { currentUser = await getWhatsappUser(tenant.id, cleanUserPhone); } catch (_) {}
+    try { currentUser = await getWhatsappUser(tenant.id, userPhone); } catch (_) {}
 
-    // 4. PER-USER TAKEOVER CHECK — ONLY path that skips AI; affects only this user
-    if (currentUser && currentUser.human_takeover) {
-      console.log(`[webhook] AI SKIPPED — per-user takeover active for ${userPhone}`);
-      try { await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', 'hr'); } catch (_) {}
-      console.log('[webhook] FINAL RESPONSE SENT — takeover active (team reply)');
-      return res.send(twiml('Our team will reply shortly 😊'));
-    }
+    // 4. PER-USER TAKEOVER CHECK
+    if (currentUser && currentUser.human_takeover === 1) return;
 
     // 5. GENERATE RESPONSE — AI called for every non-takeover message
     const model = tenant.openai_model;
@@ -264,7 +257,7 @@ router.post('/webhook', async (req, res) => {
       if (currentUser && currentUser.asked_opt_in) {
         const optIn = lowerMsg === 'da' ? 1 : 0;
         try {
-          await setOptIn(tenant.id, cleanUserPhone, optIn);
+          await setOptIn(tenant.id, userPhone, optIn);
           await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', lang);
         } catch (optErr) {
           console.error('[webhook] opt-in error:', optErr.message);
@@ -291,7 +284,7 @@ router.post('/webhook', async (req, res) => {
 
       // Set takeover for THIS USER ONLY — other users are unaffected
       try {
-        await setUserTakeover(tenant.id, cleanUserPhone, 1);
+        await setUserTakeover(tenant.id, userPhone, 1);
       } catch (tkErr) {
         console.error('[webhook] setUserTakeover failed:', tkErr.message);
       }
