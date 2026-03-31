@@ -450,32 +450,37 @@ router.get('/conversations', requireAuth, async (req, res) => {
 
 // GET /admin/conversations/:phone
 router.get('/conversations/:phone', requireAuth, async (req, res) => {
-  const tenantId = req.session.tenantId;
-  const userPhone = 'whatsapp:' + req.params.phone;
+  const tenantId  = req.session.tenantId;
+  const fullPhone = 'whatsapp:' + req.params.phone;  // format in messages table
+  const cleanPhone = req.params.phone;               // format in whatsapp_users table
 
   try {
     const [messages] = await pool.query(
       `SELECT * FROM messages
        WHERE tenant_id = ? AND user_phone = ?
        ORDER BY created_at ASC`,
-      [tenantId, userPhone]
+      [tenantId, fullPhone]
     );
 
-    const [userRows] = await pool.query(
-      'SELECT human_takeover FROM whatsapp_users WHERE tenant_id = ? AND phone = ?',
-      [tenantId, userPhone]
-    );
-    const userRecord = (userRows && userRows[0]) || null;
+    let takeover = false;
+    try {
+      const [userRows] = await pool.query(
+        'SELECT human_takeover FROM whatsapp_users WHERE tenant_id = ? AND phone = ?',
+        [tenantId, cleanPhone]
+      );
+      const userRecord = (userRows && userRows[0]) || null;
+      takeover = userRecord ? Boolean(userRecord.human_takeover) : false;
+    } catch (_) {}
 
     res.render('conversation', {
-      messages,
-      userPhone,
-      takeover: userRecord ? Boolean(userRecord.human_takeover) : false,
+      messages: Array.isArray(messages) ? messages : [],
+      userPhone: fullPhone,
+      takeover,
       tenantId,
     });
   } catch (err) {
     console.error('[admin] conversation detail error:', err.message);
-    res.status(500).send('Server error');
+    res.render('conversation', { messages: [], userPhone: fullPhone, takeover: false, tenantId });
   }
 });
 
