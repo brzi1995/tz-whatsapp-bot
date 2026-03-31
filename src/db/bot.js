@@ -145,6 +145,95 @@ async function getEventsByPeriod(tenantId, period) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Language & event-intent detection (keyword-based, no AI call)
+// ---------------------------------------------------------------------------
+
+const EVENT_PERIOD_KEYWORDS = {
+  today:    { hr: ['danas'], en: ['today'], de: ['heute'], it: ['oggi'], fr: ["aujourd'hui"] },
+  tomorrow: { hr: ['sutra'], en: ['tomorrow'], de: ['morgen'], it: ['domani'], fr: ['demain'] },
+  week:     { hr: ['tjedan'], en: ['week'], de: ['woche'], it: ['settimana'], fr: ['semaine'] },
+};
+
+const LANG_HINTS = {
+  hr: ['danas', 'sutra', 'tjedan', 'događaj', 'što', 'ima', 'hvala', 'bok'],
+  en: ['today', 'tomorrow', 'week', 'event', 'what', 'hello', 'thanks', 'please'],
+  de: ['heute', 'morgen', 'woche', 'veranstaltung', 'bitte', 'danke', 'hallo'],
+  it: ['oggi', 'domani', 'settimana', 'evento', 'grazie', 'ciao', 'cosa'],
+  fr: ["aujourd'hui", 'demain', 'semaine', 'événement', 'merci', 'bonjour'],
+};
+
+// Words that indicate a weather query — prevent time words from triggering event path
+const WEATHER_WORDS = new Set([
+  'weather', 'forecast', 'rain', 'sun', 'wind', 'cloud', 'hot', 'cold', 'temperature',
+  'vrijeme', 'prognoza', 'kiša', 'sunce', 'vjetar', 'temperatura',
+  'wetter', 'regen', 'sonne', 'temperatur',
+  'tempo', 'pioggia', 'sole', 'previsione',
+  'météo', 'pluie', 'soleil',
+]);
+
+const EVENT_RESPONSES = {
+  hr: { header: 'Evo što se događa:\n\n', empty: 'Trenutno nema događaja.' },
+  en: { header: 'Here are some events:\n\n', empty: 'No events found.' },
+  de: { header: 'Hier sind einige Veranstaltungen:\n\n', empty: 'Keine Veranstaltungen gefunden.' },
+  it: { header: 'Ecco alcuni eventi:\n\n', empty: 'Nessun evento trovato.' },
+  fr: { header: 'Voici quelques événements:\n\n', empty: 'Aucun événement trouvé.' },
+};
+
+/**
+ * Detect user language from message keywords.
+ * Falls back to 'hr' if nothing matches.
+ * @param {string} message
+ * @returns {string} ISO 639-1 code
+ */
+function detectLang(message) {
+  const lower = message.toLowerCase();
+  let best = { lang: 'hr', score: 0 };
+  for (const [lang, keywords] of Object.entries(LANG_HINTS)) {
+    const score = keywords.filter(kw => lower.includes(kw)).length;
+    if (score > best.score) best = { lang, score };
+  }
+  return best.lang;
+}
+
+/**
+ * Detect event time period from message keywords.
+ * Returns null if the message looks like a weather query.
+ * @param {string} message
+ * @returns {'today'|'tomorrow'|'week'|null}
+ */
+function detectEventPeriod(message) {
+  const lower = message.toLowerCase();
+  // Don't steal weather queries that happen to contain a time word
+  if (lower.split(/\s+/).some(w => WEATHER_WORDS.has(w))) return null;
+  for (const [period, langs] of Object.entries(EVENT_PERIOD_KEYWORDS)) {
+    for (const keywords of Object.values(langs)) {
+      if (keywords.some(kw => lower.includes(kw))) return period;
+    }
+  }
+  return null;
+}
+
+/**
+ * Fetch events for a period and return a formatted, language-aware reply string.
+ * No AI call — pure DB + template.
+ * @param {number} tenantId
+ * @param {'today'|'tomorrow'|'week'} period
+ * @param {string} lang
+ * @returns {Promise<string>}
+ */
+async function getEventsFormatted(tenantId, period, lang) {
+  const events = await getEventsByPeriod(tenantId, period);
+  const phrases = EVENT_RESPONSES[lang] || EVENT_RESPONSES.en;
+  if (!events.length) return phrases.empty;
+  const lines = events.map(ev => {
+    const d = ev.date instanceof Date ? ev.date : new Date(ev.date);
+    const dateStr = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.`;
+    return `• ${ev.title} (${dateStr})`;
+  });
+  return phrases.header + lines.join('\n');
+}
+
 /**
  * Activate human takeover for a tenant (bot goes silent for that tenant).
  * @param {number} tenantId
@@ -158,4 +247,4 @@ async function setHumanTakeover(tenantId) {
   }
 }
 
-module.exports = { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, setHumanTakeover };
+module.exports = { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, setHumanTakeover, detectLang, detectEventPeriod, getEventsFormatted };

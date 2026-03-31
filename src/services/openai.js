@@ -24,50 +24,60 @@ async function chat(systemPrompt, messages, model = 'gpt-4o-mini') {
   return response.choices[0].message.content.trim();
 }
 
-const VALID_LANGS   = ['hr','en','de','it','fr'];
+const VALID_LANGS   = ['hr', 'en', 'de', 'it', 'fr'];
 const VALID_INTENTS = [
-  'weather_current','weather_tomorrow','weather_multi',
-  'events_today','events_tomorrow','events_week','events',
-  'faq','other',
+  'weather_current', 'weather_tomorrow', 'weather_multi',
+  'events_today', 'events_tomorrow', 'events_week', 'events',
+  'faq', 'other',
 ];
 
 /**
- * Single AI call that returns both detected language and intent.
- * Falls back to { lang: 'en', intent: 'other' } on any failure.
+ * Single AI call: detects language + intent AND generates the reply.
+ * For event/weather intents the caller uses DB/API instead of response.
+ * Falls back to { lang: 'hr', intent: 'other', response: '' } on any failure.
+ *
+ * @param {string} message       - Raw user message
+ * @param {string} systemPrompt  - Tenant system prompt (sets bot personality)
+ * @param {string} model         - OpenAI model ID
+ * @returns {{ lang, intent, response }}
  */
-async function parseMessage(message, model = 'gpt-4o-mini') {
+async function parseMessage(message, systemPrompt, model = 'gpt-4o-mini') {
   try {
-    const response = await getClient().chat.completions.create({
+    const result = await getClient().chat.completions.create({
       model,
       response_format: { type: 'json_object' },
-      messages: [{
-        role: 'user',
-        content: `Detect the language and intent of this tourist message. Return JSON only.
+      messages: [
+        {
+          role: 'system',
+          content: `${systemPrompt}
 
-{"lang":"hr|en|de|it|fr","intent":"weather_current|weather_tomorrow|weather_multi|events_today|events_tomorrow|events_week|events|faq|other"}
+You must reply ONLY with valid JSON:
+{"lang":"hr|en|de|it|fr","intent":"events_today|events_tomorrow|events_week|events|weather_current|weather_tomorrow|weather_multi|faq|other","response":"your reply"}
 
 Intent rules:
-- events_today: what to do today / today's events / što raditi danas / eventi oggi / Veranstaltungen heute
-- events_tomorrow: what to do tomorrow / tomorrow's events / što raditi sutra / domani / morgen
-- events_week: this week / weekend events / ovaj tjedan / diese Woche / cette semaine
-- events: events in general (no specific time)
-- weather_current: current weather now
-- weather_tomorrow: tomorrow's weather forecast
-- weather_multi: multi-day weather forecast
-- faq: general question about the destination
-- other: anything else
+- events_today/tomorrow/week: user asks about events for a specific day → set response to ""
+- events: user asks about events in general (no specific time) → set response to ""
+- weather_current/tomorrow/multi: user asks about weather → set response to ""
+- faq: question about the destination → write a helpful reply
+- other: anything else → write a helpful reply
 
-Message: ${message}`,
-      }],
+Always reply in the same language as the user.`,
+        },
+        {
+          role: 'user',
+          content: message,
+        },
+      ],
     });
-    const parsed = JSON.parse(response.choices[0].message.content.trim());
+    const parsed = JSON.parse(result.choices[0].message.content.trim());
     return {
-      lang:   VALID_LANGS.includes(parsed.lang)     ? parsed.lang   : 'hr',
-      intent: VALID_INTENTS.includes(parsed.intent) ? parsed.intent : 'other',
+      lang:     VALID_LANGS.includes(parsed.lang)     ? parsed.lang   : 'hr',
+      intent:   VALID_INTENTS.includes(parsed.intent) ? parsed.intent : 'other',
+      response: typeof parsed.response === 'string'   ? parsed.response : '',
     };
   } catch (err) {
     console.error('[openai] parseMessage failed:', err.message);
-    return { lang: 'en', intent: 'other' };
+    return { lang: 'hr', intent: 'other', response: '' };
   }
 }
 
