@@ -2,17 +2,18 @@ const express = require('express');
 const router = express.Router();
 const { getTenant, getMessages, saveMessages } = require('../db/sessions');
 const { parseMessage } = require('../services/openai');
-const { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, setHumanTakeover, upsertWhatsappUser, getWhatsappUser, setOptIn } = require('../db/bot');
+const { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, upsertWhatsappUser, getWhatsappUser, setOptIn, setUserTakeover } = require('../db/bot');
 const { sendHandoverEmail } = require('../services/email');
-const { shouldNotifyAdmin, notifyAdmin } = require('../services/notify');
+const { sendAdminNotification } = require('../services/notify');
 
-// Messages that need no AI response — short acknowledgements across all supported languages
+// Pure acknowledgements that need no reply — greetings are intentionally excluded
+// so Belly can introduce herself (bok, hi, hej, etc. are handled by AI)
 const TRIVIAL = new Set([
   'ok', 'okay', 'k', 'yes', 'no', 'yep', 'nope', 'thanks', 'thx', 'ty', 'np',
-  'da', 'ne', 'hvala', 'bok',
-  'ja', 'nein', 'danke', 'super',
+  'da', 'ne', 'hvala',
+  'nein', 'danke',
   'si', 'grazie',
-  'oui', 'non', 'merci',
+  'non', 'merci',
 ]);
 
 const FALLBACK_MSG = {
@@ -234,15 +235,18 @@ router.post('/webhook', async (req, res) => {
     }
     console.log(`[webhook] tenant: ${tenant.name}`);
 
-    // 3. Upsert user — fire-and-forget, never blocks message flow
-    upsertWhatsappUser(tenant.id, userPhone).catch(err =>
-      console.error('[webhook] upsertWhatsappUser error:', err.message));
+    // 3. Upsert user — ensure record exists before any per-user checks
+    try { await upsertWhatsappUser(tenant.id, userPhone); } catch (_) {}
 
-    // 4. TAKEOVER CHECK — the ONLY path that skips AI
-    if (tenant.human_takeover) {
-      console.log(`[webhook] AI SKIPPED — human takeover active for tenant ${tenant.id}`);
+    // 3.5. Fetch current user state (takeover flag, opt-in state)
+    let currentUser = null;
+    try { currentUser = await getWhatsappUser(tenant.id, userPhone); } catch (_) {}
+
+    // 4. PER-USER TAKEOVER CHECK — ONLY path that skips AI; affects only this user
+    if (currentUser && currentUser.human_takeover) {
+      console.log(`[webhook] AI SKIPPED — per-user takeover active for ${userPhone}`);
       await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', 'hr');
-      console.log('[webhook] FINAL RESPONSE SENT — empty (takeover)');
+      console.log('[webhook] FINAL RESPONSE SENT — empty (per-user takeover)');
       return res.send(emptyTwiml());
     }
 
@@ -252,44 +256,53 @@ router.post('/webhook', async (req, res) => {
     const { lang, intent, response: aiResponse } = await parseMessage(trimmedMsg, tenant.system_prompt, model);
     console.log(`[webhook] intent=${intent} lang=${lang} response="${(aiResponse || '').slice(0, 80)}"`);
 
-    // 6. Admin notification — non-blocking, never stops flow
-    if (shouldNotifyAdmin(trimmedMsg, intent, aiResponse)) {
-      notifyAdmin(tenant.id, userPhone, trimmedMsg).catch(() => {});
-    }
-
-    // 7. Opt-in response (da/ne) — handled after AI so we have lang
+    // 7. Opt-in response (da/ne) — use already-fetched currentUser, no extra DB call
     if (lowerMsg === 'da' || lowerMsg === 'ne') {
-      try {
-        const wu = await getWhatsappUser(tenant.id, userPhone);
-        if (wu && wu.asked_opt_in) {
-          const optIn = lowerMsg === 'da' ? 1 : 0;
+      if (currentUser && currentUser.asked_opt_in) {
+        const optIn = lowerMsg === 'da' ? 1 : 0;
+        try {
           await setOptIn(tenant.id, userPhone, optIn);
           await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', lang);
-          const reply = optIn ? OPT_IN_CONFIRM.hr : OPT_OUT_CONFIRM.hr;
-          console.log('[webhook] FINAL RESPONSE SENT — opt-in');
-          return res.send(twiml(reply));
+        } catch (optErr) {
+          console.error('[webhook] opt-in error:', optErr.message);
         }
-      } catch (optErr) {
-        console.error('[webhook] opt-in error:', optErr.message);
+        const reply = optIn ? OPT_IN_CONFIRM.hr : OPT_OUT_CONFIRM.hr;
+        console.log('[webhook] FINAL RESPONSE SENT — opt-in');
+        return res.send(twiml(reply));
       }
     }
 
-    // 8. Trivial short messages — AI was called, no reply needed
-    if (trimmedMsg.length < 4 || TRIVIAL.has(lowerMsg)) {
+    // 8. Trivial acknowledgements — AI was called but no reply needed
+    // Length < 2 catches stray single chars; greetings (bok, hi, hej…) are NOT in TRIVIAL
+    if (trimmedMsg.length < 2 || TRIVIAL.has(lowerMsg)) {
       console.log(`[webhook] FINAL RESPONSE SENT — trivial (empty)`);
       return res.send(emptyTwiml());
     }
 
-    // 9. Explicit help request → trigger human handover
-    if (intent === 'other') {
-      const HELP_KEYWORDS = ['help', 'agent', 'čovjek', 'covjek', 'osoba', 'pomoć', 'pomoc', 'kontakt', 'human', 'person'];
-      if (HELP_KEYWORDS.some(kw => lowerMsg.includes(kw))) {
-        await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', lang);
-        await setHumanTakeover(tenant.id);
-        await sendHandoverEmail(userPhone, trimmedMsg);
-        console.log('[webhook] FINAL RESPONSE SENT — human handover');
-        return res.send(twiml(fallbackReply(lang)));
+    // 9. Explicit help request → per-user takeover + admin notification
+    // Checked regardless of AI intent — a message can contain help keywords
+    // even when OpenAI classifies it as faq, ai, etc.
+    const HELP_KEYWORDS = ['help', 'agent', 'čovjek', 'covjek', 'osoba', 'pomoć', 'pomoc', 'kontakt', 'human', 'person'];
+    if (HELP_KEYWORDS.some(kw => lowerMsg.includes(kw))) {
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', lang);
+
+      // Set takeover for THIS USER ONLY — other users are unaffected
+      try {
+        await setUserTakeover(tenant.id, userPhone, 1);
+      } catch (tkErr) {
+        console.error('[webhook] setUserTakeover failed:', tkErr.message);
       }
+
+      // Notify admin BEFORE sending Twilio reply — awaited so it completes before response
+      try {
+        await sendAdminNotification(tenant.id, userPhone, trimmedMsg);
+      } catch (notifyErr) {
+        console.error('[webhook] sendAdminNotification threw unexpectedly:', notifyErr.message);
+      }
+      await sendHandoverEmail(userPhone, trimmedMsg).catch(() => {});
+
+      console.log('[webhook] FINAL RESPONSE SENT — human handover (per-user)');
+      return res.send(twiml(fallbackReply(lang)));
     }
 
     // 10. FAQ — DB answer if match, AI response if no match (falls through)

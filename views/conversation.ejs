@@ -116,7 +116,7 @@
     btn.disabled = true;
     btn.style.opacity = '0.6';
     try {
-      const r    = await fetch('/admin/takeover/<%= tenantId %>', { method: 'POST' });
+      const r    = await fetch('/admin/conversations/<%= encodeURIComponent(userPhone || '') %>/takeover', { method: 'POST' });
       const data = await r.json();
       if (data.success) {
         const on = data.human_takeover;

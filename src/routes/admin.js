@@ -5,45 +5,6 @@ const bcrypt = require('bcryptjs');
 const { requireAuth } = require('../middleware/auth');
 const { sendMessage } = require('../services/twilio');
 
-/**
- * POST /admin/takeover/:tenantId
- * Toggles the human_takeover flag for the given tenant.
- * Returns { success: true, human_takeover: <new boolean value> }
- *
- * Auth is intentionally omitted here — added in Phase 2.
- */
-router.post('/takeover/:tenantId', async (req, res) => {
-  const tenantId = parseInt(req.params.tenantId, 10);
-  if (!tenantId || isNaN(tenantId)) {
-    return res.status(400).json({ success: false, error: 'Invalid tenant ID' });
-  }
-
-  try {
-    // Toggle the flag in a single atomic statement
-    await pool.query(
-      'UPDATE tenants SET human_takeover = NOT human_takeover WHERE id = ?',
-      [tenantId]
-    );
-
-    // Read back the new value so the caller knows the current state
-    const [rows] = await pool.query(
-      'SELECT human_takeover FROM tenants WHERE id = ?',
-      [tenantId]
-    );
-
-    if (!rows.length) {
-      return res.status(404).json({ success: false, error: 'Tenant not found' });
-    }
-
-    const newValue = Boolean(rows[0].human_takeover);
-    console.log(`[admin] tenant ${tenantId} human_takeover set to ${newValue}`);
-    return res.json({ success: true, human_takeover: newValue });
-  } catch (err) {
-    console.error('[admin] takeover error:', err.message);
-    return res.status(500).json({ success: false, error: 'Database error' });
-  }
-});
-
 // ---------------------------------------------------------------------------
 // Auth routes
 // ---------------------------------------------------------------------------
@@ -184,6 +145,15 @@ router.get('/dashboard', requireAuth, async (req, res) => {
       featuredEvents = fevRows || [];
     } catch (_) {}
 
+    let activeUserTakeovers = 0;
+    try {
+      const [tkRows] = await pool.query(
+        'SELECT COUNT(*) AS total FROM whatsapp_users WHERE tenant_id = ? AND human_takeover = 1',
+        [tenantId]
+      );
+      activeUserTakeovers = (tkRows && tkRows[0] && tkRows[0].total) || 0;
+    } catch (_) {}
+
     // Derive human-readable insights from existing data — no AI calls
     const insights = [];
     const hasData = intents.reduce((s, r) => s + Number(r.count), 0) > 0;
@@ -234,7 +204,7 @@ router.get('/dashboard', requireAuth, async (req, res) => {
       languages,
       timeOfDay,
       insights,
-      humanTakeover,
+      activeUserTakeovers,
       featuredEvents,
       tenantId,
     });
@@ -484,21 +454,48 @@ router.get('/conversations/:phone', requireAuth, async (req, res) => {
       [tenantId, userPhone]
     );
 
-    const [convTenantRows] = await pool.query(
-      'SELECT human_takeover FROM tenants WHERE id = ?',
-      [tenantId]
+    const [userRows] = await pool.query(
+      'SELECT human_takeover FROM whatsapp_users WHERE tenant_id = ? AND phone = ?',
+      [tenantId, userPhone]
     );
-    const tenant = convTenantRows && convTenantRows.length ? convTenantRows[0] : null;
+    const userRecord = (userRows && userRows[0]) || null;
 
     res.render('conversation', {
       messages,
       userPhone,
-      takeover: tenant ? Boolean(tenant.human_takeover) : false,
+      takeover: userRecord ? Boolean(userRecord.human_takeover) : false,
       tenantId,
     });
   } catch (err) {
     console.error('[admin] conversation detail error:', err.message);
     res.status(500).send('Server error');
+  }
+});
+
+// POST /admin/conversations/:phone/takeover — toggle per-user takeover
+router.post('/conversations/:phone/takeover', requireAuth, async (req, res) => {
+  const tenantId  = req.session.tenantId;
+  const userPhone = req.params.phone;
+
+  try {
+    await pool.query(
+      'UPDATE whatsapp_users SET human_takeover = NOT human_takeover WHERE tenant_id = ? AND phone = ?',
+      [tenantId, userPhone]
+    );
+
+    const [rows] = await pool.query(
+      'SELECT human_takeover FROM whatsapp_users WHERE tenant_id = ? AND phone = ?',
+      [tenantId, userPhone]
+    );
+    const user = (rows && rows[0]) || null;
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+    const newValue = Boolean(user.human_takeover);
+    console.log(`[admin] per-user takeover for ${userPhone} set to ${newValue}`);
+    return res.json({ success: true, human_takeover: newValue });
+  } catch (err) {
+    console.error('[admin] per-user takeover error:', err.message);
+    return res.status(500).json({ success: false, error: 'Database error' });
   }
 });
 

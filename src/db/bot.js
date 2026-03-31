@@ -252,19 +252,6 @@ async function getEventsFormatted(tenantId, period, lang) {
   return phrases.header + lines.join('\n');
 }
 
-/**
- * Activate human takeover for a tenant (bot goes silent for that tenant).
- * @param {number} tenantId
- */
-async function setHumanTakeover(tenantId) {
-  try {
-    await pool.query('UPDATE tenants SET human_takeover = 1 WHERE id = ?', [tenantId]);
-    console.log(`[bot] human_takeover activated for tenant ${tenantId}`);
-  } catch (err) {
-    console.error('[bot] setHumanTakeover error:', err.message);
-  }
-}
-
 // ---------------------------------------------------------------------------
 // WhatsApp users — opt-in tracking
 // ---------------------------------------------------------------------------
@@ -282,11 +269,11 @@ async function upsertWhatsappUser(tenantId, phone) {
 }
 
 /**
- * Return { opt_in, asked_opt_in } for the user, or null if not found.
+ * Return { opt_in, asked_opt_in, human_takeover } for the user, or null if not found.
  */
 async function getWhatsappUser(tenantId, phone) {
   const [rows] = await pool.query(
-    'SELECT opt_in, asked_opt_in FROM whatsapp_users WHERE tenant_id = ? AND phone = ?',
+    'SELECT opt_in, asked_opt_in, human_takeover FROM whatsapp_users WHERE tenant_id = ? AND phone = ?',
     [tenantId, phone]
   );
   return (rows && rows[0]) || null;
@@ -302,4 +289,16 @@ async function setOptIn(tenantId, phone, value) {
   );
 }
 
-module.exports = { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, setHumanTakeover, detectLang, detectEventPeriod, getEventsFormatted, upsertWhatsappUser, getWhatsappUser, setOptIn };
+/**
+ * Set per-user human_takeover flag (1 = operator takes over, 0 = bot resumes).
+ * Affects ONLY this user — all other users on the tenant continue using the bot.
+ */
+async function setUserTakeover(tenantId, phone, value) {
+  await pool.query(
+    'UPDATE whatsapp_users SET human_takeover = ? WHERE tenant_id = ? AND phone = ?',
+    [value, tenantId, phone]
+  );
+  console.log(`[bot] per-user takeover set to ${value} for ${phone} on tenant ${tenantId}`);
+}
+
+module.exports = { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, detectLang, detectEventPeriod, getEventsFormatted, upsertWhatsappUser, getWhatsappUser, setOptIn, setUserTakeover };
