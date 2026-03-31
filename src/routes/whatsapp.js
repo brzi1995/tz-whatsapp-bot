@@ -4,6 +4,7 @@ const { getTenant, getMessages, saveMessages } = require('../db/sessions');
 const { parseMessage } = require('../services/openai');
 const { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, setHumanTakeover } = require('../db/bot');
 const { sendHandoverEmail } = require('../services/email');
+const { shouldNotifyAdmin, notifyAdmin } = require('../services/notify');
 
 // Messages that need no AI response — short acknowledgements across all supported languages
 const TRIVIAL = new Set([
@@ -228,6 +229,11 @@ router.post('/webhook', async (req, res) => {
       console.log(`[webhook] human_takeover active for tenant ${tenant.id} — silencing bot`);
       await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', lang);
       return res.send(emptyTwiml());
+    }
+
+    // 5.5. Smart admin notification — fires once per user, never blocks bot response
+    if (shouldNotifyAdmin(trimmedMsg, intent, aiResponse)) {
+      notifyAdmin(tenant.id, userPhone, trimmedMsg).catch(() => {});
     }
 
     // 6. FAQ — return DB answer directly; no match falls through to aiResponse
