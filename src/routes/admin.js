@@ -447,12 +447,12 @@ router.get('/conversations', requireAuth, async (req, res) => {
     const safeRows = Array.isArray(rows) ? rows : [];
     const conversations = safeRows.map(u => ({
       ...u,
-      human_takeover: u?.human_takeover || 0,
+      human_takeover: Number(u?.human_takeover || 0),
     }));
     res.render('conversations', { conversations });
   } catch (err) {
-    console.error('DB ERROR:', err);
-    return res.status(500).send('Database error');
+    console.error('CONVERSATIONS FULL ERROR:', err);
+    return res.render('conversations', { conversations: [] });
   }
 });
 
@@ -565,8 +565,8 @@ router.get('/broadcast', requireAuth, async (req, res) => {
     const optedInCount = (countRows && countRows[0] && countRows[0].total) || 0;
     res.render('broadcast', { optedInCount, sent: null, error: null });
   } catch (err) {
-    console.error('[admin] broadcast get error:', err.message);
-    res.status(500).send('Server error');
+    console.error('BROADCAST GET ERROR FULL:', err);
+    res.render('broadcast', { optedInCount: 0, sent: null, error: 'Greška učitavanja' });
   }
 });
 
@@ -605,8 +605,8 @@ router.post('/broadcast', requireAuth, async (req, res) => {
 
     res.render('broadcast', { optedInCount, sent: sentCount, error: null });
   } catch (err) {
-    console.error('[admin] broadcast post error:', err.message);
-    res.status(500).send('Server error');
+    console.error('BROADCAST POST ERROR FULL:', err);
+    res.render('broadcast', { optedInCount: 0, sent: null, error: 'Greška slanja' });
   }
 });
 
