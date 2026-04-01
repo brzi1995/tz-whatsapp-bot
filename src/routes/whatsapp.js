@@ -299,9 +299,15 @@ router.post('/webhook', async (req, res) => {
     }
 
     const model = tenant.openai_model;
-    console.log(`[webhook] AI CALLED — "${trimmedMsg}"`);
-    const { lang, intent, response: aiResponse } = await parseMessage(trimmedMsg, tenant.system_prompt, model);
-    console.log(`[webhook] intent=${intent} lang=${lang} response="${(aiResponse || '').slice(0, 80)}"`);
+
+    // Load conversation history — empty array on first interaction
+    const history = await getMessages(tenant.id, userPhone).catch(() => []);
+    console.log(`[webhook] history length: ${history.length}`);
+
+    console.log("USER MESSAGE:", trimmedMsg);
+    const { lang, intent, response: aiResponse } = await parseMessage(trimmedMsg, tenant.system_prompt, model, history);
+    console.log("AI RESPONSE:", aiResponse);
+    console.log(`[webhook] intent=${intent} lang=${lang}`);
 
     // 7. Opt-in response (da/ne) — use already-fetched currentUser, no extra DB call
     if (lowerMsg === 'da' || lowerMsg === 'ne') {
@@ -489,6 +495,13 @@ router.post('/webhook', async (req, res) => {
       console.log(`[webhook] FINAL RESPONSE SENT — weak answer, asking user (intent=${intent})`);
       return res.send(twiml(unsureMsg(lang)));
     }
+
+    // Save conversation turn so AI has context on the next message
+    await saveMessages(tenant.id, userPhone, [
+      ...history,
+      { role: 'user',      content: trimmedMsg },
+      { role: 'assistant', content: reply },
+    ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
 
     await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', lang);
     console.log(`[webhook] FINAL RESPONSE SENT — AI ("${reply.slice(0, 60)}")`);

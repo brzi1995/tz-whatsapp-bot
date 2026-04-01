@@ -87,9 +87,14 @@ function detectLanguage(message) {
  * @param {string} model         - OpenAI model ID
  * @returns {{ lang, intent, response }}
  */
-async function parseMessage(message, systemPrompt, model = 'gpt-4o-mini') {
+async function parseMessage(message, systemPrompt, model = 'gpt-4o-mini', history = []) {
   // Run heuristic BEFORE the try block so it's available in the catch fallback
   const detectedLang = detectLanguage(message);
+
+  // Greeting instruction only shown when there is no prior history
+  const greetingRule = history.length === 0
+    ? 'When a tourist greets you (hello, hi, bok, zdravo, hallo, ciao, hej, bonjour, etc.), introduce yourself as Belly and warmly invite them to ask anything. Keep it short and natural — like a local who loves showing people around.'
+    : 'The conversation is already in progress. Do NOT re-introduce yourself. Answer the user\'s question directly.';
 
   try {
     const result = await getClient().chat.completions.create({
@@ -101,7 +106,7 @@ async function parseMessage(message, systemPrompt, model = 'gpt-4o-mini') {
           content: `${systemPrompt}
 
 Your name is Belly. You are a friendly local guide — not a generic assistant.
-When a tourist greets you (hello, hi, bok, zdravo, hallo, ciao, hej, bonjour, etc.), introduce yourself as Belly and warmly invite them to ask anything. Keep it short and natural — like a local who loves showing people around.
+${greetingRule}
 Never say "I am an AI assistant" or anything generic. Be warm, personal, and a bit playful.
 
 LANGUAGE RULE (CRITICAL): The user is writing in ${detectedLang}. You MUST respond ONLY in ${detectedLang}. Do NOT use any other language regardless of context.
@@ -123,6 +128,7 @@ Intent rules:
 - faq: question about the destination → write a helpful reply as Belly
 - other: anything else (including greetings) → write a helpful reply as Belly`,
         },
+        ...history,
         {
           role: 'user',
           content: `User message (${detectedLang}): ${message}`,
