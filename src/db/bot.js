@@ -276,9 +276,15 @@ async function upsertWhatsappUser(tenantId, phone) {
   console.log("CHAT USER LOOKUP:", clean);
   console.log("RAW PHONE:", phone, "LOOKUP PHONE:", clean);
 
-  // Update existing row by normalized phone — handles both stored formats
-  // (whatsapp:+385... and +385...) without touching human_takeover
-  console.log("MATCHING PHONE:", clean);
+  // Read current takeover state BEFORE any write so we can detect accidental resets
+  const [beforeRows] = await pool.query(
+    'SELECT human_takeover FROM users_chat WHERE tenant_id = ? AND phone = ?',
+    [tenantId, clean]
+  );
+  const beforeUser = (beforeRows && beforeRows[0]) || null;
+  console.log("BEFORE UPDATE:", beforeUser?.human_takeover);
+
+  // Update existing row — only touches phone + last_message_at, never human_takeover
   const [result] = await pool.query(
     `UPDATE users_chat SET phone = ?, last_message_at = NOW()
      WHERE tenant_id = ? AND phone = ?`,
@@ -288,12 +294,24 @@ async function upsertWhatsappUser(tenantId, phone) {
   console.log("USER UPDATE:", clean, "affectedRows:", result.affectedRows);
 
   if (result.affectedRows === 0) {
-    // No existing row — insert fresh (new user, human_takeover defaults to 0)
+    // No existing row — insert fresh (new user, human_takeover inherits DB DEFAULT 0)
     await pool.query(
       `INSERT INTO users_chat (tenant_id, phone, last_message_at) VALUES (?, ?, NOW())`,
       [tenantId, clean]
     );
     console.log("USER INSERT (new):", clean);
+  }
+
+  // Read takeover state AFTER write to confirm it was not changed
+  const [afterRows] = await pool.query(
+    'SELECT human_takeover FROM users_chat WHERE tenant_id = ? AND phone = ?',
+    [tenantId, clean]
+  );
+  const afterUser = (afterRows && afterRows[0]) || null;
+  console.log("AFTER UPDATE:", afterUser?.human_takeover);
+
+  if (beforeUser && Number(beforeUser.human_takeover) !== Number(afterUser?.human_takeover)) {
+    console.error("TAKEOVER RESET DETECTED for", clean, "— was", beforeUser.human_takeover, "now", afterUser?.human_takeover);
   }
 }
 
@@ -302,13 +320,17 @@ async function upsertWhatsappUser(tenantId, phone) {
  */
 async function getWhatsappUser(tenantId, phone) {
   const clean = normalizePhone(phone);
-  console.log("CHAT USER LOOKUP:", clean);
   console.log("RAW PHONE:", phone, "LOOKUP PHONE:", clean);
   const [rows] = await pool.query(
     'SELECT opt_in, asked_opt_in, human_takeover, awaiting_human_confirmation FROM users_chat WHERE tenant_id = ? AND phone = ?',
     [tenantId, clean]
   );
-  return (rows && rows[0]) || null;
+  const user = (rows && rows[0]) || null;
+  console.log("DB USER FOUND:", user);
+  if (user === null) {
+    console.error("USER NOT FOUND in users_chat for phone:", clean, "tenant:", tenantId);
+  }
+  return user;
 }
 
 /**
