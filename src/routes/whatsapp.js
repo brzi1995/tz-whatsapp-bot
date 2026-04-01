@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { getTenant, getMessages, saveMessages } = require('../db/sessions');
-const { parseMessage, detectLanguage } = require('../services/openai');
-const { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, upsertWhatsappUser, getWhatsappUser, setOptIn, setAwaitingConfirmation } = require('../db/bot');
+const { parseMessage } = require('../services/openai');
+const { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, upsertWhatsappUser, getWhatsappUser, setOptIn, detectLang } = require('../db/bot');
 
 /**
  * Returns true when the message is plausibly tourism/destination-related.
@@ -52,21 +52,20 @@ function isRelevantQuestion(message) {
 }
 
 const NOT_RELEVANT_MSG = {
-  hr: 'Mogu pomoći samo s pitanjima vezanim za Brela (plaže, parking, restorani, aktivnosti).\nŽelite li da vas povežem s osobom za dodatnu pomoć? (da/ne)',
-  en: 'I can only help with questions about Brela (beaches, parking, restaurants, activities).\nWould you like me to connect you with a person? (da/ne)',
-  de: 'Ich kann nur bei Fragen zu Brela helfen (Strände, Parken, Restaurants, Aktivitäten).\nMöchten Sie mit einer Person verbunden werden? (da/ne)',
-  it: 'Posso aiutare solo con domande su Brela (spiagge, parcheggio, ristoranti, attività).\nVuoi essere messo in contatto con una persona? (da/ne)',
-  fr: 'Je peux uniquement aider avec des questions sur Brela (plages, parking, restaurants, activités).\nVoulez-vous être mis en contact avec une personne? (da/ne)',
-  sv: 'Jag kan bara hjälpa med frågor om Brela (stränder, parkering, restauranger, aktiviteter).\nVill du att jag kopplar dig till en person? (da/ne)',
-  no: 'Jeg kan bare hjelpe med spørsmål om Brela (strender, parkering, restauranter, aktiviteter).\nVil du at jeg kobler deg til en person? (da/ne)',
-  cs: 'Mohu pomoci pouze s otázkami týkajícími se Brela (pláže, parkování, restaurace, aktivity).\nChcete, abych vás spojil s osobou? (da/ne)',
+  hr: 'Nisam siguran da sam razumio pitanje. Možeš pitati o plažama, parkingu, restoranima ili aktivnostima u Brelima 😊',
+  en: "I'm not sure I understood. You can ask about beaches, parking, restaurants, or activities in Brela 😊",
+  de: 'Ich bin nicht sicher, ob ich die Frage verstanden habe. Sie können nach Stränden, Parken, Restaurants oder Aktivitäten in Brela fragen 😊',
+  it: 'Non sono sicuro di aver capito. Puoi chiedere di spiagge, parcheggi, ristoranti o attività a Brela 😊',
+  fr: "Je ne suis pas sûr d'avoir compris. Vous pouvez demander des informations sur les plages, le parking, les restaurants ou les activités à Brela 😊",
+  sv: 'Jag är inte säker på att jag förstod frågan. Du kan fråga om stränder, parkering, restauranger eller aktiviteter i Brela 😊',
+  no: 'Jeg er ikke sikker på at jeg forstod spørsmålet. Du kan spørre om strender, parkering, restauranter eller aktiviteter i Brela 😊',
+  cs: 'Nejsem si jistý, že jsem otázce rozuměl. Můžete se ptát na pláže, parkování, restaurace nebo aktivity v Brele 😊',
 };
 function notRelevantReply(lang) {
-  return NOT_RELEVANT_MSG[lang] || NOT_RELEVANT_MSG.en;
+  return NOT_RELEVANT_MSG[lang] || NOT_RELEVANT_MSG.hr;
 }
 
-// Pure acknowledgements that need no reply — greetings are intentionally excluded
-// so Belly can introduce herself (bok, hi, hej, etc. are handled by AI)
+// Pure acknowledgements that need no reply
 const TRIVIAL = new Set([
   'ok', 'okay', 'k', 'yes', 'no', 'yep', 'nope', 'thanks', 'thx', 'ty', 'np',
   'da', 'ne', 'hvala',
@@ -75,80 +74,42 @@ const TRIVIAL = new Set([
   'non', 'merci',
 ]);
 
+// Greetings — handled with a fixed intro reply, no AI call needed
+const GREETING_WORDS = [
+  'hello', 'hi', 'hey', 'bok', 'hej', 'zdravo', 'hallo', 'ciao',
+  'bonjour', 'salut', 'dobar dan', 'guten tag', 'buongiorno', 'buenas',
+];
+function isGreeting(msg) {
+  const lower = msg.toLowerCase().trim();
+  return GREETING_WORDS.some(w => lower === w || lower.startsWith(w + ' ') || lower.startsWith(w + '!') || lower.startsWith(w + ','));
+}
+const GREETING_MSG = {
+  hr: 'Bok! 👋 Ja sam turistički asistent. Mogu ti pomoći s informacijama o plažama, parkingu, restoranima i aktivnostima. Kako mogu pomoći?',
+  en: "Hello! 👋 I'm your tourist assistant. I can help you with beaches, parking, restaurants, and activities. How can I help?",
+  de: 'Hallo! 👋 Ich bin Ihr Touristenassistent. Ich kann Ihnen bei Stränden, Parken, Restaurants und Aktivitäten helfen. Wie kann ich helfen?',
+  it: 'Ciao! 👋 Sono il vostro assistente turistico. Posso aiutarvi con spiagge, parcheggi, ristoranti e attività. Come posso aiutare?',
+  fr: 'Bonjour! 👋 Je suis votre assistant touristique. Je peux vous aider avec les plages, le stationnement, les restaurants et les activités. Comment puis-je aider?',
+  sv: 'Hej! 👋 Jag är din turistassistent. Jag kan hjälpa dig med stränder, parkering, restauranger och aktiviteter. Hur kan jag hjälpa?',
+  no: 'Hei! 👋 Jeg er din turistassistent. Jeg kan hjelpe deg med strender, parkering, restauranter og aktiviteter. Hvordan kan jeg hjelpe?',
+  cs: 'Ahoj! 👋 Jsem váš turistický asistent. Mohu vám pomoci s plážemi, parkováním, restauracemi a aktivitami. Jak mohu pomoci?',
+};
+function greetingReply(lang) {
+  return GREETING_MSG[lang] || GREETING_MSG.hr;
+}
+
 const FALLBACK_MSG = {
-  hr: 'Rado ćemo vam pomoći 😊 Naš tim će vam uskoro odgovoriti.',
-  en: "We'll be happy to help 😊 Our team will respond shortly.",
-  de: 'Wir helfen Ihnen gerne 😊 Unser Team meldet sich in Kürze.',
-  it: 'Saremo lieti di aiutarvi 😊 Il nostro team risponderà a breve.',
-  fr: 'Nous serons heureux de vous aider 😊 Notre équipe vous répondra bientôt.',
-  sv: 'Vi hjälper gärna 😊 Vårt team återkommer snart.',
-  no: 'Vi hjelper gjerne 😊 Teamet vårt svarer snart.',
-  cs: 'Rádi vám pomůžeme 😊 Náš tým se vám brzy ozve.',
+  hr: 'Nisam siguran da sam razumio. Pokušaj pitati na drugi način 😊',
+  en: "I'm not sure I understood. Try asking differently 😊",
+  de: 'Ich bin nicht sicher, ob ich verstanden habe. Versuche es anders zu fragen 😊',
+  it: 'Non sono sicuro di aver capito. Prova a chiedere in modo diverso 😊',
+  fr: "Je ne suis pas sûr d'avoir compris. Essaie de reformuler ta question 😊",
+  sv: 'Jag är inte säker på att jag förstod. Försök fråga på ett annat sätt 😊',
+  no: 'Jeg er ikke sikker på at jeg forstod. Prøv å spørre på en annen måte 😊',
+  cs: 'Nejsem si jistý, že jsem rozuměl. Zkuste se zeptat jinak 😊',
 };
 function fallbackReply(lang) {
-  return FALLBACK_MSG[lang] || FALLBACK_MSG.en;
+  return FALLBACK_MSG[lang] || FALLBACK_MSG.hr;
 }
-
-// --- Weak-answer detection (no takeover — informational prompt only) ---
-
-const UNSURE_PHRASES = [
-  // English
-  "i don't know", "i'm not sure", "i am not sure", "not sure", "unsure",
-  "i cannot", "i can't", "can't help", "cannot help", "unable to",
-  "i have no information", "no information available", "don't have accurate",
-  // Croatian
-  "ne znam", "nisam siguran", "nisam sigurna", "ne mogu", "nemam točnu",
-  // German
-  "nicht sicher", "ich weiß nicht", "weiß nicht", "keine genaue information",
-  // French
-  "je ne sais pas", "pas sûr", "je ne suis pas sûr", "pas d'informations précises",
-  // Italian
-  "non lo so", "non sono sicuro", "non sono sicura", "non ho informazioni precise",
-];
-
-/**
- * Returns true when the AI reply signals it doesn't know the answer.
- * Does NOT trigger takeover — only used to ask the user if they want help.
- */
-function isWeakResponse(reply) {
-  if (!reply || reply.trim().length < 20) return true;
-  const lower = reply.toLowerCase();
-  return UNSURE_PHRASES.some(p => lower.includes(p));
-}
-
-const UNSURE_MSG = {
-  hr: 'Nemam točnu informaciju za to. Želite li da vas povežem s osobom? (da/ne)',
-  en: "I don't have accurate information on that. Would you like me to connect you with a person? (da/ne)",
-  de: 'Ich habe keine genaue Information dazu. Möchten Sie mit einer Person verbunden werden? (da/ne)',
-  it: 'Non ho informazioni precise su questo. Vuole che la metta in contatto con una persona? (da/ne)',
-  fr: "Je n'ai pas d'informations précises à ce sujet. Voulez-vous que je vous mette en contact avec une personne? (da/ne)",
-  sv: 'Jag har ingen exakt information om det. Vill du att jag sätter dig i kontakt med en person? (da/ne)',
-  no: 'Jeg har ingen nøyaktig informasjon om det. Vil du at jeg setter deg i kontakt med en person? (da/ne)',
-  cs: 'Nemám přesné informace o tom. Chcete, abych vás spojil s osobou? (da/ne)',
-};
-function unsureMsg(lang) { return UNSURE_MSG[lang] || UNSURE_MSG.en; }
-
-// Responses when user replies da/ne to the "connect with a person?" offer
-const HUMAN_OFFER_DA = {
-  hr: 'U redu, proslijedit ću vaš upit osobi koja će vam se uskoro javiti.',
-  en: "Alright, I'll forward your request to a person who will get back to you shortly.",
-  de: 'In Ordnung, ich leite Ihre Anfrage an eine Person weiter, die sich bald bei Ihnen meldet.',
-  it: 'Va bene, inoltrerò la tua richiesta a una persona che ti contatterà a breve.',
-  fr: "D'accord, je vais transmettre votre demande à une personne qui vous contactera bientôt.",
-  sv: 'Okej, jag vidarebefordrar din fråga till en person som återkommer snart.',
-  no: 'Ok, jeg videresender forespørselen din til en person som vil ta kontakt snart.',
-  cs: 'Dobře, přepošlu váš dotaz osobě, která se vám brzy ozve.',
-};
-const HUMAN_OFFER_NE = {
-  hr: 'U redu 🙂 Ako imate još pitanja o Brelima, slobodno pitajte.',
-  en: 'Alright 🙂 If you have any more questions about Brela, feel free to ask.',
-  de: 'In Ordnung 🙂 Wenn Sie weitere Fragen zu Brela haben, können Sie diese gerne stellen.',
-  it: 'Va bene 🙂 Se hai altre domande su Brela, non esitare a chiedere.',
-  fr: "D'accord 🙂 Si vous avez d'autres questions sur Brela, n'hésitez pas à demander.",
-  sv: 'Okej 🙂 Om du har fler frågor om Brela, fråga gärna.',
-  no: 'Ok 🙂 Hvis du har flere spørsmål om Brela, er du velkommen til å spørre.',
-  cs: 'Dobře 🙂 Pokud máte další otázky ohledně Brela, neváhejte se zeptat.',
-};
 
 const OPT_IN_CONFIRM = {
   hr: 'Super! Obavijestit ćemo te o događajima 🎉',
@@ -372,7 +333,7 @@ router.post('/webhook', async (req, res) => {
     // 3. Upsert user — ensure record exists before any per-user checks
     try { await upsertWhatsappUser(tenant.id, userPhone); } catch (_) {}
 
-    // 3.5. Fetch current user state (takeover flag, opt-in state)
+    // 3.5. Fetch current user state (opt-in state)
     let currentUser = null;
     try {
       currentUser = await getWhatsappUser(tenant.id, userPhone);
@@ -380,26 +341,38 @@ router.post('/webhook', async (req, res) => {
       console.error("[webhook] getWhatsappUser failed:", userErr.message);
     }
 
-    if (currentUser === null) {
-      console.warn("[webhook] currentUser is null — user not found or DB error for:", userPhone);
+    // 4. Opt-in consent (da/ne in response to notification offer)
+    if ((lowerMsg === 'da' || lowerMsg === 'ne') && currentUser && currentUser.asked_opt_in) {
+      const optIn = lowerMsg === 'da' ? 1 : 0;
+      const msgLang = detectLang(trimmedMsg);
+      try {
+        await setOptIn(tenant.id, userPhone, optIn);
+        await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', msgLang);
+      } catch (optErr) {
+        console.error('[webhook] opt-in error:', optErr.message);
+      }
+      const reply = optIn ? (OPT_IN_CONFIRM[msgLang] || OPT_IN_CONFIRM.hr) : (OPT_OUT_CONFIRM[msgLang] || OPT_OUT_CONFIRM.hr);
+      console.log('[webhook] FINAL RESPONSE SENT — opt-in');
+      return res.send(twiml(reply));
     }
 
-    // 4. PER-USER TAKEOVER CHECK — save message first, then block bot
-    console.log("TAKEOVER STATUS:", currentUser?.human_takeover);
+    // 5. Greeting — fast reply without AI
+    if (isGreeting(trimmedMsg)) {
+      const msgLang = detectLang(trimmedMsg);
+      try { await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', msgLang); } catch (_) {}
+      console.log(`[webhook] FINAL RESPONSE SENT — greeting (${msgLang})`);
+      return res.send(twiml(greetingReply(msgLang)));
+    }
 
-    if (Number(currentUser?.human_takeover) === 1) {
-      // Always save incoming message so admin can see it in the dashboard
-      try {
-        await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', detectLanguage(trimmedMsg));
-      } catch (_) {}
-      console.log("BOT BLOCKED - HUMAN TAKEOVER ACTIVE");
+    // 6. Trivial acknowledgements — no reply needed
+    if (trimmedMsg.length < 2 || TRIVIAL.has(lowerMsg)) {
+      console.log(`[webhook] FINAL RESPONSE SENT — trivial (empty)`);
       return res.send(emptyTwiml());
     }
 
-    // RELEVANCE GATE — blocks spam/nonsense before FAQ, AI, or events logic
-    // Runs after takeover so takeover-user messages are always saved above
+    // 7. RELEVANCE GATE — blocks spam/nonsense before FAQ, AI, or events logic
     if (!isRelevantQuestion(trimmedMsg)) {
-      const gateLang = detectLanguage(trimmedMsg);
+      const gateLang = detectLang(trimmedMsg);
       console.log(`[webhook] BLOCKED — irrelevant message: "${trimmedMsg.slice(0, 60)}"`);
       return res.send(twiml(notRelevantReply(gateLang)));
     }
@@ -433,43 +406,6 @@ router.post('/webhook', async (req, res) => {
     );
     console.log("AI RESPONSE:", aiResponse);
     console.log(`[webhook] intent=${intent} lang=${lang}`);
-
-    // 7. DA/NE responses — human handoff offer takes priority over opt-in
-    if (lowerMsg === 'da' || lowerMsg === 'ne') {
-      // 7a. User replied to "would you like to connect with a person?" prompt
-      if (currentUser && Number(currentUser.awaiting_human_confirmation) === 1) {
-        try {
-          await setAwaitingConfirmation(tenant.id, userPhone, 0);
-          await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', lang);
-        } catch (_) {}
-        const reply = lowerMsg === 'da'
-          ? (HUMAN_OFFER_DA[lang] || HUMAN_OFFER_DA.hr)
-          : (HUMAN_OFFER_NE[lang] || HUMAN_OFFER_NE.hr);
-        console.log('[webhook] FINAL RESPONSE SENT — human handoff response');
-        return res.send(twiml(reply));
-      }
-
-      // 7b. User replied to opt-in notification offer
-      if (currentUser && currentUser.asked_opt_in) {
-        const optIn = lowerMsg === 'da' ? 1 : 0;
-        try {
-          await setOptIn(tenant.id, userPhone, optIn);
-          await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', lang);
-        } catch (optErr) {
-          console.error('[webhook] opt-in error:', optErr.message);
-        }
-        const reply = optIn ? OPT_IN_CONFIRM.hr : OPT_OUT_CONFIRM.hr;
-        console.log('[webhook] FINAL RESPONSE SENT — opt-in');
-        return res.send(twiml(reply));
-      }
-    }
-
-    // 8. Trivial acknowledgements — AI was called but no reply needed
-    // Length < 2 catches stray single chars; greetings (bok, hi, hej…) are NOT in TRIVIAL
-    if (trimmedMsg.length < 2 || TRIVIAL.has(lowerMsg)) {
-      console.log(`[webhook] FINAL RESPONSE SENT — trivial (empty)`);
-      return res.send(emptyTwiml());
-    }
 
     // 11. Weather — real-time data from OpenWeather API
     if (intent === 'weather_current' || intent === 'weather_tomorrow' || intent === 'weather_multi') {
@@ -611,14 +547,6 @@ router.post('/webhook', async (req, res) => {
     // 14. AI response — default for faq-no-match, anything else
     const reply = aiResponse || fallbackReply(lang);
 
-    // Weak-answer detection: ask user if they want help — no takeover, no admin notification
-    if (isWeakResponse(reply)) {
-      try { await setAwaitingConfirmation(tenant.id, userPhone, 1); } catch (_) {}
-      await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', lang);
-      console.log(`[webhook] FINAL RESPONSE SENT — weak answer, asking user (intent=${intent})`);
-      return res.send(twiml(unsureMsg(lang)));
-    }
-
     // Save conversation turn so AI has context on the next message
     await saveMessages(tenant.id, userPhone, [
       ...history,
@@ -644,8 +572,8 @@ router.post('/webhook', async (req, res) => {
     const isQuota = err.status === 429 || err.code === 'insufficient_quota';
     console.log('[webhook] FINAL RESPONSE SENT — error fallback');
     res.send(twiml(isQuota
-      ? 'Service temporarily unavailable. Please try again later.'
-      : 'An error occurred. Please try again.'
+      ? 'Usluga je privremeno nedostupna. Molimo pokušajte ponovo.'
+      : 'Došlo je do greške. Molimo pokušajte ponovo.'
     ));
   }
 });
