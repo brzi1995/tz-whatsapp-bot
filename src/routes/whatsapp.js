@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getTenant, getMessages, saveMessages } = require('../db/sessions');
 const { parseMessage } = require('../services/openai');
-const { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, upsertWhatsappUser, getWhatsappUser, setOptIn } = require('../db/bot');
+const { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, upsertWhatsappUser, getWhatsappUser, setOptIn, setAwaitingConfirmation } = require('../db/bot');
 
 // Pure acknowledgements that need no reply — greetings are intentionally excluded
 // so Belly can introduce herself (bok, hi, hej, etc. are handled by AI)
@@ -28,8 +28,39 @@ function fallbackReply(lang) {
   return FALLBACK_MSG[lang] || FALLBACK_MSG.en;
 }
 
-// --- Smart human handoff ---
+// --- Weak-answer detection (no takeover — informational prompt only) ---
 
+const UNSURE_PHRASES = [
+  "i don't know", "i'm not sure", "i am not sure", "not sure", "unsure",
+  "i cannot", "i can't", "can't help", "cannot help", "unable to",
+  "i have no information", "no information available",
+  "ne znam", "nisam siguran", "nisam sigurna", "ne mogu",
+  "nicht sicher", "ich weiß nicht", "weiß nicht",
+  "je ne sais pas", "pas sûr", "je ne suis pas sûr",
+  "non lo so", "non sono sicuro", "non sono sicura",
+];
+
+/**
+ * Returns true when the AI reply signals it doesn't know the answer.
+ * Does NOT trigger takeover — only used to ask the user if they want help.
+ */
+function isWeakResponse(reply) {
+  if (!reply || reply.trim().length < 20) return true;
+  const lower = reply.toLowerCase();
+  return UNSURE_PHRASES.some(p => lower.includes(p));
+}
+
+const UNSURE_MSG = {
+  hr: 'Nisam siguran da sam dobro razumio. Želite li pomoć od našeg tima?',
+  en: "I'm not sure I understood correctly. Would you like help from our team?",
+  de: 'Ich bin unsicher, ob ich richtig verstanden habe. Möchten Sie Hilfe von unserem Team?',
+  it: 'Non sono sicuro di aver capito bene. Vuoi assistenza dal nostro team?',
+  fr: "Je ne suis pas sûr d'avoir bien compris. Voulez-vous l'aide de notre équipe?",
+  sv: 'Jag är inte säker på att jag förstod rätt. Vill du ha hjälp från vårt team?',
+  no: 'Jeg er ikke sikker på at jeg forstod riktig. Vil du ha hjelp fra teamet vårt?',
+  cs: 'Nejsem si jistý, zda jsem správně porozuměl. Chcete pomoc od našeho týmu?',
+};
+function unsureMsg(lang) { return UNSURE_MSG[lang] || UNSURE_MSG.en; }
 
 const OPT_IN_CONFIRM = {
   hr: 'Super! Obavijestit ćemo te o događajima 🎉',
@@ -450,6 +481,14 @@ router.post('/webhook', async (req, res) => {
 
     // 14. AI response — default for faq-no-match, anything else
     const reply = aiResponse || fallbackReply(lang);
+
+    // Weak-answer detection: ask user if they want help — no takeover, no admin notification
+    if (isWeakResponse(reply)) {
+      try { await setAwaitingConfirmation(tenant.id, userPhone, 1); } catch (_) {}
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', lang);
+      console.log(`[webhook] FINAL RESPONSE SENT — weak answer, asking user (intent=${intent})`);
+      return res.send(twiml(unsureMsg(lang)));
+    }
 
     await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', lang);
     console.log(`[webhook] FINAL RESPONSE SENT — AI ("${reply.slice(0, 60)}")`);
