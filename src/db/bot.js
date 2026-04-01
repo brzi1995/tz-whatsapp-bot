@@ -40,12 +40,11 @@ async function logMessage(tenantId, userPhone, message, intent, lang = 'hr') {
 
 /**
  * Try to match a user message against FAQ entries for the tenant.
- * Splits each faq.question into individual words and checks whether any word
- * appears in the user message (case-insensitive). Returns the answer for the
- * first matching row, or null when nothing matches.
+ * Returns { answer, score } for the best match (score = 0–1, matched keywords / total),
+ * or null when nothing matches at all.
  * @param {number} tenantId
  * @param {string} userMessage
- * @returns {Promise<string|null>}
+ * @returns {Promise<{answer:string, score:number}|null>}
  */
 async function getFaqMatch(tenantId, userMessage) {
   try {
@@ -56,16 +55,19 @@ async function getFaqMatch(tenantId, userMessage) {
     if (!rows.length) return null;
 
     const normalised = userMessage.toLowerCase();
+    let best = null;
 
     for (const row of rows) {
       const keywords = row.question.toLowerCase().split(/\s+/).filter(Boolean);
-      const matched = keywords.some(word => normalised.includes(word));
-      if (matched) {
-        console.log(`[bot] FAQ match on question: "${row.question}"`);
-        return row.answer;
+      if (!keywords.length) continue;
+      const matchedCount = keywords.filter(kw => normalised.includes(kw)).length;
+      const score = matchedCount / keywords.length;
+      if (score > 0 && (!best || score > best.score)) {
+        best = { answer: row.answer, score };
+        console.log(`[bot] FAQ scored match on "${row.question}" — score: ${score.toFixed(2)}`);
       }
     }
-    return null;
+    return best;
   } catch (err) {
     console.error('[bot] getFaqMatch error:', err.message);
     return null;

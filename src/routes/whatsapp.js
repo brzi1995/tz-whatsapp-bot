@@ -217,14 +217,6 @@ const NO_EVENTS = {
   no: 'Ingen kommende arrangementer, men her er noen forslag:\n• Utforsk gamlebyen og historiske steder\n• Slapp av på en av de vakre strendene\n• Oppdag lokale restauranter og kjøkkenet 😊',
   cs: 'Žádné nadcházející akce, ale zde je pár tipů:\n• Prozkoumejte staré město a historická místa\n• Odpočiňte si na jedné z krásných pláží\n• Objevte místní restaurace a kuchyni 😊',
 };
-const EVENTS_HEADER = {
-  hr: '📅 Nadolazeći događaji:',
-  en: '📅 Upcoming events:',
-  de: '📅 Bevorstehende Veranstaltungen:',
-  it: '📅 Prossimi eventi:',
-  fr: '📅 Événements à venir:',
-};
-
 function escapeXml(str) {
   return String(str)
     .replace(/&/g, '&amp;')
@@ -301,8 +293,34 @@ router.post('/webhook', async (req, res) => {
     const history = await getMessages(tenant.id, userPhone).catch(() => []);
     console.log(`[webhook] history length: ${history.length}`);
 
+    // Pre-fetch FAQ + upcoming events in parallel (cheap DB reads)
+    const [faqMatch, upcomingEvents] = await Promise.all([
+      getFaqMatch(tenant.id, trimmedMsg).catch(() => null),
+      getUpcomingEvents(tenant.id).catch(() => []),
+    ]);
+
+    // Strong FAQ match — skip AI entirely
+    if (faqMatch && faqMatch.score >= 0.5) {
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', detectLanguage(trimmedMsg));
+      console.log(`[webhook] FINAL RESPONSE SENT — FAQ (strong match, score=${faqMatch.score.toFixed(2)})`);
+      return res.send(twiml(faqMatch.answer));
+    }
+
+    // Build context for AI: weak FAQ match and/or upcoming events
+    const faqContext   = faqMatch ? faqMatch.answer : null;
+    const eventContext = upcomingEvents.length
+      ? upcomingEvents.map(ev => {
+          const dateStr = new Date(ev.date).toISOString().slice(0, 10);
+          let line = `${ev.title} (${dateStr})`;
+          if (ev.description) line += `: ${ev.description}`;
+          return line;
+        }).join('\n')
+      : null;
+
     console.log("USER MESSAGE:", trimmedMsg);
-    const { lang, intent, response: aiResponse } = await parseMessage(trimmedMsg, tenant.system_prompt, model, history);
+    const { lang, intent, response: aiResponse } = await parseMessage(
+      trimmedMsg, tenant.system_prompt, model, history, { faqContext, eventContext }
+    );
     console.log("AI RESPONSE:", aiResponse);
     console.log(`[webhook] intent=${intent} lang=${lang}`);
 
@@ -327,16 +345,6 @@ router.post('/webhook', async (req, res) => {
     if (trimmedMsg.length < 2 || TRIVIAL.has(lowerMsg)) {
       console.log(`[webhook] FINAL RESPONSE SENT — trivial (empty)`);
       return res.send(emptyTwiml());
-    }
-
-    // 9. FAQ — DB answer if match, AI response if no match (falls through)
-    if (intent === 'faq') {
-      const faqAnswer = await getFaqMatch(tenant.id, trimmedMsg);
-      if (faqAnswer) {
-        await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', lang);
-        console.log('[webhook] FINAL RESPONSE SENT — FAQ');
-        return res.send(twiml(faqAnswer));
-      }
     }
 
     // 11. Weather — real-time data from OpenWeather API
@@ -457,21 +465,15 @@ router.post('/webhook', async (req, res) => {
 
     if (intent === 'events') {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'events', lang);
-      const events = await getUpcomingEvents(tenant.id);
-      if (!events.length) {
-        console.log('[webhook] FINAL RESPONSE SENT — events (empty)');
-        return res.send(twiml(NO_EVENTS[lang] || NO_EVENTS.en));
-      }
-      const header = EVENTS_HEADER[lang] || EVENTS_HEADER.en;
-      const lines = events.map(ev => {
-        const dateStr = new Date(ev.date).toISOString().slice(0, 10);
-        let line = `• ${ev.title} (${dateStr})`;
-        if (ev.description) line += ` — ${ev.description}`;
-        if (ev.location_link) line += `\n  📍 ${ev.location_link}`;
-        return line;
-      }).join('\n');
-      console.log(`[webhook] FINAL RESPONSE SENT — events (${events.length} found)`);
-      return res.send(twiml(`${header}\n\n${lines}`));
+      // AI crafted a contextual response using the pre-fetched eventContext
+      const reply = aiResponse || (NO_EVENTS[lang] || NO_EVENTS.en);
+      await saveMessages(tenant.id, userPhone, [
+        ...history,
+        { role: 'user',      content: trimmedMsg },
+        { role: 'assistant', content: reply },
+      ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
+      console.log(`[webhook] FINAL RESPONSE SENT — events general (AI contextual)`);
+      return res.send(twiml(reply));
     }
 
     // 13. Rate limit — per user/day, does NOT trigger takeover

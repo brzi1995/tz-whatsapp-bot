@@ -87,7 +87,7 @@ function detectLanguage(message) {
  * @param {string} model         - OpenAI model ID
  * @returns {{ lang, intent, response }}
  */
-async function parseMessage(message, systemPrompt, model = 'gpt-4o-mini', history = []) {
+async function parseMessage(message, systemPrompt, model = 'gpt-4o-mini', history = [], context = {}) {
   // Run heuristic BEFORE the try block so it's available in the catch fallback
   const detectedLang = detectLanguage(message);
 
@@ -95,6 +95,12 @@ async function parseMessage(message, systemPrompt, model = 'gpt-4o-mini', histor
   const greetingRule = history.length === 0
     ? 'When a tourist greets you (hello, hi, bok, zdravo, hallo, ciao, hej, bonjour, etc.), introduce yourself as Belly and warmly invite them to ask anything. Keep it short and natural — like a local who loves showing people around.'
     : 'The conversation is already in progress. Do NOT re-introduce yourself. Answer the user\'s question directly.';
+
+  const { faqContext, eventContext } = context;
+  const contextBlock = [
+    faqContext   ? `RELEVANT FAQ (use if helpful): ${faqContext}`   : '',
+    eventContext ? `RELEVANT EVENTS (use if helpful): ${eventContext}` : '',
+  ].filter(Boolean).join('\n\n');
 
   try {
     const result = await getClient().chat.completions.create({
@@ -117,7 +123,7 @@ RESPONSE QUALITY RULES:
 - Sound like a knowledgeable local friend, not a tourist brochure
 - Avoid vague clichés ("visit the beaches", "try local food") — always name the specific place and why it's worth it
 - Be concise but concrete
-
+${contextBlock ? `\n${contextBlock}` : ''}
 You must reply ONLY with valid JSON:
 {"lang":"${detectedLang}","intent":"events_today|events_tomorrow|events_week|events|weather_current|weather_tomorrow|weather_multi|faq|other","response":"your reply"}
 
