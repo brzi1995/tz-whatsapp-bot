@@ -28,7 +28,7 @@ router.post('/login', async (req, res) => {
 
   try {
     const [rows] = await pool.query(
-      'SELECT id, email, password, tenant_id FROM users WHERE email = ? LIMIT 1',
+      'SELECT id, email, password, tenant_id FROM admins WHERE email = ? LIMIT 1',
       [email.trim().toLowerCase()]
     );
 
@@ -452,8 +452,10 @@ router.get('/conversations', requireAuth, async (req, res) => {
 // GET /admin/conversations/:phone
 router.get('/conversations/:phone', requireAuth, async (req, res) => {
   const tenantId  = req.session.tenantId;
-  const cleanPhone = normalizePhone(req.params.phone); // +385... format for users table
-  const fullPhone = 'whatsapp:' + cleanPhone;          // whatsapp:+385... format for messages table
+  const cleanPhone = normalizePhone(req.params.phone); // +385... — same as webhook + DB
+  const fullPhone  = 'whatsapp:' + cleanPhone;         // whatsapp:+385... — messages table only
+
+  console.log("UI LOAD PHONE:", cleanPhone);
 
   try {
     const [messages] = await pool.query(
@@ -463,15 +465,15 @@ router.get('/conversations/:phone', requireAuth, async (req, res) => {
       [tenantId, fullPhone]
     );
 
-    let takeover = false;
-    try {
-      const [userRows] = await pool.query(
-        'SELECT human_takeover FROM users WHERE tenant_id = ? AND phone = ?',
-        [tenantId, cleanPhone]
-      );
-      const userRecord = (userRows && userRows[0]) || null;
-      takeover = userRecord ? Boolean(userRecord.human_takeover) : false;
-    } catch (_) {}
+    const [userRows] = await pool.query(
+      'SELECT human_takeover FROM users WHERE tenant_id = ? AND phone = ?',
+      [tenantId, cleanPhone]
+    );
+    const user = (userRows && userRows[0]) || null;
+
+    console.log("UI TAKEOVER:", user?.human_takeover);
+
+    const takeover = Number(user?.human_takeover) === 1;
 
     res.render('conversation', {
       messages: Array.isArray(messages) ? messages : [],
