@@ -244,7 +244,10 @@ router.post('/webhook', async (req, res) => {
     try { currentUser = await getWhatsappUser(tenant.id, userPhone); } catch (_) {}
 
     // 4. PER-USER TAKEOVER CHECK
-    if (currentUser && currentUser.human_takeover === 1) return;
+    if (currentUser && currentUser.human_takeover) {
+      console.log(`[webhook] takeover active for ${userPhone} — bot suppressed`);
+      return res.send(emptyTwiml());
+    }
 
     // 5. GENERATE RESPONSE — AI called for every non-takeover message
     const model = tenant.openai_model;
