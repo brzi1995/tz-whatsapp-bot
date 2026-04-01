@@ -52,7 +52,7 @@ function isRelevantQuestion(message) {
 }
 
 const NOT_RELEVANT_MSG = {
-  hr: 'Mogu pomoći samo s pitanjima vezanim za Brela (plaže, parking, restorani, aktivnosti).\nŽelite li da vas povežem s osobom? (da/ne)',
+  hr: 'Mogu pomoći samo s pitanjima vezanim za Brela (plaže, parking, restorani, aktivnosti).\nŽelite li da vas povežem s osobom za dodatnu pomoć? (da/ne)',
   en: 'I can only help with questions about Brela (beaches, parking, restaurants, activities).\nWould you like me to connect you with a person? (da/ne)',
   de: 'Ich kann nur bei Fragen zu Brela helfen (Strände, Parken, Restaurants, Aktivitäten).\nMöchten Sie mit einer Person verbunden werden? (da/ne)',
   it: 'Posso aiutare solo con domande su Brela (spiagge, parcheggio, ristoranti, attività).\nVuoi essere messo in contatto con una persona? (da/ne)',
@@ -336,11 +336,11 @@ router.post('/webhook', async (req, res) => {
       console.warn("[webhook] currentUser is null — user not found or DB error for:", userPhone);
     }
 
-    // 4. PER-USER TAKEOVER CHECK — hard stop before ANY AI or response logic
+    // 4. PER-USER TAKEOVER CHECK — save message first, then block bot
     console.log("TAKEOVER STATUS:", currentUser?.human_takeover);
 
     if (Number(currentUser?.human_takeover) === 1) {
-      // Save message BEFORE exiting so it appears in the admin dashboard
+      // Always save incoming message so admin can see it in the dashboard
       try {
         await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', detectLanguage(trimmedMsg));
       } catch (_) {}
@@ -348,7 +348,8 @@ router.post('/webhook', async (req, res) => {
       return res.send(emptyTwiml());
     }
 
-    // RELEVANCE GATE — must pass before ANY FAQ, AI, or events logic
+    // RELEVANCE GATE — blocks spam/nonsense before FAQ, AI, or events logic
+    // Runs after takeover so takeover-user messages are always saved above
     if (!isRelevantQuestion(trimmedMsg)) {
       const gateLang = detectLanguage(trimmedMsg);
       console.log(`[webhook] BLOCKED — irrelevant message: "${trimmedMsg.slice(0, 60)}"`);
