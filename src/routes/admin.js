@@ -466,7 +466,7 @@ router.get('/conversations/:phone', requireAuth, async (req, res) => {
     try {
       const [userRows] = await pool.query(
         'SELECT human_takeover FROM whatsapp_users WHERE tenant_id = ? AND phone = ?',
-        [tenantId, cleanPhone]
+        [tenantId, fullPhone]
       );
       const userRecord = (userRows && userRows[0]) || null;
       takeover = userRecord ? Boolean(userRecord.human_takeover) : false;
@@ -486,7 +486,7 @@ router.get('/conversations/:phone', requireAuth, async (req, res) => {
 
 // POST /admin/takeover/:phone — toggle per-user takeover (called from conversation view)
 router.post('/takeover/:phone', requireAuth, async (req, res) => {
-  const cleanPhone = req.params.phone.replace('whatsapp:', '');
+  const cleanPhone = decodeURIComponent(req.params.phone).replace('whatsapp:', '');
   console.log('[admin] takeover toggle for:', cleanPhone);
 
   try {
