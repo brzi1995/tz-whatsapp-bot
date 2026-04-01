@@ -309,11 +309,11 @@ router.post('/webhook', async (req, res) => {
       console.warn("[webhook] currentUser is null — user not found or DB error for:", userPhone);
     }
 
-    // 4. PER-USER TAKEOVER CHECK — must run before ANY AI or response logic
+    // 4. PER-USER TAKEOVER CHECK — hard stop before ANY AI or response logic
     console.log("TAKEOVER STATUS:", currentUser?.human_takeover);
 
     if (Number(currentUser?.human_takeover) === 1) {
-      console.log("TAKEOVER ACTIVE - BOT BLOCKED");
+      console.log("BOT BLOCKED - HUMAN TAKEOVER ACTIVE");
       return res.send(emptyTwiml());
     }
 
@@ -346,10 +346,10 @@ router.post('/webhook', async (req, res) => {
       return res.send(twiml(humanConfirmPrompt(confirmLang)));
     }
 
-    // 5. GENERATE RESPONSE — AI called for every non-takeover message
-    console.log("AI ENTRY - TAKEOVER:", currentUser?.human_takeover);
+    // 5. GENERATE RESPONSE — second takeover guard (defence in depth before AI call)
+    console.log("TAKEOVER STATUS:", currentUser?.human_takeover);
     if (Number(currentUser?.human_takeover) === 1) {
-      console.log("BLOCKED AI - TAKEOVER ACTIVE");
+      console.log("BOT BLOCKED - HUMAN TAKEOVER ACTIVE");
       return res.send(emptyTwiml());
     }
 

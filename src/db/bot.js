@@ -322,11 +322,11 @@ async function getWhatsappUser(tenantId, phone) {
   const clean = normalizePhone(phone);
   console.log("RAW PHONE:", phone, "LOOKUP PHONE:", clean);
   const [rows] = await pool.query(
-    'SELECT opt_in, asked_opt_in, human_takeover, awaiting_human_confirmation FROM users_chat WHERE tenant_id = ? AND phone = ?',
+    'SELECT * FROM users_chat WHERE tenant_id = ? AND phone = ?',
     [tenantId, clean]
   );
   const user = (rows && rows[0]) || null;
-  console.log("DB USER FOUND:", user);
+  console.log("LOOKUP USER:", clean, user);
   if (user === null) {
     console.error("USER NOT FOUND in users_chat for phone:", clean, "tenant:", tenantId);
   }
