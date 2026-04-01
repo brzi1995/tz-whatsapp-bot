@@ -113,34 +113,28 @@
   // Phone encoded at render time — used in fetch URL at runtime
   const userPhone = '<%= encodeURIComponent((userPhone || "").replace("whatsapp:", "")) %>';
 
-  // Local state — mirrors DB value, updated from API response (no page reload)
-  let humanTakeover = <%= takeover ? 1 : 0 %>;
-
   document.getElementById('takeoverBtn').addEventListener('click', async () => {
-    const btn   = document.getElementById('takeoverBtn');
-    const badge = document.getElementById('takeoverBadge');
+    const btn = document.getElementById('takeoverBtn');
     btn.disabled = true;
     btn.style.opacity = '0.6';
 
+    const url = `/admin/conversations/${userPhone}/takeover`;
+    console.log('[takeover] POST', url);
+
     try {
-      const res  = await fetch(`/admin/conversations/${userPhone}/takeover`, { method: 'POST' });
+      const res  = await fetch(url, { method: 'POST' });
       const data = await res.json();
+      console.log('[takeover] response:', data);
 
       if (data.success) {
-        humanTakeover = data.human_takeover;
-
-        // Update button
-        btn.textContent       = humanTakeover ? '🤖 Return to bot' : '🧑 Take over';
-        btn.style.background  = humanTakeover ? '#dc2626' : '#2563eb';
-
-        // Update badge
-        badge.textContent       = humanTakeover ? '🔴 Human takeover' : '🟢 Bot active';
-        badge.style.background  = humanTakeover ? '#fef2f2' : '#f0fdf4';
-        badge.style.color       = humanTakeover ? '#dc2626' : '#16a34a';
+        window.location.reload();
+      } else {
+        console.error('[takeover] server returned failure:', data);
+        btn.disabled = false;
+        btn.style.opacity = '1';
       }
     } catch (e) {
-      alert('Network error — please try again.');
-    } finally {
+      console.error('[takeover] fetch error:', e);
       btn.disabled = false;
       btn.style.opacity = '1';
     }
