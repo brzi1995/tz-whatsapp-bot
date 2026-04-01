@@ -1,15 +1,20 @@
 const pool = require('./index');
 
 /**
- * Normalize phone to plain +385... format — strips whatsapp: prefix,
- * decodes %2B encoding, and trims whitespace.
- * All users-table queries must go through this.
+ * Normalize phone to plain +385... format.
+ * Handles all incoming formats:
+ *   "whatsapp:+385955225691" → "+385955225691"
+ *   "+385 955 225 691"       → "+385955225691"
+ *   "385955225691"           → "+385955225691"
+ *   "%2B385955225691"        → "+385955225691"
  */
 function normalizePhone(phone) {
-  return decodeURIComponent(String(phone || ''))
+  if (!phone) return phone;
+  return decodeURIComponent(String(phone))
     .replace('whatsapp:', '')
     .replace(/\s+/g, '')
-    .trim();
+    .trim()
+    .replace(/^385/, '+385'); // add + prefix when missing
 }
 
 /**
@@ -273,8 +278,8 @@ async function getEventsFormatted(tenantId, period, lang) {
  */
 async function upsertWhatsappUser(tenantId, phone) {
   const clean = normalizePhone(phone);
-  console.log("CHAT USER LOOKUP:", clean);
-  console.log("RAW PHONE:", phone, "LOOKUP PHONE:", clean);
+  console.log("RAW PHONE:", phone);
+  console.log("NORMALIZED PHONE:", clean);
 
   // Read current takeover state BEFORE any write so we can detect accidental resets
   const [beforeRows] = await pool.query(
@@ -320,7 +325,8 @@ async function upsertWhatsappUser(tenantId, phone) {
  */
 async function getWhatsappUser(tenantId, phone) {
   const clean = normalizePhone(phone);
-  console.log("RAW PHONE:", phone, "LOOKUP PHONE:", clean);
+  console.log("RAW PHONE:", phone);
+  console.log("NORMALIZED PHONE:", clean);
   const [rows] = await pool.query(
     'SELECT * FROM users_chat WHERE tenant_id = ? AND phone = ?',
     [tenantId, clean]
@@ -338,6 +344,8 @@ async function getWhatsappUser(tenantId, phone) {
  */
 async function setOptIn(tenantId, phone, value) {
   const clean = normalizePhone(phone);
+  console.log("RAW PHONE:", phone);
+  console.log("NORMALIZED PHONE:", clean);
   await pool.query(
     'UPDATE users_chat SET opt_in = ? WHERE tenant_id = ? AND phone = ?',
     [value, tenantId, clean]
@@ -350,6 +358,8 @@ async function setOptIn(tenantId, phone, value) {
  */
 async function setUserTakeover(tenantId, phone, value) {
   const clean = normalizePhone(phone);
+  console.log("RAW PHONE:", phone);
+  console.log("NORMALIZED PHONE:", clean);
   await pool.query(
     'UPDATE users_chat SET human_takeover = ? WHERE tenant_id = ? AND phone = ?',
     [value, tenantId, clean]
@@ -359,6 +369,8 @@ async function setUserTakeover(tenantId, phone, value) {
 
 async function setAwaitingConfirmation(tenantId, phone, value) {
   const clean = normalizePhone(phone);
+  console.log("RAW PHONE:", phone);
+  console.log("NORMALIZED PHONE:", clean);
   await pool.query(
     'UPDATE users_chat SET awaiting_human_confirmation = ? WHERE tenant_id = ? AND phone = ?',
     [value, tenantId, clean]
