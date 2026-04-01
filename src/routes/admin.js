@@ -28,7 +28,7 @@ router.post('/login', async (req, res) => {
 
   try {
     const [rows] = await pool.query(
-      'SELECT id, email, password, tenant_id FROM admins WHERE email = ? LIMIT 1',
+      'SELECT id, email, password, tenant_id FROM users WHERE email = ? LIMIT 1',
       [email.trim().toLowerCase()]
     );
 
@@ -154,7 +154,7 @@ router.get('/dashboard', requireAuth, async (req, res) => {
     let activeUserTakeovers = 0;
     try {
       const [tkRows] = await pool.query(
-        'SELECT COUNT(*) AS total FROM users WHERE tenant_id = ? AND human_takeover = 1',
+        'SELECT COUNT(*) AS total FROM users_chat WHERE tenant_id = ? AND human_takeover = 1',
         [tenantId]
       );
       activeUserTakeovers = (tkRows && tkRows[0] && tkRows[0].total) || 0;
@@ -465,8 +465,9 @@ router.get('/conversations/:phone', requireAuth, async (req, res) => {
       [tenantId, fullPhone]
     );
 
+    console.log("CHAT USER LOOKUP:", cleanPhone);
     const [userRows] = await pool.query(
-      'SELECT human_takeover FROM users WHERE tenant_id = ? AND phone = ?',
+      'SELECT human_takeover FROM users_chat WHERE tenant_id = ? AND phone = ?',
       [tenantId, cleanPhone]
     );
     const user = (userRows && userRows[0]) || null;
@@ -497,8 +498,9 @@ router.post('/takeover/:phone', requireAuth, async (req, res) => {
   try {
     console.log("RUNNING QUERY...");
 
+    console.log("CHAT USER LOOKUP:", cleanPhone);
     const [result] = await pool.query(
-      "UPDATE users SET human_takeover = NOT human_takeover WHERE phone = ?",
+      "UPDATE users_chat SET human_takeover = NOT human_takeover WHERE phone = ?",
       [cleanPhone]
     );
 
@@ -528,19 +530,20 @@ router.post('/conversations/:phone/takeover', requireAuth, async (req, res) => {
   console.log("MATCHING PHONE:", cleanPhone);
 
   try {
+    console.log("CHAT USER LOOKUP:", cleanPhone);
     const [result] = await pool.query(
-      "UPDATE users SET human_takeover = NOT human_takeover WHERE phone = ?",
+      "UPDATE users_chat SET human_takeover = NOT human_takeover WHERE phone = ?",
       [cleanPhone]
     );
 
     console.log(`[admin] takeover affectedRows: ${result.affectedRows}`);
     if (result.affectedRows === 0) {
       console.error(`[admin] takeover: no row found for ${cleanPhone}`);
-      return res.status(404).json({ success: false, error: 'User not found in users' });
+      return res.status(404).json({ success: false, error: 'User not found in users_chat' });
     }
 
     const [rows] = await pool.query(
-      "SELECT human_takeover FROM users WHERE tenant_id = ? AND phone = ?",
+      "SELECT human_takeover FROM users_chat WHERE tenant_id = ? AND phone = ?",
       [tenantId, cleanPhone]
     );
     const user = (rows && rows[0]) || null;
@@ -576,8 +579,9 @@ router.post('/conversations/:phone/reply', requireAuth, async (req, res) => {
     if (!tenant) return res.status(404).send('Tenant not found');
 
     // Fetch current user state — human_takeover must NOT be changed by this route
+    console.log("CHAT USER LOOKUP:", cleanPhone);
     const [userRows] = await pool.query(
-      'SELECT human_takeover FROM users WHERE tenant_id = ? AND phone = ?',
+      'SELECT human_takeover FROM users_chat WHERE tenant_id = ? AND phone = ?',
       [tenantId, cleanPhone]
     );
     const existingUser = (userRows && userRows[0]) || null;
@@ -609,7 +613,7 @@ router.get('/broadcast', requireAuth, async (req, res) => {
   const tenantId = req.session.tenantId;
   try {
     const [countRows] = await pool.query(
-      'SELECT COUNT(*) AS total FROM users WHERE tenant_id = ? AND opt_in = 1',
+      'SELECT COUNT(*) AS total FROM users_chat WHERE tenant_id = ? AND opt_in = 1',
       [tenantId]
     );
     const optedInCount = (countRows && countRows[0] && countRows[0].total) || 0;
@@ -633,7 +637,7 @@ router.post('/broadcast', requireAuth, async (req, res) => {
     if (!tenant) return res.status(404).send('Tenant not found');
 
     const [users] = await pool.query(
-      'SELECT phone FROM users WHERE tenant_id = ? AND opt_in = 1',
+      'SELECT phone FROM users_chat WHERE tenant_id = ? AND opt_in = 1',
       [tenantId]
     );
 
@@ -648,7 +652,7 @@ router.post('/broadcast', requireAuth, async (req, res) => {
     }
 
     const [countRows] = await pool.query(
-      'SELECT COUNT(*) AS total FROM users WHERE tenant_id = ? AND opt_in = 1',
+      'SELECT COUNT(*) AS total FROM users_chat WHERE tenant_id = ? AND opt_in = 1',
       [tenantId]
     );
     const optedInCount = (countRows && countRows[0] && countRows[0].total) || 0;

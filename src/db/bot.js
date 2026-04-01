@@ -273,13 +273,14 @@ async function getEventsFormatted(tenantId, period, lang) {
  */
 async function upsertWhatsappUser(tenantId, phone) {
   const clean = normalizePhone(phone);
+  console.log("CHAT USER LOOKUP:", clean);
   console.log("RAW PHONE:", phone, "LOOKUP PHONE:", clean);
 
   // Update existing row by normalized phone — handles both stored formats
   // (whatsapp:+385... and +385...) without touching human_takeover
   console.log("MATCHING PHONE:", clean);
   const [result] = await pool.query(
-    `UPDATE users SET phone = ?, last_message_at = NOW()
+    `UPDATE users_chat SET phone = ?, last_message_at = NOW()
      WHERE tenant_id = ? AND phone = ?`,
     [clean, tenantId, clean]
   );
@@ -289,7 +290,7 @@ async function upsertWhatsappUser(tenantId, phone) {
   if (result.affectedRows === 0) {
     // No existing row — insert fresh (new user, human_takeover defaults to 0)
     await pool.query(
-      `INSERT INTO users (tenant_id, phone, last_message_at) VALUES (?, ?, NOW())`,
+      `INSERT INTO users_chat (tenant_id, phone, last_message_at) VALUES (?, ?, NOW())`,
       [tenantId, clean]
     );
     console.log("USER INSERT (new):", clean);
@@ -301,9 +302,10 @@ async function upsertWhatsappUser(tenantId, phone) {
  */
 async function getWhatsappUser(tenantId, phone) {
   const clean = normalizePhone(phone);
+  console.log("CHAT USER LOOKUP:", clean);
   console.log("RAW PHONE:", phone, "LOOKUP PHONE:", clean);
   const [rows] = await pool.query(
-    'SELECT opt_in, asked_opt_in, human_takeover, awaiting_human_confirmation FROM users WHERE tenant_id = ? AND phone = ?',
+    'SELECT opt_in, asked_opt_in, human_takeover, awaiting_human_confirmation FROM users_chat WHERE tenant_id = ? AND phone = ?',
     [tenantId, clean]
   );
   return (rows && rows[0]) || null;
@@ -315,7 +317,7 @@ async function getWhatsappUser(tenantId, phone) {
 async function setOptIn(tenantId, phone, value) {
   const clean = normalizePhone(phone);
   await pool.query(
-    'UPDATE users SET opt_in = ? WHERE tenant_id = ? AND phone = ?',
+    'UPDATE users_chat SET opt_in = ? WHERE tenant_id = ? AND phone = ?',
     [value, tenantId, clean]
   );
 }
@@ -327,7 +329,7 @@ async function setOptIn(tenantId, phone, value) {
 async function setUserTakeover(tenantId, phone, value) {
   const clean = normalizePhone(phone);
   await pool.query(
-    'UPDATE users SET human_takeover = ? WHERE tenant_id = ? AND phone = ?',
+    'UPDATE users_chat SET human_takeover = ? WHERE tenant_id = ? AND phone = ?',
     [value, tenantId, clean]
   );
   console.log(`[bot] per-user takeover set to ${value} for ${clean} on tenant ${tenantId}`);
@@ -336,7 +338,7 @@ async function setUserTakeover(tenantId, phone, value) {
 async function setAwaitingConfirmation(tenantId, phone, value) {
   const clean = normalizePhone(phone);
   await pool.query(
-    'UPDATE users SET awaiting_human_confirmation = ? WHERE tenant_id = ? AND phone = ?',
+    'UPDATE users_chat SET awaiting_human_confirmation = ? WHERE tenant_id = ? AND phone = ?',
     [value, tenantId, clean]
   );
 }

@@ -85,8 +85,7 @@ CREATE TABLE IF NOT EXISTS usage (
 -- -------------------------------------------------------------------------
 
 -- One row per (tenant, tourist phone). Tracks opt-in consent and activity.
--- NOTE: this table was renamed from whatsapp_users to users.
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE IF NOT EXISTS users_chat (
   id              INT AUTO_INCREMENT PRIMARY KEY,
   tenant_id       INT         NOT NULL,
   phone           VARCHAR(50) NOT NULL,
@@ -100,22 +99,22 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- Migration for existing installs — run once on the live DB:
--- RENAME TABLE whatsapp_users TO users;
--- ALTER TABLE users ADD COLUMN IF NOT EXISTS human_takeover TINYINT(1) NOT NULL DEFAULT 0;
--- ALTER TABLE users ADD COLUMN IF NOT EXISTS awaiting_human_confirmation TINYINT(1) NOT NULL DEFAULT 0;
--- UPDATE users SET phone = REPLACE(REPLACE(phone, 'whatsapp:', ''), ' ', '') WHERE phone LIKE 'whatsapp:%' OR phone LIKE '% %';
+-- RENAME TABLE whatsapp_users TO users_chat;
+--   OR if already renamed to users:
+-- RENAME TABLE users TO users_chat;   (only the chat/tourist table — NOT the admin login table)
+-- ALTER TABLE users_chat ADD COLUMN IF NOT EXISTS human_takeover TINYINT(1) NOT NULL DEFAULT 0;
+-- ALTER TABLE users_chat ADD COLUMN IF NOT EXISTS awaiting_human_confirmation TINYINT(1) NOT NULL DEFAULT 0;
+-- UPDATE users_chat SET phone = REPLACE(REPLACE(phone, 'whatsapp:', ''), ' ', '') WHERE phone LIKE 'whatsapp:%' OR phone LIKE '% %';
 
 -- -------------------------------------------------------------------------
 -- Phase 2 — Admin dashboard
 -- -------------------------------------------------------------------------
 
-CREATE TABLE IF NOT EXISTS admins (
+-- Admin login accounts — separate from WhatsApp chat users
+CREATE TABLE IF NOT EXISTS users (
   id         INT AUTO_INCREMENT PRIMARY KEY,
   email      VARCHAR(255) NOT NULL UNIQUE,
   password   VARCHAR(255) NOT NULL,          -- bcrypt hash
   tenant_id  INT          NOT NULL,
   FOREIGN KEY (tenant_id) REFERENCES tenants(id)
 );
-
--- Migration for existing installs — run once on the live DB:
--- RENAME TABLE users TO admins;   (only if users still holds admin accounts)
