@@ -413,7 +413,7 @@ router.post('/events/:id/toggle-featured', requireAuth, async (req, res) => {
 
   try {
     await pool.query(
-      'UPDATE events SET featured = NOT featured WHERE id = ? AND tenant_id = ?',
+      'UPDATE events SET featured = 1 - featured WHERE id = ? AND tenant_id = ?',
       [id, tenantId]
     );
     res.redirect('/admin/events');
@@ -467,7 +467,7 @@ router.post('/broadcast', requireAuth, async (req, res) => {
     let sentCount = 0;
     for (const user of users) {
       try {
-        await sendMessage(user.phone, tenant.phone_number, message);
+        await sendMessage('whatsapp:' + user.phone, tenant.phone_number, message);
         sentCount++;
       } catch (sendErr) {
         console.error(`[admin] broadcast send error for ${user.phone}:`, sendErr.message);

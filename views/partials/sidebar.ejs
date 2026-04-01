@@ -13,22 +13,27 @@
     <div class="nav-section-label">Navigacija</div>
 
     <a href="/admin/dashboard" class="<%= typeof activePage !== 'undefined' && activePage === 'dashboard' ? 'active' : '' %>">
-      <span class="nav-icon">📊</span> Dashboard
+      <span class="nav-icon"><i data-lucide="layout-dashboard"></i></span>
+      Dashboard
     </a>
     <a href="/admin/faq" class="<%= typeof activePage !== 'undefined' && activePage === 'faq' ? 'active' : '' %>">
-      <span class="nav-icon">💬</span> FAQ
+      <span class="nav-icon"><i data-lucide="help-circle"></i></span>
+      FAQ
     </a>
     <a href="/admin/events" class="<%= typeof activePage !== 'undefined' && activePage === 'events' ? 'active' : '' %>">
-      <span class="nav-icon">📅</span> Događaji
+      <span class="nav-icon"><i data-lucide="calendar-days"></i></span>
+      Događaji
     </a>
     <a href="/admin/broadcast" class="<%= typeof activePage !== 'undefined' && activePage === 'broadcast' ? 'active' : '' %>">
-      <span class="nav-icon">📣</span> Obavijesti
+      <span class="nav-icon"><i data-lucide="bell"></i></span>
+      Obavijesti
     </a>
   </div>
 
   <div class="sidebar-footer" id="sidebar-footer">
     <a href="/admin/logout">
-      <span>↩</span> Odjava
+      <span class="nav-icon"><i data-lucide="log-out"></i></span>
+      Odjava
     </a>
   </div>
 </nav>

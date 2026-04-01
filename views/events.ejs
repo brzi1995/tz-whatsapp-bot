@@ -24,13 +24,15 @@
       <input type="text" name="location_link" placeholder="Npr. https://osm.org/...">
       <label>Opis</label>
       <textarea name="description" rows="2" placeholder="Kratki opis događaja..."></textarea>
-      <div class="add-form-footer">
+      <div class="ev-form-footer">
         <label class="feat-check">
           <input type="checkbox" name="featured" value="1">
-          ⭐ Istakni događaj
-          <span class="feat-check-hint">(bot ga šalje kao prioritet)</span>
+          <span>⭐ Istakni događaj</span>
+          <span class="feat-check-hint">— bot ga šalje kao prioritet</span>
         </label>
-        <button type="submit" class="btn btn-primary">Dodaj događaj</button>
+        <button type="submit" class="btn btn-primary">
+          <i data-lucide="plus"></i> Dodaj događaj
+        </button>
       </div>
     </form>
   </div>
@@ -40,7 +42,9 @@
   <% } else { %>
     <div class="item-list">
       <% events.forEach(function(ev) {
-           const dateStr = ev.date ? new Date(ev.date).toLocaleDateString('hr-HR', { day:'numeric', month:'long', year:'numeric' }) : null;
+           const dateStr = ev.date
+             ? new Date(ev.date).toLocaleDateString('hr-HR', { day:'numeric', month:'long', year:'numeric' })
+             : null;
       %>
       <div class="item-card">
         <div class="item-card-body">
@@ -51,20 +55,25 @@
             <% } %>
           </div>
           <div class="item-card-meta">
-            <% if (dateStr) { %>📅 <%= dateStr %><% } %>
-            <% if (ev.location_link) { %> &nbsp;·&nbsp; <a href="<%= ev.location_link %>" target="_blank" style="color:var(--blue);text-decoration:none">📍 Lokacija</a><% } %>
+            <% if (dateStr) { %><i data-lucide="calendar" style="width:12px;height:12px;vertical-align:middle;margin-right:3px"></i><%= dateStr %><% } %>
+            <% if (ev.location_link) { %>&nbsp;·&nbsp;<a href="<%= ev.location_link %>" target="_blank" style="color:var(--blue);text-decoration:none">📍 Lokacija</a><% } %>
             <% if (ev.description) { %><br><%= ev.description %><% } %>
           </div>
         </div>
         <div class="item-card-actions">
           <form method="POST" action="/admin/events/<%= ev.id %>/toggle-featured">
-            <button type="submit" class="btn btn-sm" style="background:<%= ev.featured ? '#fef3c7' : '#f1f5f9' %>;color:<%= ev.featured ? '#d97706' : '#94a3b8' %>;border:1px solid <%= ev.featured ? '#fde68a' : 'var(--border)' %>">
+            <button type="submit" class="btn btn-sm" title="<%= ev.featured ? 'Ukloni isticanje' : 'Istakni' %>"
+              style="background:<%= ev.featured ? 'var(--amber-light)' : '#f1f5f9' %>;color:<%= ev.featured ? 'var(--amber)' : '#94a3b8' %>;border:1px solid <%= ev.featured ? '#fde68a' : 'var(--border)' %>">
               <%= ev.featured ? '⭐' : '☆' %>
             </button>
           </form>
-          <a href="/admin/events/<%= ev.id %>/edit" class="btn btn-secondary btn-sm">Uredi</a>
+          <a href="/admin/events/<%= ev.id %>/edit" class="btn btn-secondary btn-sm">
+            <i data-lucide="pencil"></i> Uredi
+          </a>
           <form method="POST" action="/admin/events/<%= ev.id %>/delete" onsubmit="return confirm('Obrisati ovaj događaj?')">
-            <button type="submit" class="btn btn-danger btn-sm">Briši</button>
+            <button type="submit" class="btn btn-danger btn-sm">
+              <i data-lucide="trash-2"></i> Briši
+            </button>
           </form>
         </div>
       </div>
@@ -74,7 +83,7 @@
 </main>
 
 <style>
-.add-form-footer {
+.ev-form-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;

@@ -10,17 +10,20 @@
   if (locals.featuredEvents  === undefined) locals.featuredEvents  = [];
   if (locals.timeOfDay       === undefined) locals.timeOfDay       = { morning: 0, afternoon: 0, evening: 0 };
 
-  const _langMap = { hr:'🇭🇷 Hrvatski', en:'🇬🇧 English', de:'🇩🇪 Deutsch', it:'🇮🇹 Italiano', fr:'🇫🇷 Français', sv:'🇸🇪 Svenska', no:'🇳🇴 Norsk', cs:'🇨🇿 Čeština' };
-  const _topLang = languages.length ? (_langMap[languages[0].lang] || languages[0].lang) : null;
-  const _langCount = languages.length;
+  // Language stats
+  const _langNames = { hr:'🇭🇷 Hrvatski', en:'🇬🇧 English', de:'🇩🇪 Deutsch', it:'🇮🇹 Italiano', fr:'🇫🇷 Français', sv:'🇸🇪 Svenska', no:'🇳🇴 Norsk', cs:'🇨🇿 Čeština' };
+  const _langTotal = languages.reduce((s,r) => s + Number(r.count), 0) || 1;
+  const _topLang   = languages.length ? (_langNames[languages[0].lang] || languages[0].lang) : null;
+  const _topLangPct = languages.length ? Math.round(Number(languages[0].count) / _langTotal * 100) : 0;
 
+  // Peak activity
   const _tod = timeOfDay || {};
   const _todSlots = [
-    { label:'Jutro',        icon:'🌅', val: Number(_tod.morning)||0 },
-    { label:'Poslijepodne', icon:'☀️', val: Number(_tod.afternoon)||0 },
-    { label:'Večer',        icon:'🌙', val: Number(_tod.evening)||0 },
+    { label:'Jutro',   icon:'🌅', val: Number(_tod.morning)||0 },
+    { label:'Popodne', icon:'☀️', val: Number(_tod.afternoon)||0 },
+    { label:'Večer',   icon:'🌙', val: Number(_tod.evening)||0 },
   ];
-  const _peakSlot = _todSlots.reduce((a, b) => b.val > a.val ? b : a, _todSlots[0]);
+  const _peakSlot  = _todSlots.reduce((a, b) => b.val > a.val ? b : a, _todSlots[0]);
   const _peakTotal = _todSlots.reduce((s, x) => s + x.val, 0);
 %>
 
@@ -30,100 +33,111 @@
     <p>Pregled aktivnosti vašeg WhatsApp bota</p>
   </div>
 
-  <!-- AI Insights -->
-  <div class="ai-insights">
-    <div class="ai-insights-header">
-      <span>✨</span>
-      <span>AI Insights</span>
+  <!-- Uvidi (compact) -->
+  <% if (insights && insights.length) { %>
+  <div class="uvidi-card">
+    <div class="uvidi-label">
+      <i data-lucide="sparkles"></i> Uvidi
     </div>
-    <% if (!insights.length) { %>
-      <p class="ai-insights-empty">Nema podataka — uvidi će se pojaviti kako turisti koriste bota.</p>
-    <% } else { %>
-      <div class="ai-insights-grid">
-        <% insights.forEach(function(ins) { %>
-          <div class="ai-insight-item">
-            <span class="ai-insight-icon"><%= ins.icon %></span>
-            <span><%= ins.text %></span>
-          </div>
-        <% }); %>
-      </div>
-    <% } %>
+    <div class="uvidi-items">
+      <% insights.forEach(function(ins) { %>
+        <div class="uvidi-item"><%= ins.icon %> <%= ins.text %></div>
+      <% }); %>
+    </div>
   </div>
+  <% } %>
 
-  <!-- Stat cards -->
-  <div class="cards">
+  <!-- Stats grid: hero + 3 secondary -->
+  <div class="stats-grid">
+
+    <!-- Hero: total messages -->
+    <div class="hero-card">
+      <div class="hero-icon">
+        <i data-lucide="message-circle"></i>
+      </div>
+      <div class="label">Ukupno poruka</div>
+      <div class="hero-num"><%= totalMessages %></div>
+    </div>
+
+    <!-- Users -->
     <div class="stat-card">
       <div class="stat-card-top">
         <div class="label">Korisnici</div>
-        <div class="stat-card-icon icon-blue">👥</div>
+        <div class="stat-card-icon icon-blue">
+          <i data-lucide="users"></i>
+        </div>
       </div>
       <div class="num"><%= totalUsers %></div>
     </div>
+
+    <!-- Top language -->
     <div class="stat-card">
       <div class="stat-card-top">
-        <div class="label">Poruke</div>
-        <div class="stat-card-icon icon-green">💬</div>
+        <div class="label">Jezik</div>
+        <div class="stat-card-icon icon-purple">
+          <i data-lucide="globe"></i>
+        </div>
       </div>
-      <div class="num"><%= totalMessages %></div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-card-top">
-        <div class="label">Jezici</div>
-        <div class="stat-card-icon icon-purple">🌍</div>
-      </div>
-      <div class="num"><%= _langCount %></div>
       <% if (_topLang) { %>
+        <div class="num num-text"><%= _topLangPct %>%</div>
         <div class="stat-sub"><%= _topLang %></div>
+      <% } else { %>
+        <div class="num" style="color:var(--muted)">—</div>
       <% } %>
     </div>
+
+    <!-- Peak activity -->
     <div class="stat-card">
       <div class="stat-card-top">
-        <div class="label">Vršno doba</div>
-        <div class="stat-card-icon icon-amber">⏰</div>
+        <div class="label">Najaktivnije</div>
+        <div class="stat-card-icon icon-amber">
+          <i data-lucide="clock"></i>
+        </div>
       </div>
       <% if (_peakTotal > 0) { %>
         <div class="num num-text"><%= _peakSlot.icon %> <%= _peakSlot.label %></div>
       <% } else { %>
-        <div class="num num-text" style="color:var(--muted)">—</div>
+        <div class="num" style="color:var(--muted)">—</div>
       <% } %>
     </div>
+
   </div>
 
   <!-- Featured Events -->
   <div class="chart-wrap">
     <div class="chart-header">
       <div style="display:flex;align-items:center;gap:8px">
-        <span>🔥</span>
         <h2>Izdvojeni događaji</h2>
       </div>
-      <a href="/admin/events" class="btn btn-secondary btn-sm">Upravljaj</a>
+      <a href="/admin/events" class="btn btn-secondary btn-sm">
+        <i data-lucide="settings-2"></i> Upravljaj
+      </a>
     </div>
     <% if (!featuredEvents || !featuredEvents.length) { %>
-      <div style="text-align:center;padding:16px 0;color:var(--muted);font-size:13px">
+      <div style="padding:12px 0;color:var(--muted);font-size:13px">
         Nema izdvojenih događaja —
         <a href="/admin/events" style="color:var(--blue);text-decoration:none;font-weight:600">označi ih u listi</a>
       </div>
     <% } else { %>
-      <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;flex-direction:column;gap:7px">
         <% featuredEvents.forEach(function(ev) {
              const dateStr = ev.date ? new Date(ev.date).toLocaleDateString('hr-HR') : '—';
         %>
-        <div class="feat-event-row">
-          <span class="feat-event-icon">📅</span>
-          <div class="feat-event-body">
-            <div class="feat-event-title"><%= ev.title %></div>
+        <div class="feat-row">
+          <div class="feat-body">
+            <div class="feat-title"><%= ev.title %></div>
             <% if (ev.description) { %>
-              <div class="feat-event-desc"><%= ev.description %></div>
+              <div class="feat-desc"><%= ev.description %></div>
             <% } %>
           </div>
-          <div class="feat-event-date"><%= dateStr %></div>
+          <div class="feat-date"><%= dateStr %></div>
         </div>
         <% }); %>
       </div>
     <% } %>
   </div>
 
-  <!-- Messages chart -->
+  <!-- Chart: messages per day -->
   <div class="chart-wrap">
     <div class="chart-header">
       <h2>Poruke po danu</h2>
@@ -133,197 +147,139 @@
   </div>
 
   <!-- Intent distribution -->
+  <% const intentLabels = {
+       faq:'Opće informacije',
+       weather:'Vrijeme', weather_current:'Vrijeme', weather_tomorrow:'Vrijeme', weather_multi:'Vrijeme',
+       events:'Događaji',
+       ai:'AI razgovor',
+       admin_reply:'Admin odgovori',
+       other:'Ostalo',
+       fallback:'Ostalo'
+     };
+     const intentColors = { faq:'#2563eb', weather:'#0ea5e9', events:'#16a34a', ai:'#7c3aed', admin_reply:'#64748b' };
+     const intentTotal  = intents.reduce((s,r) => s + Number(r.count), 0) || 1;
+  %>
+  <% if (intents.length) { %>
   <div class="chart-wrap" style="margin-bottom:0">
     <div class="chart-header">
-      <h2>Interesi turista</h2>
+      <h2>Upiti turista</h2>
       <span class="chart-badge">Po tipu</span>
     </div>
-    <% const intentLabels = { faq:'Opće informacije', weather:'Vrijeme', weather_current:'Vrijeme', weather_tomorrow:'Vrijeme', weather_multi:'Vrijeme', events:'Događaji', ai:'Ostalo', other:'Ostalo', fallback:'Ostalo' };
-       const intentColors = { faq:'#2563eb', weather:'#0ea5e9', events:'#16a34a', ai:'#7c3aed' };
-       const intentTotal  = intents.reduce((s,r) => s + Number(r.count), 0) || 1;
-    %>
-    <% if (!intents.length) { %>
-      <p style="color:var(--muted);font-size:13px;padding-top:4px">Nema podataka.</p>
-    <% } else { intents.forEach(function(r) {
+    <% intents.forEach(function(r) {
          const pct = Math.round(Number(r.count) / intentTotal * 100);
-         const col = intentColors[r.intent] || '#64748b';
-         const lbl = intentLabels[r.intent]  || r.intent;
+         const col = intentColors[r.intent] || '#94a3b8';
+         const lbl = intentLabels[r.intent] || r.intent;
     %>
-      <div class="intent-row">
-        <div class="intent-row-label">
+      <div class="ibar">
+        <div class="ibar-label">
           <span><%= lbl %></span>
-          <span class="intent-row-count"><%= r.count %> (<%= pct %>%)</span>
+          <span class="ibar-count"><%= r.count %> (<%= pct %>%)</span>
         </div>
-        <div class="intent-bar-track">
-          <div class="intent-bar-fill" style="width:<%= pct %>%;background:<%= col %>"></div>
+        <div class="ibar-track">
+          <div class="ibar-fill" style="width:<%= pct %>%;background:<%= col %>"></div>
         </div>
       </div>
-    <% }); } %>
+    <% }); %>
   </div>
+  <% } %>
 
 </main>
 
 <style>
-.ai-insights {
-  background: linear-gradient(135deg, #1e3a5f 0%, #1e40af 100%);
-  border-radius: var(--radius);
-  padding: 20px 24px;
-  margin-bottom: 22px;
-  color: #fff;
-  box-shadow: 0 4px 20px rgba(37,99,235,.2);
-}
-.ai-insights-header {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  font-size: 14px;
-  font-weight: 700;
-  margin-bottom: 14px;
-}
-.ai-insights-empty { color: #93c5fd; font-size: 13px; margin: 0; }
-.ai-insights-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-.ai-insight-item {
-  background: rgba(255,255,255,.12);
-  border-radius: 10px;
-  padding: 9px 14px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  flex: 1;
-  min-width: 200px;
-}
-.ai-insight-icon { font-size: 17px; flex-shrink: 0; }
-
-.feat-event-row {
+.feat-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 11px 14px;
+  padding: 10px 12px;
   background: #fffbeb;
   border-radius: 10px;
   border: 1px solid #fde68a;
 }
-.feat-event-icon { font-size: 18px; flex-shrink: 0; }
-.feat-event-body { flex: 1; min-width: 0; }
-.feat-event-title { font-weight: 700; font-size: 13px; color: var(--text); }
-.feat-event-desc {
-  font-size: 12px;
-  color: var(--muted);
-  margin-top: 2px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.feat-event-date {
-  font-size: 12px;
-  font-weight: 600;
-  color: #92400e;
-  background: #fef3c7;
-  padding: 3px 9px;
-  border-radius: 20px;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
+.feat-body { flex: 1; min-width: 0; }
+.feat-title { font-weight: 700; font-size: 13px; color: var(--text); }
+.feat-desc { font-size: 12px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feat-date { font-size: 12px; font-weight: 600; color: #92400e; background: #fef3c7; padding: 3px 9px; border-radius: 20px; white-space: nowrap; flex-shrink: 0; }
 
-.intent-row { margin-bottom: 12px; }
-.intent-row:last-child { margin-bottom: 0; }
-.intent-row-label {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  margin-bottom: 5px;
-  font-weight: 600;
-  color: var(--text);
-}
-.intent-row-count { color: var(--muted); font-weight: 400; }
-.intent-bar-track {
-  background: #f1f5f9;
-  border-radius: 20px;
-  height: 7px;
-  overflow: hidden;
-}
-.intent-bar-fill { height: 100%; border-radius: 20px; }
+.ibar { margin-bottom: 10px; }
+.ibar:last-child { margin-bottom: 0; }
+.ibar-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; font-weight: 600; color: var(--text); }
+.ibar-count { color: var(--muted); font-weight: 400; }
+.ibar-track { background: #f1f5f9; border-radius: 20px; height: 6px; overflow: hidden; }
+.ibar-fill  { height: 100%; border-radius: 20px; transition: width .4s ease; }
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
-  (function () {
-    const today = new Date();
-    const labels = [];
-    const dataMap = {};
+(function () {
+  const today  = new Date();
+  const labels = [];
+  const dataMap = {};
 
-    <% perDay.forEach(function(row) {
-      const d = row.day instanceof Date ? row.day.toISOString().slice(0,10) : String(row.day).slice(0,10);
-    %>
-    dataMap['<%= d %>'] = <%= row.count %>;
-    <% }); %>
+  <% perDay.forEach(function(row) {
+    const d = row.day instanceof Date ? row.day.toISOString().slice(0,10) : String(row.day).slice(0,10);
+  %>
+  dataMap['<%= d %>'] = <%= row.count %>;
+  <% }); %>
 
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i);
-      labels.push(d.toLocaleDateString('hr-HR', { weekday: 'short', day: 'numeric', month: 'numeric' }));
-      const key = d.toISOString().slice(0, 10);
-      if (!dataMap[key]) dataMap[key] = 0;
-    }
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    labels.push(d.toLocaleDateString('hr-HR', { weekday:'short', day:'numeric', month:'numeric' }));
+    const key = d.toISOString().slice(0, 10);
+    if (!dataMap[key]) dataMap[key] = 0;
+  }
+  const values = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    values.push(dataMap[d.toISOString().slice(0, 10)] || 0);
+  }
 
-    const values = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i);
-      values.push(dataMap[d.toISOString().slice(0, 10)] || 0);
-    }
+  const ctx = document.getElementById('msgChart').getContext('2d');
+  const gradient = ctx.createLinearGradient(0, 0, 0, 200);
+  gradient.addColorStop(0, 'rgba(37,99,235,.82)');
+  gradient.addColorStop(1, 'rgba(37,99,235,.10)');
 
-    const ctx = document.getElementById('msgChart').getContext('2d');
-    const gradient = ctx.createLinearGradient(0, 0, 0, 240);
-    gradient.addColorStop(0,   'rgba(37,99,235,0.85)');
-    gradient.addColorStop(1,   'rgba(37,99,235,0.12)');
-
-    new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{
-          label: 'Poruke',
-          data: values,
-          backgroundColor: gradient,
-          borderRadius: 8,
-          borderSkipped: false,
-          hoverBackgroundColor: 'rgba(37,99,235,1)',
-        }]
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Poruke',
+        data: values,
+        backgroundColor: gradient,
+        borderRadius: 7,
+        borderSkipped: false,
+        hoverBackgroundColor: 'rgba(37,99,235,1)',
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#0f172a',
+          titleColor: '#94a3b8',
+          bodyColor: '#fff',
+          padding: 10,
+          cornerRadius: 8,
+          callbacks: { label: c => ` ${c.parsed.y} poruka` }
+        }
       },
-      options: {
-        responsive: true,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            backgroundColor: '#0f172a',
-            titleColor: '#94a3b8',
-            bodyColor: '#fff',
-            padding: 10,
-            cornerRadius: 8,
-            callbacks: { label: ctx => ` ${ctx.parsed.y} poruka` }
-          }
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { precision: 0, color: '#94a3b8', font: { size: 11 } },
+          grid: { color: '#f1f5f9', drawBorder: false }
         },
-        scales: {
-          y: {
-            beginAtZero: true,
-            ticks: { precision: 0, color: '#94a3b8', font: { size: 11 } },
-            grid: { color: '#f1f5f9', drawBorder: false }
-          },
-          x: {
-            ticks: { color: '#64748b', font: { size: 11 } },
-            grid: { display: false }
-          }
+        x: {
+          ticks: { color: '#64748b', font: { size: 11 } },
+          grid: { display: false }
         }
       }
-    });
-  })();
+    }
+  });
+})();
 </script>
 
 <%- include('partials/foot') %>
