@@ -436,10 +436,14 @@ router.get('/broadcast', requireAuth, async (req, res) => {
       [tenantId]
     );
     const optedInCount = (countRows && countRows[0] && countRows[0].total) || 0;
-    res.render('broadcast', { optedInCount, sent: null, error: null });
+    const [events] = await pool.query(
+      'SELECT id, title, description, date, featured FROM events WHERE tenant_id = ? ORDER BY date ASC',
+      [tenantId]
+    );
+    res.render('broadcast', { optedInCount, sent: null, error: null, events });
   } catch (err) {
     console.error('BROADCAST GET ERROR FULL:', err);
-    res.render('broadcast', { optedInCount: 0, sent: null, error: 'Greška učitavanja' });
+    res.render('broadcast', { optedInCount: 0, sent: null, error: 'Greška učitavanja', events: [] });
   }
 });
 
@@ -475,11 +479,15 @@ router.post('/broadcast', requireAuth, async (req, res) => {
       [tenantId]
     );
     const optedInCount = (countRows && countRows[0] && countRows[0].total) || 0;
+    const [events] = await pool.query(
+      'SELECT id, title, description, date, featured FROM events WHERE tenant_id = ? ORDER BY date ASC',
+      [tenantId]
+    );
 
-    res.render('broadcast', { optedInCount, sent: sentCount, error: null });
+    res.render('broadcast', { optedInCount, sent: sentCount, error: null, events });
   } catch (err) {
     console.error('BROADCAST POST ERROR FULL:', err);
-    res.render('broadcast', { optedInCount: 0, sent: null, error: 'Greška slanja' });
+    res.render('broadcast', { optedInCount: 0, sent: null, error: 'Greška slanja', events: [] });
   }
 });
 
