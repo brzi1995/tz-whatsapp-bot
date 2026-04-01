@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getTenant, getMessages, saveMessages } = require('../db/sessions');
-const { parseMessage } = require('../services/openai');
+const { parseMessage, detectLanguage } = require('../services/openai');
 const { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, upsertWhatsappUser, getWhatsappUser, setOptIn, setAwaitingConfirmation } = require('../db/bot');
 
 // Pure acknowledgements that need no reply — greetings are intentionally excluded
@@ -287,13 +287,10 @@ router.post('/webhook', async (req, res) => {
     console.log("TAKEOVER STATUS:", currentUser?.human_takeover);
 
     if (Number(currentUser?.human_takeover) === 1) {
-      console.log("BOT BLOCKED - HUMAN TAKEOVER ACTIVE");
-      return res.send(emptyTwiml());
-    }
-
-    // 5. GENERATE RESPONSE — second takeover guard (defence in depth before AI call)
-    console.log("TAKEOVER STATUS:", currentUser?.human_takeover);
-    if (Number(currentUser?.human_takeover) === 1) {
+      // Save message BEFORE exiting so it appears in the admin dashboard
+      try {
+        await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', detectLanguage(trimmedMsg));
+      } catch (_) {}
       console.log("BOT BLOCKED - HUMAN TAKEOVER ACTIVE");
       return res.send(emptyTwiml());
     }
