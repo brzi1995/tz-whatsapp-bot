@@ -4,6 +4,67 @@ const { getTenant, getMessages, saveMessages } = require('../db/sessions');
 const { parseMessage, detectLanguage } = require('../services/openai');
 const { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, upsertWhatsappUser, getWhatsappUser, setOptIn, setAwaitingConfirmation } = require('../db/bot');
 
+/**
+ * Returns true when the message is plausibly tourism/destination-related.
+ * Runs BEFORE any DB or AI work — pure in-memory check.
+ * Blocks spam, math expressions, and completely off-topic messages.
+ */
+function isRelevantQuestion(message) {
+  const lower = message.toLowerCase().trim();
+
+  // Opt-in confirmations always pass (they answer a bot-initiated yes/no)
+  if (lower === 'da' || lower === 'ne') return true;
+
+  // Block math expressions (e.g. "2+2", "100/4", "x=5")
+  if (/\d\s*[+\-*/=]\s*\d/.test(lower)) return false;
+
+  // Block gibberish: longer than 4 chars with no vowels at all
+  const lettersOnly = lower.replace(/[^a-zčćšžđ]/g, '');
+  if (lettersOnly.length > 4 && !/[aeiouaeiou]/.test(lettersOnly)) return false;
+
+  // Tourism keywords, question words, greetings — any match is enough
+  const RELEVANT_KEYWORDS = [
+    // Destination
+    'brela', 'brelu', 'brelima',
+    // Beach / sea
+    'beach', 'plaža', 'plaži', 'plažu', 'more', 'sea', 'swim', 'kupanje',
+    // Food / drink
+    'restoran', 'restaurant', 'food', 'jelo', 'hrana', 'kava', 'coffee', 'bar', 'cafe',
+    // Getting around
+    'parking', 'prijevoz', 'bus', 'taxi', 'rent', 'najam', 'bicikl', 'bike',
+    // Accommodation
+    'hotel', 'apartman', 'smještaj', 'accommodation',
+    // Activities / events
+    'aktivnost', 'activities', 'event', 'događaj', 'izlet', 'excursion', 'tour',
+    // Practical
+    'atm', 'bankomat', 'wifi', 'ljekarna', 'pharmacy', 'doktor', 'doctor',
+    // Weather
+    'weather', 'vrijeme', 'prognoza', 'forecast', 'temperatura', 'temperature',
+    // Question words (multilingual)
+    'gdje', 'what', 'where', 'how', 'when', 'kada', 'koliko', 'ima',
+    'wie', 'wo', 'wann', 'dove', 'quando', 'où', 'quand', 'comment',
+    // Greetings (so bot can introduce itself)
+    'hello', 'hi', 'hey', 'bok', 'hej', 'zdravo', 'hallo', 'ciao', 'bonjour',
+    'dobar', 'dobro', 'salut',
+  ];
+
+  return RELEVANT_KEYWORDS.some(kw => lower.includes(kw));
+}
+
+const NOT_RELEVANT_MSG = {
+  hr: 'Mogu pomoći samo s pitanjima vezanim za Brela (plaže, parking, restorani, aktivnosti).\nŽelite li da vas povežem s osobom? (da/ne)',
+  en: 'I can only help with questions about Brela (beaches, parking, restaurants, activities).\nWould you like me to connect you with a person? (da/ne)',
+  de: 'Ich kann nur bei Fragen zu Brela helfen (Strände, Parken, Restaurants, Aktivitäten).\nMöchten Sie mit einer Person verbunden werden? (da/ne)',
+  it: 'Posso aiutare solo con domande su Brela (spiagge, parcheggio, ristoranti, attività).\nVuoi essere messo in contatto con una persona? (da/ne)',
+  fr: 'Je peux uniquement aider avec des questions sur Brela (plages, parking, restaurants, activités).\nVoulez-vous être mis en contact avec une personne? (da/ne)',
+  sv: 'Jag kan bara hjälpa med frågor om Brela (stränder, parkering, restauranger, aktiviteter).\nVill du att jag kopplar dig till en person? (da/ne)',
+  no: 'Jeg kan bare hjelpe med spørsmål om Brela (strender, parkering, restauranter, aktiviteter).\nVil du at jeg kobler deg til en person? (da/ne)',
+  cs: 'Mohu pomoci pouze s otázkami týkajícími se Brela (pláže, parkování, restaurace, aktivity).\nChcete, abych vás spojil s osobou? (da/ne)',
+};
+function notRelevantReply(lang) {
+  return NOT_RELEVANT_MSG[lang] || NOT_RELEVANT_MSG.en;
+}
+
 // Pure acknowledgements that need no reply — greetings are intentionally excluded
 // so Belly can introduce herself (bok, hi, hej, etc. are handled by AI)
 const TRIVIAL = new Set([
@@ -287,6 +348,13 @@ router.post('/webhook', async (req, res) => {
       return res.send(emptyTwiml());
     }
 
+    // RELEVANCE GATE — must pass before ANY FAQ, AI, or events logic
+    if (!isRelevantQuestion(trimmedMsg)) {
+      const gateLang = detectLanguage(trimmedMsg);
+      console.log(`[webhook] BLOCKED — irrelevant message: "${trimmedMsg.slice(0, 60)}"`);
+      return res.send(twiml(notRelevantReply(gateLang)));
+    }
+
     const model = tenant.openai_model;
 
     // Load conversation history — empty array on first interaction
@@ -299,14 +367,7 @@ router.post('/webhook', async (req, res) => {
       getUpcomingEvents(tenant.id).catch(() => []),
     ]);
 
-    // Strong FAQ match — skip AI entirely
-    if (faqMatch && faqMatch.score >= 0.5) {
-      await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', detectLanguage(trimmedMsg));
-      console.log(`[webhook] FINAL RESPONSE SENT — FAQ (strong match, score=${faqMatch.score.toFixed(2)})`);
-      return res.send(twiml(faqMatch.answer));
-    }
-
-    // Build context for AI: weak FAQ match and/or upcoming events
+    // Build context for AI — FAQ answer (any match) and upcoming events
     const faqContext   = faqMatch ? faqMatch.answer : null;
     const eventContext = upcomingEvents.length
       ? upcomingEvents.map(ev => {
