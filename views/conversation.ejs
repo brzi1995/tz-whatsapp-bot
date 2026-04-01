@@ -118,10 +118,12 @@
       method: "POST"
     });
     console.log("Response status:", res.status);
+    const data = await res.json().catch(e => ({ parseError: e.message }));
+    console.log("Response body:", data);
     if (res.ok) {
       window.location.reload();
     } else {
-      alert("Takeover failed");
+      alert("Takeover failed: " + (data.error || res.status));
     }
   }
 </script>
