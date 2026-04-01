@@ -4,6 +4,7 @@ const pool = require('../db/index');
 const bcrypt = require('bcryptjs');
 const { requireAuth } = require('../middleware/auth');
 const { sendMessage } = require('../services/twilio');
+const { normalizePhone } = require('../db/bot');
 
 // ---------------------------------------------------------------------------
 // Auth routes
@@ -488,17 +489,14 @@ router.get('/conversations/:phone', requireAuth, async (req, res) => {
 router.post('/takeover/:phone', requireAuth, async (req, res) => {
   console.log("RAW PARAM:", req.params.phone);
 
-  const decoded = decodeURIComponent(req.params.phone);
-  console.log("DECODED:", decoded);
-
-  const cleanPhone = decoded.replace('whatsapp:', '');
-  console.log("CLEAN:", cleanPhone);
+  const cleanPhone = normalizePhone(req.params.phone);
+  console.log("MATCHING PHONE:", cleanPhone);
 
   try {
     console.log("RUNNING QUERY...");
 
     const [result] = await pool.query(
-      "UPDATE users SET human_takeover = NOT human_takeover WHERE REPLACE(phone, 'whatsapp:', '') = ?",
+      "UPDATE users SET human_takeover = NOT human_takeover WHERE phone = ?",
       [cleanPhone]
     );
 
@@ -508,7 +506,6 @@ router.post('/takeover/:phone', requireAuth, async (req, res) => {
       success: true,
       debug: {
         raw: req.params.phone,
-        decoded,
         cleanPhone,
         affectedRows: result.affectedRows
       }
@@ -525,12 +522,12 @@ router.post('/takeover/:phone', requireAuth, async (req, res) => {
 // POST /admin/conversations/:phone/takeover — toggle per-user takeover
 router.post('/conversations/:phone/takeover', requireAuth, async (req, res) => {
   const tenantId  = req.session.tenantId;
-  const cleanPhone = req.params.phone.replace('whatsapp:', '');
-  console.log('Takeover update for:', cleanPhone);
+  const cleanPhone = normalizePhone(req.params.phone);
+  console.log("MATCHING PHONE:", cleanPhone);
 
   try {
     const [result] = await pool.query(
-      "UPDATE users SET human_takeover = NOT human_takeover WHERE REPLACE(phone, 'whatsapp:', '') = ?",
+      "UPDATE users SET human_takeover = NOT human_takeover WHERE phone = ?",
       [cleanPhone]
     );
 
@@ -541,7 +538,7 @@ router.post('/conversations/:phone/takeover', requireAuth, async (req, res) => {
     }
 
     const [rows] = await pool.query(
-      "SELECT human_takeover FROM users WHERE tenant_id = ? AND REPLACE(phone, 'whatsapp:', '') = ?",
+      "SELECT human_takeover FROM users WHERE tenant_id = ? AND phone = ?",
       [tenantId, cleanPhone]
     );
     const user = (rows && rows[0]) || null;

@@ -8,6 +8,7 @@ const pool = require('./index');
 function normalizePhone(phone) {
   return decodeURIComponent(String(phone || ''))
     .replace('whatsapp:', '')
+    .replace(/\s+/g, '')
     .trim();
 }
 
@@ -276,9 +277,10 @@ async function upsertWhatsappUser(tenantId, phone) {
 
   // Update existing row by normalized phone — handles both stored formats
   // (whatsapp:+385... and +385...) without touching human_takeover
+  console.log("MATCHING PHONE:", clean);
   const [result] = await pool.query(
     `UPDATE users SET phone = ?, last_message_at = NOW()
-     WHERE tenant_id = ? AND REPLACE(phone, 'whatsapp:', '') = ?`,
+     WHERE tenant_id = ? AND phone = ?`,
     [clean, tenantId, clean]
   );
 
@@ -348,4 +350,4 @@ async function getLastUserLang(tenantId, phone) {
   return (rows && rows[0] && rows[0].lang) || 'en';
 }
 
-module.exports = { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, detectLang, detectEventPeriod, getEventsFormatted, upsertWhatsappUser, getWhatsappUser, setOptIn, setUserTakeover, setAwaitingConfirmation, getLastUserLang };
+module.exports = { normalizePhone, logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, detectLang, detectEventPeriod, getEventsFormatted, upsertWhatsappUser, getWhatsappUser, setOptIn, setUserTakeover, setAwaitingConfirmation, getLastUserLang };
