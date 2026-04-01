@@ -92,13 +92,18 @@ function fallbackReply(lang) {
 // --- Weak-answer detection (no takeover — informational prompt only) ---
 
 const UNSURE_PHRASES = [
+  // English
   "i don't know", "i'm not sure", "i am not sure", "not sure", "unsure",
   "i cannot", "i can't", "can't help", "cannot help", "unable to",
-  "i have no information", "no information available",
-  "ne znam", "nisam siguran", "nisam sigurna", "ne mogu",
-  "nicht sicher", "ich weiß nicht", "weiß nicht",
-  "je ne sais pas", "pas sûr", "je ne suis pas sûr",
-  "non lo so", "non sono sicuro", "non sono sicura",
+  "i have no information", "no information available", "don't have accurate",
+  // Croatian
+  "ne znam", "nisam siguran", "nisam sigurna", "ne mogu", "nemam točnu",
+  // German
+  "nicht sicher", "ich weiß nicht", "weiß nicht", "keine genaue information",
+  // French
+  "je ne sais pas", "pas sûr", "je ne suis pas sûr", "pas d'informations précises",
+  // Italian
+  "non lo so", "non sono sicuro", "non sono sicura", "non ho informazioni precise",
 ];
 
 /**
@@ -112,16 +117,38 @@ function isWeakResponse(reply) {
 }
 
 const UNSURE_MSG = {
-  hr: 'Nisam siguran da sam dobro razumio. Želite li pomoć od našeg tima?',
-  en: "I'm not sure I understood correctly. Would you like help from our team?",
-  de: 'Ich bin unsicher, ob ich richtig verstanden habe. Möchten Sie Hilfe von unserem Team?',
-  it: 'Non sono sicuro di aver capito bene. Vuoi assistenza dal nostro team?',
-  fr: "Je ne suis pas sûr d'avoir bien compris. Voulez-vous l'aide de notre équipe?",
-  sv: 'Jag är inte säker på att jag förstod rätt. Vill du ha hjälp från vårt team?',
-  no: 'Jeg er ikke sikker på at jeg forstod riktig. Vil du ha hjelp fra teamet vårt?',
-  cs: 'Nejsem si jistý, zda jsem správně porozuměl. Chcete pomoc od našeho týmu?',
+  hr: 'Nemam točnu informaciju za to. Želite li da vas povežem s osobom? (da/ne)',
+  en: "I don't have accurate information on that. Would you like me to connect you with a person? (da/ne)",
+  de: 'Ich habe keine genaue Information dazu. Möchten Sie mit einer Person verbunden werden? (da/ne)',
+  it: 'Non ho informazioni precise su questo. Vuole che la metta in contatto con una persona? (da/ne)',
+  fr: "Je n'ai pas d'informations précises à ce sujet. Voulez-vous que je vous mette en contact avec une personne? (da/ne)",
+  sv: 'Jag har ingen exakt information om det. Vill du att jag sätter dig i kontakt med en person? (da/ne)',
+  no: 'Jeg har ingen nøyaktig informasjon om det. Vil du at jeg setter deg i kontakt med en person? (da/ne)',
+  cs: 'Nemám přesné informace o tom. Chcete, abych vás spojil s osobou? (da/ne)',
 };
 function unsureMsg(lang) { return UNSURE_MSG[lang] || UNSURE_MSG.en; }
+
+// Responses when user replies da/ne to the "connect with a person?" offer
+const HUMAN_OFFER_DA = {
+  hr: 'U redu, proslijedit ću vaš upit osobi koja će vam se uskoro javiti.',
+  en: "Alright, I'll forward your request to a person who will get back to you shortly.",
+  de: 'In Ordnung, ich leite Ihre Anfrage an eine Person weiter, die sich bald bei Ihnen meldet.',
+  it: 'Va bene, inoltrerò la tua richiesta a una persona che ti contatterà a breve.',
+  fr: "D'accord, je vais transmettre votre demande à une personne qui vous contactera bientôt.",
+  sv: 'Okej, jag vidarebefordrar din fråga till en person som återkommer snart.',
+  no: 'Ok, jeg videresender forespørselen din til en person som vil ta kontakt snart.',
+  cs: 'Dobře, přepošlu váš dotaz osobě, která se vám brzy ozve.',
+};
+const HUMAN_OFFER_NE = {
+  hr: 'U redu 🙂 Ako imate još pitanja o Brelima, slobodno pitajte.',
+  en: 'Alright 🙂 If you have any more questions about Brela, feel free to ask.',
+  de: 'In Ordnung 🙂 Wenn Sie weitere Fragen zu Brela haben, können Sie diese gerne stellen.',
+  it: 'Va bene 🙂 Se hai altre domande su Brela, non esitare a chiedere.',
+  fr: "D'accord 🙂 Si vous avez d'autres questions sur Brela, n'hésitez pas à demander.",
+  sv: 'Okej 🙂 Om du har fler frågor om Brela, fråga gärna.',
+  no: 'Ok 🙂 Hvis du har flere spørsmål om Brela, er du velkommen til å spørre.',
+  cs: 'Dobře 🙂 Pokud máte další otázky ohledně Brela, neváhejte se zeptat.',
+};
 
 const OPT_IN_CONFIRM = {
   hr: 'Super! Obavijestit ćemo te o događajima 🎉',
@@ -386,8 +413,22 @@ router.post('/webhook', async (req, res) => {
     console.log("AI RESPONSE:", aiResponse);
     console.log(`[webhook] intent=${intent} lang=${lang}`);
 
-    // 7. Opt-in response (da/ne) — use already-fetched currentUser, no extra DB call
+    // 7. DA/NE responses — human handoff offer takes priority over opt-in
     if (lowerMsg === 'da' || lowerMsg === 'ne') {
+      // 7a. User replied to "would you like to connect with a person?" prompt
+      if (currentUser && Number(currentUser.awaiting_human_confirmation) === 1) {
+        try {
+          await setAwaitingConfirmation(tenant.id, userPhone, 0);
+          await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', lang);
+        } catch (_) {}
+        const reply = lowerMsg === 'da'
+          ? (HUMAN_OFFER_DA[lang] || HUMAN_OFFER_DA.hr)
+          : (HUMAN_OFFER_NE[lang] || HUMAN_OFFER_NE.hr);
+        console.log('[webhook] FINAL RESPONSE SENT — human handoff response');
+        return res.send(twiml(reply));
+      }
+
+      // 7b. User replied to opt-in notification offer
       if (currentUser && currentUser.asked_opt_in) {
         const optIn = lowerMsg === 'da' ? 1 : 0;
         try {
