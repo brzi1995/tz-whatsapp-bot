@@ -452,8 +452,8 @@ router.get('/conversations', requireAuth, async (req, res) => {
 // GET /admin/conversations/:phone
 router.get('/conversations/:phone', requireAuth, async (req, res) => {
   const tenantId  = req.session.tenantId;
-  const fullPhone = 'whatsapp:' + req.params.phone;  // format in messages table
-  const cleanPhone = req.params.phone;               // format in users table
+  const cleanPhone = normalizePhone(req.params.phone); // +385... format for users table
+  const fullPhone = 'whatsapp:' + cleanPhone;          // whatsapp:+385... format for messages table
 
   try {
     const [messages] = await pool.query(
@@ -467,7 +467,7 @@ router.get('/conversations/:phone', requireAuth, async (req, res) => {
     try {
       const [userRows] = await pool.query(
         'SELECT human_takeover FROM users WHERE tenant_id = ? AND phone = ?',
-        [tenantId, fullPhone]
+        [tenantId, cleanPhone]
       );
       const userRecord = (userRows && userRows[0]) || null;
       takeover = userRecord ? Boolean(userRecord.human_takeover) : false;
@@ -556,10 +556,9 @@ router.post('/conversations/:phone/takeover', requireAuth, async (req, res) => {
 // POST /admin/conversations/:phone/reply
 router.post('/conversations/:phone/reply', requireAuth, async (req, res) => {
   const tenantId = req.session.tenantId;
-  const userPhone = 'whatsapp:' + req.params.phone;
+  const cleanPhone = normalizePhone(req.params.phone);
+  const userPhone = 'whatsapp:' + cleanPhone; // Twilio requires whatsapp: prefix
   const message = (req.body.message || '').trim();
-
-  const cleanPhone = req.params.phone; // URL-safe, no whatsapp: prefix
 
   if (!message) {
     return res.redirect('/admin/conversations/' + encodeURIComponent(cleanPhone));
@@ -574,10 +573,18 @@ router.post('/conversations/:phone/reply', requireAuth, async (req, res) => {
     const tenant = (tenantRows && tenantRows[0]) || null;
     if (!tenant) return res.status(404).send('Tenant not found');
 
+    // Fetch current user state — human_takeover must NOT be changed by this route
+    const [userRows] = await pool.query(
+      'SELECT human_takeover FROM users WHERE tenant_id = ? AND phone = ?',
+      [tenantId, cleanPhone]
+    );
+    const existingUser = (userRows && userRows[0]) || null;
+    console.log("ADMIN MESSAGE - takeover stays:", existingUser?.human_takeover);
+
     // Send WhatsApp message via Twilio (Twilio needs whatsapp: prefix)
     await sendMessage(userPhone, tenant.phone_number, message);
 
-    // Log the admin reply in the messages table (messages stores whatsapp: prefix)
+    // Log the admin reply in the messages table only — users table is NOT touched
     await pool.query(
       'INSERT INTO messages (tenant_id, user_phone, message, intent, lang) VALUES (?, ?, ?, ?, ?)',
       [tenantId, userPhone, message, 'admin_reply', 'hr']
