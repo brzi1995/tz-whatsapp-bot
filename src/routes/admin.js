@@ -484,6 +484,30 @@ router.get('/conversations/:phone', requireAuth, async (req, res) => {
   }
 });
 
+// POST /admin/takeover/:phone — toggle per-user takeover (called from conversation view)
+router.post('/takeover/:phone', requireAuth, async (req, res) => {
+  const cleanPhone = req.params.phone.replace('whatsapp:', '');
+  console.log('[admin] takeover toggle for:', cleanPhone);
+
+  try {
+    const [result] = await pool.query(
+      "UPDATE whatsapp_users SET human_takeover = NOT human_takeover WHERE REPLACE(phone, 'whatsapp:', '') = ?",
+      [cleanPhone]
+    );
+
+    console.log(`[admin] takeover affectedRows: ${result.affectedRows}`);
+    if (result.affectedRows === 0) {
+      console.error(`[admin] takeover: no row found for ${cleanPhone}`);
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[admin] takeover error:', err.message);
+    return res.status(500).json({ success: false, error: 'Database error' });
+  }
+});
+
 // POST /admin/conversations/:phone/takeover — toggle per-user takeover
 router.post('/conversations/:phone/takeover', requireAuth, async (req, res) => {
   const tenantId  = req.session.tenantId;

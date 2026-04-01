@@ -63,6 +63,8 @@
           <%= takeover ? '🔴 Human takeover' : '🟢 Bot active' %>
         </span>
         <button id="takeoverBtn" class="btn btn-sm"
+                data-phone="<%= (userPhone || '').replace('whatsapp:', '') %>"
+                onclick="toggleTakeover(this.dataset.phone)"
                 style="background:<%= takeover ? '#dc2626' : '#2563eb' %>;color:#fff">
           <%= takeover ? '🤖 Return to bot' : '🧑 Take over' %>
         </button>
@@ -110,35 +112,18 @@
   const chatEl = document.getElementById('chat-messages');
   if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
 
-  // Phone encoded at render time — used in fetch URL at runtime
-  const userPhone = '<%= encodeURIComponent((userPhone || "").replace("whatsapp:", "")) %>';
-
-  document.getElementById('takeoverBtn').addEventListener('click', async () => {
-    const btn = document.getElementById('takeoverBtn');
-    btn.disabled = true;
-    btn.style.opacity = '0.6';
-
-    const url = `/admin/conversations/${userPhone}/takeover`;
-    console.log('[takeover] POST', url);
-
-    try {
-      const res  = await fetch(url, { method: 'POST' });
-      const data = await res.json();
-      console.log('[takeover] response:', data);
-
-      if (data.success) {
-        window.location.reload();
-      } else {
-        console.error('[takeover] server returned failure:', data);
-        btn.disabled = false;
-        btn.style.opacity = '1';
-      }
-    } catch (e) {
-      console.error('[takeover] fetch error:', e);
-      btn.disabled = false;
-      btn.style.opacity = '1';
+  async function toggleTakeover(phone) {
+    console.log("Takeover clicked:", phone);
+    const res = await fetch(`/admin/takeover/${encodeURIComponent(phone)}`, {
+      method: "POST"
+    });
+    console.log("Response status:", res.status);
+    if (res.ok) {
+      window.location.reload();
+    } else {
+      alert("Takeover failed");
     }
-  });
+  }
 </script>
 
 <%- include('partials/foot') %>
