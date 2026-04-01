@@ -318,6 +318,27 @@ function twiml(message) {
   return `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(message)}</Message></Response>`;
 }
 
+/**
+ * TwiML response that appends a link card after the main message.
+ * If imageUrl is provided, sends a second WhatsApp message containing the image
+ * (displayed as a card in the chat) with title + URL as caption.
+ * If only linkUrl (no image), appends the link inline to the main message.
+ */
+function twimlWithFaqLink(text, linkTitle, linkUrl, imageUrl) {
+  if (imageUrl && linkUrl) {
+    const caption = (linkTitle ? linkTitle + '\n' : '') + linkUrl;
+    return `<?xml version="1.0" encoding="UTF-8"?><Response>` +
+      `<Message>${escapeXml(text)}</Message>` +
+      `<Message><Body>${escapeXml(caption)}</Body><Media>${escapeXml(imageUrl)}</Media></Message>` +
+      `</Response>`;
+  }
+  if (linkUrl) {
+    const appended = text + '\n\n' + (linkTitle ? '🔗 ' + linkTitle + '\n' : '') + linkUrl;
+    return twiml(appended);
+  }
+  return twiml(text);
+}
+
 function emptyTwiml() {
   return '<?xml version="1.0" encoding="UTF-8\"?><Response></Response>';
 }
@@ -605,9 +626,17 @@ router.post('/webhook', async (req, res) => {
       { role: 'assistant', content: reply },
     ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
 
-    await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', lang);
-    console.log(`[webhook] FINAL RESPONSE SENT — AI ("${reply.slice(0, 60)}")`);
-    res.send(twiml(reply));
+    await logMessage(tenant.id, userPhone, trimmedMsg, intent === 'faq' ? 'faq' : 'ai', lang);
+
+    // Enrich FAQ replies with a link card when the matched FAQ has link data
+    const hasFaqLink = intent === 'faq' && faqMatch && (faqMatch.link_url || faqMatch.link_image);
+    if (hasFaqLink) {
+      console.log(`[webhook] FINAL RESPONSE SENT — FAQ with link card ("${reply.slice(0, 60)}")`);
+      res.send(twimlWithFaqLink(reply, faqMatch.link_title, faqMatch.link_url, faqMatch.link_image));
+    } else {
+      console.log(`[webhook] FINAL RESPONSE SENT — AI ("${reply.slice(0, 60)}")`);
+      res.send(twiml(reply));
+    }
 
   } catch (err) {
     console.error('[webhook] error:', err.message);

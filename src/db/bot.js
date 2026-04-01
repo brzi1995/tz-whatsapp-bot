@@ -49,7 +49,7 @@ async function logMessage(tenantId, userPhone, message, intent, lang = 'hr') {
 async function getFaqMatch(tenantId, userMessage) {
   try {
     const [rows] = await pool.query(
-      'SELECT question, answer FROM faq WHERE tenant_id = ?',
+      'SELECT question, answer, link_title, link_url, link_image FROM faq WHERE tenant_id = ?',
       [tenantId]
     );
     if (!rows.length) return null;
@@ -63,7 +63,13 @@ async function getFaqMatch(tenantId, userMessage) {
       const matchedCount = keywords.filter(kw => normalised.includes(kw)).length;
       const score = matchedCount / keywords.length;
       if (score > 0 && (!best || score > best.score)) {
-        best = { answer: row.answer, score };
+        best = {
+          answer:      row.answer,
+          score,
+          link_title:  row.link_title  || null,
+          link_url:    row.link_url    || null,
+          link_image:  row.link_image  || null,
+        };
         console.log(`[bot] FAQ scored match on "${row.question}" — score: ${score.toFixed(2)}`);
       }
     }

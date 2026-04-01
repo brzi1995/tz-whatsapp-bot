@@ -249,12 +249,12 @@ router.get('/faq', requireAuth, async (req, res) => {
 // POST /admin/faq
 router.post('/faq', requireAuth, async (req, res) => {
   const tenantId = req.session.tenantId;
-  const { question, answer } = req.body;
+  const { question, answer, link_title, link_url, link_image } = req.body;
 
   try {
     await pool.query(
-      'INSERT INTO faq (tenant_id, question, answer) VALUES (?, ?, ?)',
-      [tenantId, question, answer]
+      'INSERT INTO faq (tenant_id, question, answer, link_title, link_url, link_image) VALUES (?, ?, ?, ?, ?, ?)',
+      [tenantId, question, answer, link_title || null, link_url || null, link_image || null]
     );
     res.redirect('/admin/faq');
   } catch (err) {
@@ -304,12 +304,12 @@ router.get('/faq/:id/edit', requireAuth, async (req, res) => {
 router.post('/faq/:id/edit', requireAuth, async (req, res) => {
   const tenantId = req.session.tenantId;
   const id = parseInt(req.params.id, 10);
-  const { question, answer } = req.body;
+  const { question, answer, link_title, link_url, link_image } = req.body;
 
   try {
     await pool.query(
-      'UPDATE faq SET question = ?, answer = ? WHERE id = ? AND tenant_id = ?',
-      [question, answer, id, tenantId]
+      'UPDATE faq SET question = ?, answer = ?, link_title = ?, link_url = ?, link_image = ? WHERE id = ? AND tenant_id = ?',
+      [question, answer, link_title || null, link_url || null, link_image || null, id, tenantId]
     );
     res.redirect('/admin/faq');
   } catch (err) {

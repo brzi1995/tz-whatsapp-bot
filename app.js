@@ -42,8 +42,14 @@ try {
     pool.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS send_notification TINYINT(1) NOT NULL DEFAULT 0')
       .catch(err => console.warn('[migration] events.send_notification:', err.message));
     pool.query("ALTER TABLE events ADD COLUMN IF NOT EXISTS notification_status VARCHAR(20) NOT NULL DEFAULT 'none'")
-      .then(() => console.log('[migration] events columns ensured'))
       .catch(err => console.warn('[migration] events.notification_status:', err.message));
+    pool.query('ALTER TABLE faq ADD COLUMN IF NOT EXISTS link_title VARCHAR(255) DEFAULT NULL')
+      .catch(err => console.warn('[migration] faq.link_title:', err.message));
+    pool.query('ALTER TABLE faq ADD COLUMN IF NOT EXISTS link_url VARCHAR(500) DEFAULT NULL')
+      .catch(err => console.warn('[migration] faq.link_url:', err.message));
+    pool.query('ALTER TABLE faq ADD COLUMN IF NOT EXISTS link_image VARCHAR(500) DEFAULT NULL')
+      .then(() => console.log('[migration] all columns ensured'))
+      .catch(err => console.warn('[migration] faq.link_image:', err.message));
   });
 
   module.exports = app;

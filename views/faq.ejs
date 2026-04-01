@@ -14,6 +14,23 @@
       <input type="text" name="question" placeholder="Npr. Kada je otvorena plaža?" required>
       <label>Odgovor</label>
       <textarea name="answer" rows="3" placeholder="Unesite odgovor..." required></textarea>
+
+      <div class="faq-link-section">
+        <div class="faq-link-section-label"><i data-lucide="link" style="width:13px;height:13px;vertical-align:middle;margin-right:5px"></i>Link kartica <span style="font-weight:400;color:var(--muted)">(opcionalno)</span></div>
+        <div class="form-row">
+          <div>
+            <label>Naslov linka</label>
+            <input type="text" name="link_title" placeholder="Npr. Rezerviraj online">
+          </div>
+          <div>
+            <label>URL linka</label>
+            <input type="url" name="link_url" placeholder="https://...">
+          </div>
+        </div>
+        <label>URL slike <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">(slika za pregled kartice)</span></label>
+        <input type="url" name="link_image" placeholder="https://... (.jpg, .png, ...)">
+      </div>
+
       <button type="submit" class="btn btn-primary">
         <i data-lucide="plus"></i> Dodaj
       </button>
@@ -25,10 +42,26 @@
   <% } else { %>
     <div class="item-list">
       <% faqs.forEach(function(f) { %>
-      <div class="item-card">
+      <div class="item-card" style="align-items:flex-start">
         <div class="item-card-body">
           <div class="item-card-title"><%= f.question %></div>
           <div class="item-card-meta"><%= f.answer %></div>
+          <% if (f.link_url || f.link_image) { %>
+            <a href="<%= f.link_url || '#' %>" target="_blank" rel="noopener" class="faq-link-card">
+              <% if (f.link_image) { %>
+                <img src="<%= f.link_image %>"
+                     class="faq-link-card-img"
+                     alt=""
+                     onerror="this.style.display='none'">
+              <% } %>
+              <div class="faq-link-card-body">
+                <div class="faq-link-card-title"><%= f.link_title || f.link_url %></div>
+                <% if (f.link_url) { %>
+                  <div class="faq-link-card-url"><%= f.link_url %></div>
+                <% } %>
+              </div>
+            </a>
+          <% } %>
         </div>
         <div class="item-card-actions">
           <a href="/admin/faq/<%= f.id %>/edit" class="btn btn-secondary btn-sm">
@@ -45,5 +78,69 @@
     </div>
   <% } %>
 </main>
+
+<style>
+/* Link section in create form */
+.faq-link-section {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.faq-link-section-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.faq-link-section input {
+  background: var(--surface);
+}
+
+/* Link preview card in FAQ list */
+.faq-link-card {
+  display: block;
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  max-width: 260px;
+  text-decoration: none;
+  color: inherit;
+  box-shadow: var(--shadow-xs);
+  transition: box-shadow .2s var(--ease), transform .18s var(--ease);
+}
+.faq-link-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+.faq-link-card-img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  display: block;
+}
+.faq-link-card-body {
+  padding: 9px 11px 10px;
+  background: var(--surface);
+}
+.faq-link-card-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.35;
+}
+.faq-link-card-url {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+</style>
 
 <%- include('partials/foot') %>
