@@ -91,14 +91,16 @@ CREATE TABLE IF NOT EXISTS whatsapp_users (
   phone           VARCHAR(50) NOT NULL,
   opt_in          TINYINT(1)  NOT NULL DEFAULT 0,
   asked_opt_in    TINYINT(1)  NOT NULL DEFAULT 0,
-  human_takeover  TINYINT(1)  NOT NULL DEFAULT 0,
-  last_message_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  human_takeover               TINYINT(1)  NOT NULL DEFAULT 0,
+  awaiting_human_confirmation  TINYINT(1)  NOT NULL DEFAULT 0,
+  last_message_at              DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY unique_user (tenant_id, phone),
   FOREIGN KEY (tenant_id) REFERENCES tenants(id)
 );
 
 -- Migration for existing installs (safe to run once):
 -- ALTER TABLE whatsapp_users ADD COLUMN IF NOT EXISTS human_takeover TINYINT(1) NOT NULL DEFAULT 0;
+-- ALTER TABLE users ADD COLUMN IF NOT EXISTS awaiting_human_confirmation TINYINT(1) NOT NULL DEFAULT 0;
 
 -- -------------------------------------------------------------------------
 -- Phase 2 — Admin dashboard

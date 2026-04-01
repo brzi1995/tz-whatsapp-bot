@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getTenant, getMessages, saveMessages } = require('../db/sessions');
 const { parseMessage } = require('../services/openai');
-const { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, upsertWhatsappUser, getWhatsappUser, setOptIn, setUserTakeover } = require('../db/bot');
+const { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, upsertWhatsappUser, getWhatsappUser, setOptIn, setUserTakeover, setAwaitingConfirmation, getLastUserLang } = require('../db/bot');
 const { sendHandoverEmail } = require('../services/email');
 const { sendAdminNotification } = require('../services/notify');
 
@@ -28,6 +28,64 @@ const FALLBACK_MSG = {
 };
 function fallbackReply(lang) {
   return FALLBACK_MSG[lang] || FALLBACK_MSG.en;
+}
+
+// --- Smart human handoff ---
+
+const YES_WORDS = new Set(['yes', 'da', 'ok', 'sure', 'ja', 'oui', 'sì', 'si', 'ano', 'yep', 'yup', 'naravno', 'molim', 'please']);
+const NO_WORDS  = new Set(['no', 'ne', 'nein', 'non', 'nope', 'nie']);
+
+const HUMAN_CONFIRM_PROMPT = {
+  hr: 'Nisam siguran/na imam li pravi odgovor. Želite li da vas povežem s našim timom? (da/ne)',
+  en: "I'm not sure I have the right answer. Would you like me to connect you with our team? (yes/no)",
+  de: 'Ich bin unsicher, ob ich die richtige Antwort habe. Möchten Sie mit unserem Team verbunden werden? (ja/nein)',
+  it: 'Non sono sicuro di avere la risposta giusta. Vuoi essere connesso con il nostro team? (sì/no)',
+  fr: "Je ne suis pas sûr d'avoir la bonne réponse. Voulez-vous être connecté à notre équipe? (oui/non)",
+  sv: 'Jag är inte säker på att jag har rätt svar. Vill du att jag kopplar dig till teamet? (ja/nej)',
+  no: 'Jeg er usikker på om jeg har riktig svar. Vil du kobles til teamet vårt? (ja/nei)',
+  cs: 'Nejsem si jistý/á odpovědí. Chcete být spojeni s naším týmem? (ano/ne)',
+};
+function humanConfirmPrompt(lang) { return HUMAN_CONFIRM_PROMPT[lang] || HUMAN_CONFIRM_PROMPT.en; }
+
+const CONNECTING_MSG = {
+  hr: 'Odlično! Povezujem vas s našim timom. Odgovorit će vam uskoro. 🤝',
+  en: 'Great, connecting you to our team now. They will respond shortly. 🤝',
+  de: 'Super, wir verbinden Sie jetzt mit unserem Team. 🤝',
+  it: 'Perfetto, ti connetto ora con il nostro team. 🤝',
+  fr: 'Parfait, je vous connecte maintenant avec notre équipe. 🤝',
+  sv: 'Bra, kopplar dig nu till teamet. 🤝',
+  no: 'Flott, kobler deg til teamet nå. 🤝',
+  cs: 'Skvěle, spojuji vás s naším týmem. 🤝',
+};
+function connectingMsg(lang) { return CONNECTING_MSG[lang] || CONNECTING_MSG.en; }
+
+const BOT_CONTINUES_MSG = {
+  hr: 'U redu! Nastavit ću odgovarati na vaša pitanja. 😊',
+  en: 'No problem! I will continue to answer your questions. 😊',
+  de: 'Kein Problem! Ich beantworte weiterhin Ihre Fragen. 😊',
+  it: 'Nessun problema! Continuerò a rispondere. 😊',
+  fr: 'Pas de problème! Je continue à répondre à vos questions. 😊',
+  sv: 'Inga problem! Jag fortsätter svara på dina frågor. 😊',
+  no: 'Ingen problem! Jeg fortsetter å svare. 😊',
+  cs: 'Žádný problém! Budu odpovídat dál. 😊',
+};
+function botContinuesMsg(lang) { return BOT_CONTINUES_MSG[lang] || BOT_CONTINUES_MSG.en; }
+
+const FALLBACK_PHRASES = [
+  "i don't know", "i'm not sure", "i am not sure", "not sure", "unsure",
+  "i cannot", "i can't", "can't help", "cannot help", "unable to",
+  "i have no information", "no information available",
+  "ne znam", "nisam siguran", "nisam sigurna", "ne mogu",
+  "nicht sicher", "ich weiß nicht", "weiß nicht",
+  "je ne sais pas", "pas sûr", "je ne suis pas sûr",
+  "non lo so", "non sono sicuro", "non sono sicura",
+];
+
+function isFallbackResponse(aiResponse, intent) {
+  if (!aiResponse || aiResponse.trim() === '') return true;
+  if (intent === 'fallback') return true;
+  const lower = aiResponse.toLowerCase();
+  return FALLBACK_PHRASES.some(p => lower.includes(p));
 }
 
 const OPT_IN_CONFIRM = {
@@ -249,6 +307,35 @@ router.post('/webhook', async (req, res) => {
       return res.send(emptyTwiml());
     }
 
+    // 4.5. AWAITING HUMAN CONFIRMATION CHECK
+    if (currentUser && Number(currentUser.awaiting_human_confirmation) === 1) {
+      const confirmLang = await getLastUserLang(tenant.id, userPhone).catch(() => 'en');
+      console.log(`[webhook] awaiting handoff confirmation from ${userPhone}, lang=${confirmLang}, msg="${lowerMsg}"`);
+
+      if (YES_WORDS.has(lowerMsg.trim())) {
+        try { await setUserTakeover(tenant.id, userPhone, 1); } catch (_) {}
+        try { await setAwaitingConfirmation(tenant.id, userPhone, 0); } catch (_) {}
+        try {
+          await sendAdminNotification(tenant.id, userPhone, trimmedMsg);
+        } catch (notifyErr) { console.error('[webhook] notify error:', notifyErr.message); }
+        await sendHandoverEmail(userPhone, trimmedMsg).catch(() => {});
+        await logMessage(tenant.id, userPhone, trimmedMsg, 'handover', confirmLang);
+        console.log('[webhook] FINAL RESPONSE SENT — confirmed human handover');
+        return res.send(twiml(connectingMsg(confirmLang)));
+      }
+
+      if (NO_WORDS.has(lowerMsg.trim())) {
+        try { await setAwaitingConfirmation(tenant.id, userPhone, 0); } catch (_) {}
+        await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', confirmLang);
+        console.log('[webhook] FINAL RESPONSE SENT — declined handover, bot continues');
+        return res.send(twiml(botContinuesMsg(confirmLang)));
+      }
+
+      // Ambiguous answer — re-ask
+      console.log('[webhook] FINAL RESPONSE SENT — re-asking handover confirmation');
+      return res.send(twiml(humanConfirmPrompt(confirmLang)));
+    }
+
     // 5. GENERATE RESPONSE — AI called for every non-takeover message
     const model = tenant.openai_model;
     console.log(`[webhook] AI CALLED — "${trimmedMsg}"`);
@@ -461,6 +548,15 @@ router.post('/webhook', async (req, res) => {
 
     // 14. AI response — default for faq-no-match, other-no-keyword, anything else
     const reply = aiResponse || fallbackReply(lang);
+
+    // Smart handoff: low-quality response → ask user if they want human support
+    if (isFallbackResponse(reply, intent)) {
+      try { await setAwaitingConfirmation(tenant.id, userPhone, 1); } catch (_) {}
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', lang);
+      console.log(`[webhook] FINAL RESPONSE SENT — smart handoff prompt (intent=${intent})`);
+      return res.send(twiml(humanConfirmPrompt(lang)));
+    }
+
     await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', lang);
     console.log(`[webhook] FINAL RESPONSE SENT — AI ("${reply.slice(0, 60)}")`);
     res.send(twiml(reply));

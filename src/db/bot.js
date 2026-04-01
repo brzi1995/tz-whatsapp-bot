@@ -273,7 +273,7 @@ async function upsertWhatsappUser(tenantId, phone) {
  */
 async function getWhatsappUser(tenantId, phone) {
   const [rows] = await pool.query(
-    'SELECT opt_in, asked_opt_in, human_takeover FROM users WHERE tenant_id = ? AND phone = ?',
+    'SELECT opt_in, asked_opt_in, human_takeover, awaiting_human_confirmation FROM users WHERE tenant_id = ? AND phone = ?',
     [tenantId, phone]
   );
   return (rows && rows[0]) || null;
@@ -301,4 +301,19 @@ async function setUserTakeover(tenantId, phone, value) {
   console.log(`[bot] per-user takeover set to ${value} for ${phone} on tenant ${tenantId}`);
 }
 
-module.exports = { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, detectLang, detectEventPeriod, getEventsFormatted, upsertWhatsappUser, getWhatsappUser, setOptIn, setUserTakeover };
+async function setAwaitingConfirmation(tenantId, phone, value) {
+  await pool.query(
+    'UPDATE users SET awaiting_human_confirmation = ? WHERE tenant_id = ? AND phone = ?',
+    [value, tenantId, phone]
+  );
+}
+
+async function getLastUserLang(tenantId, phone) {
+  const [rows] = await pool.query(
+    'SELECT lang FROM messages WHERE tenant_id = ? AND user_phone = ? ORDER BY created_at DESC LIMIT 1',
+    [tenantId, phone]
+  );
+  return (rows && rows[0] && rows[0].lang) || 'en';
+}
+
+module.exports = { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, detectLang, detectEventPeriod, getEventsFormatted, upsertWhatsappUser, getWhatsappUser, setOptIn, setUserTakeover, setAwaitingConfirmation, getLastUserLang };
