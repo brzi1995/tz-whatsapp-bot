@@ -59,14 +59,15 @@
         <div style="font-size:12px;color:var(--muted);margin-top:2px"><%= (messages || []).length %> poruka</div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <span id="takeoverBadge" style="padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;background:<%= takeover ? '#fef2f2' : '#f0fdf4' %>;color:<%= takeover ? '#dc2626' : '#16a34a' %>">
-          <%= takeover ? '🔴 Human takeover' : '🟢 Bot active' %>
+        <span id="takeoverBadge" style="padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;background:<%= takeover ? '#fef2f2' : '#f0fdf4' %>;color:<%= takeover ? '#dc2626' : '#16a34a' %>;cursor:pointer"
+              onclick="toggleTakeover(document.getElementById('takeoverBtn').dataset.phone)">
+          <%= takeover ? '🔴 Operator odgovara' : '🟢 Bot active' %>
         </span>
         <button id="takeoverBtn" class="btn btn-sm"
                 data-phone="<%= (userPhone || '').replace('whatsapp:', '') %>"
                 onclick="toggleTakeover(this.dataset.phone)"
-                style="background:<%= takeover ? '#dc2626' : '#2563eb' %>;color:#fff">
-          <%= takeover ? '🤖 Return to bot' : '🧑 Take over' %>
+                style="background:<%= takeover ? '#16a34a' : '#2563eb' %>;color:#fff">
+          <%= takeover ? '🤖 Deactivate' : '🧑 Take over' %>
         </button>
       </div>
     </div>
@@ -112,18 +113,44 @@
   const chatEl = document.getElementById('chat-messages');
   if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
 
+  // Track current state — seeded from server render
+  let takeoverActive = <%= takeover ? 'true' : 'false' %>;
+
+  function applyTakeoverUI(isOn) {
+    const btn   = document.getElementById('takeoverBtn');
+    const badge = document.getElementById('takeoverBadge');
+    takeoverActive = isOn;
+
+    btn.textContent        = isOn ? '🤖 Deactivate'       : '🧑 Take over';
+    btn.style.background   = isOn ? '#16a34a'              : '#2563eb';
+    badge.textContent      = isOn ? '🔴 Operator odgovara' : '🟢 Bot active';
+    badge.style.background = isOn ? '#fef2f2'              : '#f0fdf4';
+    badge.style.color      = isOn ? '#dc2626'              : '#16a34a';
+  }
+
   async function toggleTakeover(phone) {
-    console.log("Takeover clicked:", phone);
-    const res = await fetch(`/admin/takeover/${encodeURIComponent(phone)}`, {
-      method: "POST"
-    });
-    console.log("Response status:", res.status);
-    const data = await res.json().catch(e => ({ parseError: e.message }));
-    console.log("Response body:", data);
-    if (res.ok) {
-      window.location.reload();
-    } else {
-      alert("Takeover failed: " + (data.error || res.status));
+    console.log("Takeover clicked, phone:", phone);
+    const btn = document.getElementById('takeoverBtn');
+    btn.disabled = true;
+
+    try {
+      const res = await fetch(`/admin/takeover/${encodeURIComponent(phone)}`, {
+        method: "POST"
+      });
+      console.log("Response status:", res.status);
+      const data = await res.json().catch(e => ({ parseError: e.message }));
+      console.log("Response body:", data);
+
+      if (data.success) {
+        applyTakeoverUI(!takeoverActive);
+      } else {
+        alert("Takeover failed: " + (data.error || res.status));
+      }
+    } catch (e) {
+      console.error("Takeover error:", e);
+      alert("Takeover error: " + e.message);
+    } finally {
+      btn.disabled = false;
     }
   }
 </script>
