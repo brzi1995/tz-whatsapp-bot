@@ -1,8 +1,6 @@
 <%- include('partials/head', { title: 'Dashboard' }) %>
 <%- include('partials/sidebar', { activePage: 'dashboard' }) %>
 <%
-  if (locals.humanTakeover   === undefined) locals.humanTakeover   = false;
-  if (locals.tenantId        === undefined) locals.tenantId        = 0;
   if (locals.totalUsers      === undefined) locals.totalUsers      = 0;
   if (locals.totalMessages   === undefined) locals.totalMessages   = 0;
   if (locals.perDay          === undefined) locals.perDay          = [];
@@ -10,8 +8,20 @@
   if (locals.languages       === undefined) locals.languages       = [];
   if (locals.insights        === undefined) locals.insights        = [];
   if (locals.featuredEvents  === undefined) locals.featuredEvents  = [];
-  if (locals.activeUserTakeovers === undefined) locals.activeUserTakeovers = 0;
   if (locals.timeOfDay       === undefined) locals.timeOfDay       = { morning: 0, afternoon: 0, evening: 0 };
+
+  const _langMap = { hr:'🇭🇷 Hrvatski', en:'🇬🇧 English', de:'🇩🇪 Deutsch', it:'🇮🇹 Italiano', fr:'🇫🇷 Français', sv:'🇸🇪 Svenska', no:'🇳🇴 Norsk', cs:'🇨🇿 Čeština' };
+  const _topLang = languages.length ? (_langMap[languages[0].lang] || languages[0].lang) : null;
+  const _langCount = languages.length;
+
+  const _tod = timeOfDay || {};
+  const _todSlots = [
+    { label:'Jutro',        icon:'🌅', val: Number(_tod.morning)||0 },
+    { label:'Poslijepodne', icon:'☀️', val: Number(_tod.afternoon)||0 },
+    { label:'Večer',        icon:'🌙', val: Number(_tod.evening)||0 },
+  ];
+  const _peakSlot = _todSlots.reduce((a, b) => b.val > a.val ? b : a, _todSlots[0]);
+  const _peakTotal = _todSlots.reduce((s, x) => s + x.val, 0);
 %>
 
 <main class="content">
@@ -21,18 +31,18 @@
   </div>
 
   <!-- AI Insights -->
-  <div style="background:linear-gradient(135deg,#1e3a5f 0%,#1e40af 100%);border-radius:14px;padding:22px 28px;margin-bottom:28px;color:#fff;box-shadow:0 4px 20px rgba(37,99,235,.25)">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-      <span style="font-size:20px">✨</span>
-      <span style="font-size:15px;font-weight:700;letter-spacing:-.2px">AI Insights</span>
+  <div class="ai-insights">
+    <div class="ai-insights-header">
+      <span>✨</span>
+      <span>AI Insights</span>
     </div>
     <% if (!insights.length) { %>
-      <p style="color:#93c5fd;font-size:14px;margin:0">No data yet — insights will appear as users interact.</p>
+      <p class="ai-insights-empty">Nema podataka — uvidi će se pojaviti kako turisti koriste bota.</p>
     <% } else { %>
-      <div style="display:flex;flex-wrap:wrap;gap:12px">
+      <div class="ai-insights-grid">
         <% insights.forEach(function(ins) { %>
-          <div style="background:rgba(255,255,255,.12);border-radius:10px;padding:10px 16px;display:flex;align-items:center;gap:9px;font-size:14px;font-weight:500;flex:1;min-width:220px;backdrop-filter:blur(4px)">
-            <span style="font-size:18px;flex-shrink:0"><%= ins.icon %></span>
+          <div class="ai-insight-item">
+            <span class="ai-insight-icon"><%= ins.icon %></span>
             <span><%= ins.text %></span>
           </div>
         <% }); %>
@@ -44,51 +54,72 @@
   <div class="cards">
     <div class="stat-card">
       <div class="stat-card-top">
-        <div class="label">Ukupno korisnika</div>
+        <div class="label">Korisnici</div>
         <div class="stat-card-icon icon-blue">👥</div>
       </div>
       <div class="num"><%= totalUsers %></div>
     </div>
     <div class="stat-card">
       <div class="stat-card-top">
-        <div class="label">Ukupno poruka</div>
+        <div class="label">Poruke</div>
         <div class="stat-card-icon icon-green">💬</div>
       </div>
       <div class="num"><%= totalMessages %></div>
     </div>
+    <div class="stat-card">
+      <div class="stat-card-top">
+        <div class="label">Jezici</div>
+        <div class="stat-card-icon icon-purple">🌍</div>
+      </div>
+      <div class="num"><%= _langCount %></div>
+      <% if (_topLang) { %>
+        <div class="stat-sub"><%= _topLang %></div>
+      <% } %>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-top">
+        <div class="label">Vršno doba</div>
+        <div class="stat-card-icon icon-amber">⏰</div>
+      </div>
+      <% if (_peakTotal > 0) { %>
+        <div class="num num-text"><%= _peakSlot.icon %> <%= _peakSlot.label %></div>
+      <% } else { %>
+        <div class="num num-text" style="color:var(--muted)">—</div>
+      <% } %>
+    </div>
   </div>
 
   <!-- Featured Events -->
-  <div style="background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow-sm);padding:22px 26px;margin-bottom:28px">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+  <div class="chart-wrap">
+    <div class="chart-header">
       <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:18px">🔥</span>
-        <span style="font-size:15px;font-weight:700;color:var(--text)">Izdvojeni događaji</span>
+        <span>🔥</span>
+        <h2>Izdvojeni događaji</h2>
       </div>
       <a href="/admin/events" class="btn btn-secondary btn-sm">Upravljaj</a>
     </div>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:16px;padding-left:26px">Najvažniji događaji koje preporučujemo turistima</p>
     <% if (!featuredEvents || !featuredEvents.length) { %>
-      <div style="text-align:center;padding:20px 0;color:#94a3b8;font-size:13px">
-        Trenutno nema izdvojenih događaja — označite ih u <a href="/admin/events" style="color:var(--blue);text-decoration:none;font-weight:600">listi događaja</a>
+      <div style="text-align:center;padding:16px 0;color:var(--muted);font-size:13px">
+        Nema izdvojenih događaja —
+        <a href="/admin/events" style="color:var(--blue);text-decoration:none;font-weight:600">označi ih u listi</a>
       </div>
     <% } else { %>
-    <div style="display:flex;flex-direction:column;gap:8px">
-      <% featuredEvents.forEach(function(ev) {
-         const dateStr = ev.date ? new Date(ev.date).toLocaleDateString('hr-HR') : '—';
-      %>
-      <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;background:#fffbeb;border-radius:10px;border:1px solid #fde68a">
-        <span style="font-size:20px;flex-shrink:0">📅</span>
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:14px;color:var(--text)"><%= ev.title %></div>
-          <% if (ev.description) { %>
-          <div style="font-size:12px;color:var(--muted);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><%= ev.description %></div>
-          <% } %>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <% featuredEvents.forEach(function(ev) {
+             const dateStr = ev.date ? new Date(ev.date).toLocaleDateString('hr-HR') : '—';
+        %>
+        <div class="feat-event-row">
+          <span class="feat-event-icon">📅</span>
+          <div class="feat-event-body">
+            <div class="feat-event-title"><%= ev.title %></div>
+            <% if (ev.description) { %>
+              <div class="feat-event-desc"><%= ev.description %></div>
+            <% } %>
+          </div>
+          <div class="feat-event-date"><%= dateStr %></div>
         </div>
-        <div style="font-size:12px;font-weight:600;color:#92400e;background:#fef3c7;padding:3px 9px;border-radius:20px;white-space:nowrap"><%= dateStr %></div>
+        <% }); %>
       </div>
-      <% }); %>
-    </div>
     <% } %>
   </div>
 
@@ -101,96 +132,124 @@
     <canvas id="msgChart" height="80"></canvas>
   </div>
 
-  <!-- Analytics row -->
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin-bottom:28px">
-
-    <!-- Intent distribution -->
-    <div class="chart-wrap" style="margin-bottom:0">
-      <div class="chart-header">
-        <h2>Najčešći interesi turista</h2>
-        <span class="chart-badge">Po tipu</span>
-      </div>
-      <% const intentLabels = { faq:'Opće informacije', weather:'Vrijeme', weather_current:'Vrijeme', weather_tomorrow:'Vrijeme', weather_multi:'Vrijeme', events:'Događaji', ai:'Ostalo', other:'Ostalo', fallback:'Ostalo' };
-         const intentColors = { faq:'#2563eb', weather:'#0ea5e9', events:'#16a34a', ai:'#7c3aed' };
-         const intentTotal  = intents.reduce((s,r) => s + Number(r.count), 0) || 1;
-      %>
-      <% if (!intents.length) { %>
-        <p style="color:#94a3b8;font-size:13px;padding-top:8px">Nema podataka.</p>
-      <% } else { intents.forEach(function(r) {
-           const pct = Math.round(Number(r.count) / intentTotal * 100);
-           const col = intentColors[r.intent] || '#64748b';
-           const lbl = intentLabels[r.intent]  || r.intent;
-      %>
-        <div style="margin-bottom:10px">
-          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
-            <span style="font-weight:600;color:#374151"><%= lbl %></span>
-            <span style="color:#64748b"><%= r.count %> (<%= pct %>%)</span>
-          </div>
-          <div style="background:#f1f5f9;border-radius:20px;height:7px;overflow:hidden">
-            <div style="width:<%= pct %>%;height:100%;background:<%= col %>;border-radius:20px"></div>
-          </div>
-        </div>
-      <% }); } %>
+  <!-- Intent distribution -->
+  <div class="chart-wrap" style="margin-bottom:0">
+    <div class="chart-header">
+      <h2>Interesi turista</h2>
+      <span class="chart-badge">Po tipu</span>
     </div>
-
-    <!-- Language distribution -->
-    <div class="chart-wrap" style="margin-bottom:0">
-      <div class="chart-header">
-        <h2>Jezici</h2>
-        <span class="chart-badge">Distribucija</span>
-      </div>
-      <% const langLabels = { hr:'🇭🇷 Hrvatski', en:'🇬🇧 English', de:'🇩🇪 Deutsch', it:'🇮🇹 Italiano', fr:'🇫🇷 Français', sv:'🇸🇪 Svenska', no:'🇳🇴 Norsk', cs:'🇨🇿 Čeština' };
-         const langTotal  = languages.reduce((s,r) => s + Number(r.count), 0) || 1;
-      %>
-      <% if (!languages.length) { %>
-        <p style="color:#94a3b8;font-size:13px;padding-top:8px">Nema podataka.</p>
-      <% } else { languages.forEach(function(r) {
-           const pct = Math.round(Number(r.count) / langTotal * 100);
-           const lbl = langLabels[r.lang] || r.lang;
-      %>
-        <div style="margin-bottom:10px">
-          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
-            <span style="font-weight:600;color:#374151"><%= lbl %></span>
-            <span style="color:#64748b"><%= r.count %> (<%= pct %>%)</span>
-          </div>
-          <div style="background:#f1f5f9;border-radius:20px;height:7px;overflow:hidden">
-            <div style="width:<%= pct %>%;height:100%;background:#2563eb;border-radius:20px"></div>
-          </div>
+    <% const intentLabels = { faq:'Opće informacije', weather:'Vrijeme', weather_current:'Vrijeme', weather_tomorrow:'Vrijeme', weather_multi:'Vrijeme', events:'Događaji', ai:'Ostalo', other:'Ostalo', fallback:'Ostalo' };
+       const intentColors = { faq:'#2563eb', weather:'#0ea5e9', events:'#16a34a', ai:'#7c3aed' };
+       const intentTotal  = intents.reduce((s,r) => s + Number(r.count), 0) || 1;
+    %>
+    <% if (!intents.length) { %>
+      <p style="color:var(--muted);font-size:13px;padding-top:4px">Nema podataka.</p>
+    <% } else { intents.forEach(function(r) {
+         const pct = Math.round(Number(r.count) / intentTotal * 100);
+         const col = intentColors[r.intent] || '#64748b';
+         const lbl = intentLabels[r.intent]  || r.intent;
+    %>
+      <div class="intent-row">
+        <div class="intent-row-label">
+          <span><%= lbl %></span>
+          <span class="intent-row-count"><%= r.count %> (<%= pct %>%)</span>
         </div>
-      <% }); } %>
-    </div>
-
-    <!-- Activity by time of day -->
-    <div class="chart-wrap" style="margin-bottom:0">
-      <div class="chart-header">
-        <h2>Aktivnost</h2>
-        <span class="chart-badge">Po dobu dana</span>
-      </div>
-      <% const tod = timeOfDay || {};
-         const todTotal = (Number(tod.morning)||0) + (Number(tod.afternoon)||0) + (Number(tod.evening)||0) || 1;
-         const todSlots = [
-           { label:'Jutro',        icon:'🌅', key:'morning',   val: Number(tod.morning)||0,   color:'#f59e0b' },
-           { label:'Poslijepodne', icon:'☀️', key:'afternoon', val: Number(tod.afternoon)||0, color:'#2563eb' },
-           { label:'Večer',        icon:'🌙', key:'evening',   val: Number(tod.evening)||0,   color:'#7c3aed' },
-         ];
-      %>
-      <% todSlots.forEach(function(s) {
-           const pct = Math.round(s.val / todTotal * 100);
-      %>
-        <div style="margin-bottom:10px">
-          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
-            <span style="font-weight:600;color:#374151"><%= s.icon %> <%= s.label %></span>
-            <span style="color:#64748b"><%= s.val %></span>
-          </div>
-          <div style="background:#f1f5f9;border-radius:20px;height:7px;overflow:hidden">
-            <div style="width:<%= pct %>%;height:100%;background:<%= s.color %>;border-radius:20px"></div>
-          </div>
+        <div class="intent-bar-track">
+          <div class="intent-bar-fill" style="width:<%= pct %>%;background:<%= col %>"></div>
         </div>
-      <% }); %>
-    </div>
-
+      </div>
+    <% }); } %>
   </div>
+
 </main>
+
+<style>
+.ai-insights {
+  background: linear-gradient(135deg, #1e3a5f 0%, #1e40af 100%);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  margin-bottom: 22px;
+  color: #fff;
+  box-shadow: 0 4px 20px rgba(37,99,235,.2);
+}
+.ai-insights-header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 14px;
+}
+.ai-insights-empty { color: #93c5fd; font-size: 13px; margin: 0; }
+.ai-insights-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.ai-insight-item {
+  background: rgba(255,255,255,.12);
+  border-radius: 10px;
+  padding: 9px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  flex: 1;
+  min-width: 200px;
+}
+.ai-insight-icon { font-size: 17px; flex-shrink: 0; }
+
+.feat-event-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  background: #fffbeb;
+  border-radius: 10px;
+  border: 1px solid #fde68a;
+}
+.feat-event-icon { font-size: 18px; flex-shrink: 0; }
+.feat-event-body { flex: 1; min-width: 0; }
+.feat-event-title { font-weight: 700; font-size: 13px; color: var(--text); }
+.feat-event-desc {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feat-event-date {
+  font-size: 12px;
+  font-weight: 600;
+  color: #92400e;
+  background: #fef3c7;
+  padding: 3px 9px;
+  border-radius: 20px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.intent-row { margin-bottom: 12px; }
+.intent-row:last-child { margin-bottom: 0; }
+.intent-row-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.intent-row-count { color: var(--muted); font-weight: 400; }
+.intent-bar-track {
+  background: #f1f5f9;
+  border-radius: 20px;
+  height: 7px;
+  overflow: hidden;
+}
+.intent-bar-fill { height: 100%; border-radius: 20px; }
+</style>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
@@ -221,9 +280,9 @@
     }
 
     const ctx = document.getElementById('msgChart').getContext('2d');
-    const gradient = ctx.createLinearGradient(0, 0, 0, 260);
+    const gradient = ctx.createLinearGradient(0, 0, 0, 240);
     gradient.addColorStop(0,   'rgba(37,99,235,0.85)');
-    gradient.addColorStop(1,   'rgba(37,99,235,0.15)');
+    gradient.addColorStop(1,   'rgba(37,99,235,0.12)');
 
     new Chart(ctx, {
       type: 'bar',
@@ -248,27 +307,23 @@
             bodyColor: '#fff',
             padding: 10,
             cornerRadius: 8,
-            callbacks: {
-              label: ctx => ` ${ctx.parsed.y} poruka`
-            }
+            callbacks: { label: ctx => ` ${ctx.parsed.y} poruka` }
           }
         },
         scales: {
           y: {
             beginAtZero: true,
-            ticks: { precision: 0, color: '#94a3b8', font: { size: 12 } },
+            ticks: { precision: 0, color: '#94a3b8', font: { size: 11 } },
             grid: { color: '#f1f5f9', drawBorder: false }
           },
           x: {
-            ticks: { color: '#64748b', font: { size: 12 } },
+            ticks: { color: '#64748b', font: { size: 11 } },
             grid: { display: false }
           }
         }
       }
     });
   })();
-
-
 </script>
 
 <%- include('partials/foot') %>

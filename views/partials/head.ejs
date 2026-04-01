@@ -189,19 +189,19 @@
     /* ── Stat Cards ── */
     .cards {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 18px;
-      margin-bottom: 28px;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 14px;
+      margin-bottom: 24px;
     }
     .stat-card {
       background: var(--surface);
       border-radius: var(--radius);
-      padding: 22px 24px;
+      padding: 18px 20px;
       box-shadow: var(--shadow-sm);
       border: 1px solid var(--border);
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 10px;
       transition: box-shadow .2s, transform .2s;
     }
     .stat-card:hover {
@@ -214,31 +214,35 @@
       justify-content: space-between;
     }
     .stat-card .label {
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: .06em;
       color: var(--muted);
     }
     .stat-card-icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 10px;
+      width: 36px;
+      height: 36px;
+      border-radius: 9px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 18px;
+      font-size: 16px;
       flex-shrink: 0;
     }
-    .icon-blue  { background: var(--blue-light); }
-    .icon-green { background: var(--green-light); }
+    .icon-blue   { background: var(--blue-light); }
+    .icon-green  { background: var(--green-light); }
+    .icon-amber  { background: #fef3c7; }
+    .icon-purple { background: #f3e8ff; }
     .stat-card .num {
-      font-size: 40px;
+      font-size: 36px;
       font-weight: 800;
       letter-spacing: -1.5px;
       line-height: 1;
       color: var(--text);
     }
+    .stat-card .num-text { font-size: 20px; letter-spacing: -.3px; }
+    .stat-card .stat-sub { font-size: 11px; color: var(--muted); margin-top: -4px; }
 
     /* ── Table ── */
     .table-wrap {
@@ -348,43 +352,63 @@
       border-radius: 20px;
     }
 
-    /* ── Chat bubbles ── */
-    .chat { display: flex; flex-direction: column; gap: 12px; max-width: 680px; }
-    .bubble {
-      padding: 10px 15px;
-      border-radius: 14px;
-      max-width: 72%;
-      font-size: 14px;
-      line-height: 1.55;
-    }
-    .bubble.user  { background: #f1f5f9; align-self: flex-start; border-bottom-left-radius: 3px; }
-    .bubble.bot   { background: var(--blue); color: #fff; align-self: flex-end; border-bottom-right-radius: 3px; }
-    .bubble .meta { font-size: 11px; opacity: .55; margin-top: 5px; }
-    .bubble .intent-tag {
-      display: inline-block;
-      font-size: 10px;
-      font-weight: 600;
-      background: rgba(255,255,255,.2);
-      border-radius: 4px;
-      padding: 1px 6px;
-      margin-left: 6px;
-      vertical-align: middle;
-    }
-    .bubble.user .intent-tag { background: rgba(0,0,0,.06); color: var(--muted); }
-
-    /* ── Takeover bar ── */
-    .takeover-bar {
-      background: var(--surface);
-      border-radius: var(--radius);
-      padding: 16px 22px;
-      margin-bottom: 24px;
+    /* ── Item Cards (replaces tables) ── */
+    .item-list {
       display: flex;
-      align-items: center;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+    .item-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 15px 18px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
       gap: 14px;
       box-shadow: var(--shadow-sm);
-      border: 1px solid var(--border);
+      transition: box-shadow .15s;
+    }
+    .item-card:hover { box-shadow: var(--shadow-md); }
+    .item-card-body { flex: 1; min-width: 0; }
+    .item-card-title {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text);
+      margin-bottom: 5px;
+      line-height: 1.4;
+    }
+    .item-card-meta {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .item-card-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
       flex-wrap: wrap;
     }
+
+    /* ── Tags ── */
+    .tag {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 20px;
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+    .tag-amber  { background: #fef3c7; color: #92400e; }
+    .tag-blue   { background: var(--blue-light); color: var(--blue); }
+    .tag-green  { background: var(--green-light); color: var(--green); }
+    .tag-gray   { background: #f1f5f9; color: var(--muted); }
+
+    /* ── Badges ── */
     .badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; }
     .badge-on  { background: var(--green-light); color: var(--green); }
     .badge-off { background: var(--red-light);   color: var(--red); }
@@ -445,14 +469,17 @@
       .sidebar-nav.open { display: flex; }
       .sidebar-footer { display: none; }
       .sidebar-footer.open { display: block; }
-      .content { padding: 16px 18px; }
+      .content { padding: 16px 16px; }
       .cards { grid-template-columns: 1fr 1fr; }
-      .bubble { max-width: 88%; }
       .form-row { flex-direction: column; }
       .login-box { margin: 16px; padding: 32px 24px; }
+      .item-card { flex-direction: column; }
+      .item-card-actions { width: 100%; justify-content: flex-start; }
+      .btn-sm { padding: 8px 14px; font-size: 13px; }
     }
-    @media (max-width: 480px) {
-      .cards { grid-template-columns: 1fr; }
+    @media (max-width: 400px) {
+      .cards { grid-template-columns: 1fr 1fr; }
+      .item-card-actions .btn { flex: 1; justify-content: center; }
     }
   </style>
 </head>

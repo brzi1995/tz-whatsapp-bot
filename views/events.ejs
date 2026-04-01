@@ -1,4 +1,4 @@
-<%- include('partials/head', { title: 'Dogadaji' }) %>
+<%- include('partials/head', { title: 'Događaji' }) %>
 <%- include('partials/sidebar', { activePage: 'events' }) %>
 
 <main class="content">
@@ -20,14 +20,15 @@
           <input type="date" name="date">
         </div>
       </div>
-      <label>Lokacija</label>
+      <label>Lokacija (link)</label>
       <input type="text" name="location_link" placeholder="Npr. https://osm.org/...">
       <label>Opis</label>
       <textarea name="description" rows="2" placeholder="Kratki opis događaja..."></textarea>
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-        <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;margin:0">
-          <input type="checkbox" name="featured" value="1" style="width:auto;margin:0;accent-color:var(--blue)">
-          ⭐ Istakni događaj <span style="font-size:12px;font-weight:400;color:var(--muted)">(bot ga šalje kao prioritet)</span>
+      <div class="add-form-footer">
+        <label class="feat-check">
+          <input type="checkbox" name="featured" value="1">
+          ⭐ Istakni događaj
+          <span class="feat-check-hint">(bot ga šalje kao prioritet)</span>
         </label>
         <button type="submit" class="btn btn-primary">Dodaj događaj</button>
       </div>
@@ -37,52 +38,64 @@
   <% if (events.length === 0) { %>
     <div class="empty">Nema događaja. Dodajte prvi gore.</div>
   <% } else { %>
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Naziv</th>
-          <th>Datum</th>
-          <th>Istaknuto</th>
-          <th>Lokacija</th>
-          <th>Opis</th>
-          <th style="width:150px">Akcije</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% events.forEach(function(ev) {
-          const dateStr = ev.date ? new Date(ev.date).toLocaleDateString('hr-HR') : '—';
-        %>
-        <tr style="<%= ev.featured ? 'background:#fffdf5' : '' %>">
-          <td>
-            <strong><%= ev.title %></strong>
+    <div class="item-list">
+      <% events.forEach(function(ev) {
+           const dateStr = ev.date ? new Date(ev.date).toLocaleDateString('hr-HR', { day:'numeric', month:'long', year:'numeric' }) : null;
+      %>
+      <div class="item-card">
+        <div class="item-card-body">
+          <div class="item-card-title">
+            <%= ev.title %>
             <% if (ev.featured) { %>
-            <span style="display:inline-block;margin-left:7px;font-size:10px;font-weight:700;background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:20px;vertical-align:middle">🔥 Izdvojeno</span>
+              <span class="tag tag-amber" style="margin-left:6px">⭐ Izdvojeno</span>
             <% } %>
-          </td>
-          <td style="white-space:nowrap;color:#64748b"><%= dateStr %></td>
-          <td>
-            <form method="POST" action="/admin/events/<%= ev.id %>/toggle-featured" style="display:inline">
-              <button type="submit" class="btn btn-sm" title="<%= ev.featured ? 'Ukloni isticanje' : 'Istakni ovaj događaj' %>"
-                      style="background:<%= ev.featured ? '#fef3c7' : '#f1f5f9' %>;color:<%= ev.featured ? '#d97706' : '#94a3b8' %>;border:1px solid <%= ev.featured ? '#fde68a' : '#e2e8f0' %>">
-                <%= ev.featured ? '⭐' : '☆' %>
-              </button>
-            </form>
-          </td>
-          <td style="color:#64748b"><%= ev.location_link ? '<a href="' + ev.location_link + '" target="_blank">Link</a>' : '—' %></td>
-          <td style="color:#64748b;max-width:240px;word-break:break-word"><%= ev.description || '—' %></td>
-          <td>
-            <a href="/admin/events/<%= ev.id %>/edit" class="btn btn-secondary btn-sm">Uredi</a>
-            <form method="POST" action="/admin/events/<%= ev.id %>/delete" style="display:inline" onsubmit="return confirm('Obrisati ovaj događaj?')">
-              <button type="submit" class="btn btn-danger btn-sm">Briši</button>
-            </form>
-          </td>
-        </tr>
-        <% }); %>
-      </tbody>
-    </table>
-  </div>
+          </div>
+          <div class="item-card-meta">
+            <% if (dateStr) { %>📅 <%= dateStr %><% } %>
+            <% if (ev.location_link) { %> &nbsp;·&nbsp; <a href="<%= ev.location_link %>" target="_blank" style="color:var(--blue);text-decoration:none">📍 Lokacija</a><% } %>
+            <% if (ev.description) { %><br><%= ev.description %><% } %>
+          </div>
+        </div>
+        <div class="item-card-actions">
+          <form method="POST" action="/admin/events/<%= ev.id %>/toggle-featured">
+            <button type="submit" class="btn btn-sm" style="background:<%= ev.featured ? '#fef3c7' : '#f1f5f9' %>;color:<%= ev.featured ? '#d97706' : '#94a3b8' %>;border:1px solid <%= ev.featured ? '#fde68a' : 'var(--border)' %>">
+              <%= ev.featured ? '⭐' : '☆' %>
+            </button>
+          </form>
+          <a href="/admin/events/<%= ev.id %>/edit" class="btn btn-secondary btn-sm">Uredi</a>
+          <form method="POST" action="/admin/events/<%= ev.id %>/delete" onsubmit="return confirm('Obrisati ovaj događaj?')">
+            <button type="submit" class="btn btn-danger btn-sm">Briši</button>
+          </form>
+        </div>
+      </div>
+      <% }); %>
+    </div>
   <% } %>
 </main>
+
+<style>
+.add-form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 4px;
+}
+.feat-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  margin: 0;
+}
+.feat-check input[type="checkbox"] { width: auto; margin: 0; accent-color: var(--blue); }
+.feat-check-hint { font-size: 12px; font-weight: 400; color: var(--muted); }
+</style>
 
 <%- include('partials/foot') %>
