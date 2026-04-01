@@ -299,13 +299,21 @@ router.post('/webhook', async (req, res) => {
 
     // 3.5. Fetch current user state (takeover flag, opt-in state)
     let currentUser = null;
-    try { currentUser = await getWhatsappUser(tenant.id, userPhone); } catch (_) {}
+    try {
+      currentUser = await getWhatsappUser(tenant.id, userPhone);
+    } catch (userErr) {
+      console.error("[webhook] getWhatsappUser failed:", userErr.message);
+    }
 
-    // 4. PER-USER TAKEOVER CHECK
-    console.log("TAKEOVER CHECK:", currentUser?.human_takeover);
+    if (currentUser === null) {
+      console.warn("[webhook] currentUser is null — user not found or DB error for:", userPhone);
+    }
+
+    // 4. PER-USER TAKEOVER CHECK — must run before ANY AI or response logic
+    console.log("TAKEOVER STATUS:", currentUser?.human_takeover);
 
     if (Number(currentUser?.human_takeover) === 1) {
-      console.log("BOT BLOCKED - HUMAN TAKEOVER ACTIVE");
+      console.log("TAKEOVER ACTIVE - BOT BLOCKED");
       return res.send(emptyTwiml());
     }
 
