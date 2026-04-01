@@ -37,7 +37,7 @@ async function runOptInOutreach() {
             }
             const optInMsg = msgCache.get(lang);
 
-            await sendMessage(user.phone, tenant.phone_number, optInMsg);
+            await sendMessage('whatsapp:' + user.phone, tenant.phone_number, optInMsg);
             await pool.query(
               'UPDATE users SET asked_opt_in = 1 WHERE tenant_id = ? AND phone = ?',
               [tenant.id, user.phone]

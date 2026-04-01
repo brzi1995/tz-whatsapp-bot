@@ -302,8 +302,10 @@ router.post('/webhook', async (req, res) => {
     try { currentUser = await getWhatsappUser(tenant.id, userPhone); } catch (_) {}
 
     // 4. PER-USER TAKEOVER CHECK
-    if (currentUser && Number(currentUser.human_takeover) === 1) {
-      console.log(`[webhook] takeover active for ${userPhone} — bot suppressed`);
+    console.log("TAKEOVER CHECK:", currentUser?.human_takeover);
+
+    if (Number(currentUser?.human_takeover) === 1) {
+      console.log("BOT BLOCKED - HUMAN TAKEOVER ACTIVE");
       return res.send(emptyTwiml());
     }
 

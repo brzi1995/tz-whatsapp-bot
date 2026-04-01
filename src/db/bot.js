@@ -1,6 +1,17 @@
 const pool = require('./index');
 
 /**
+ * Normalize phone to plain +385... format — strips whatsapp: prefix,
+ * decodes %2B encoding, and trims whitespace.
+ * All users-table queries must go through this.
+ */
+function normalizePhone(phone) {
+  return decodeURIComponent(String(phone || ''))
+    .replace('whatsapp:', '')
+    .trim();
+}
+
+/**
  * Log an inbound user message to the messages table.
  * lang is detected upstream by parseMessage() and passed in.
  * @param {number} tenantId
@@ -260,11 +271,13 @@ async function getEventsFormatted(tenantId, period, lang) {
  * Insert a new user or update last_message_at on every inbound message.
  */
 async function upsertWhatsappUser(tenantId, phone) {
+  const clean = normalizePhone(phone);
+  console.log("RAW PHONE:", phone, "LOOKUP PHONE:", clean);
   await pool.query(
     `INSERT INTO users (tenant_id, phone, last_message_at)
      VALUES (?, ?, NOW())
      ON DUPLICATE KEY UPDATE last_message_at = NOW()`,
-    [tenantId, phone]
+    [tenantId, clean]
   );
 }
 
@@ -272,9 +285,11 @@ async function upsertWhatsappUser(tenantId, phone) {
  * Return { opt_in, asked_opt_in, human_takeover } for the user, or null if not found.
  */
 async function getWhatsappUser(tenantId, phone) {
+  const clean = normalizePhone(phone);
+  console.log("RAW PHONE:", phone, "LOOKUP PHONE:", clean);
   const [rows] = await pool.query(
     'SELECT opt_in, asked_opt_in, human_takeover, awaiting_human_confirmation FROM users WHERE tenant_id = ? AND phone = ?',
-    [tenantId, phone]
+    [tenantId, clean]
   );
   return (rows && rows[0]) || null;
 }
@@ -283,9 +298,10 @@ async function getWhatsappUser(tenantId, phone) {
  * Set opt_in = value (1 or 0) for the user.
  */
 async function setOptIn(tenantId, phone, value) {
+  const clean = normalizePhone(phone);
   await pool.query(
     'UPDATE users SET opt_in = ? WHERE tenant_id = ? AND phone = ?',
-    [value, tenantId, phone]
+    [value, tenantId, clean]
   );
 }
 
@@ -294,24 +310,27 @@ async function setOptIn(tenantId, phone, value) {
  * Affects ONLY this user — all other users on the tenant continue using the bot.
  */
 async function setUserTakeover(tenantId, phone, value) {
+  const clean = normalizePhone(phone);
   await pool.query(
     'UPDATE users SET human_takeover = ? WHERE tenant_id = ? AND phone = ?',
-    [value, tenantId, phone]
+    [value, tenantId, clean]
   );
-  console.log(`[bot] per-user takeover set to ${value} for ${phone} on tenant ${tenantId}`);
+  console.log(`[bot] per-user takeover set to ${value} for ${clean} on tenant ${tenantId}`);
 }
 
 async function setAwaitingConfirmation(tenantId, phone, value) {
+  const clean = normalizePhone(phone);
   await pool.query(
     'UPDATE users SET awaiting_human_confirmation = ? WHERE tenant_id = ? AND phone = ?',
-    [value, tenantId, phone]
+    [value, tenantId, clean]
   );
 }
 
 async function getLastUserLang(tenantId, phone) {
+  const clean = normalizePhone(phone);
   const [rows] = await pool.query(
-    'SELECT lang FROM messages WHERE tenant_id = ? AND user_phone = ? ORDER BY created_at DESC LIMIT 1',
-    [tenantId, phone]
+    "SELECT lang FROM messages WHERE tenant_id = ? AND REPLACE(user_phone, 'whatsapp:', '') = ? ORDER BY created_at DESC LIMIT 1",
+    [tenantId, clean]
   );
   return (rows && rows[0] && rows[0].lang) || 'en';
 }

@@ -113,6 +113,25 @@
   const chatEl = document.getElementById('chat-messages');
   if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
 
+  // Poll for new messages every 3 seconds
+  const pollPhone = '<%= encodeURIComponent((userPhone || "").replace("whatsapp:", "")) %>';
+
+  setInterval(() => {
+    fetch(`/admin/conversations/${pollPhone}`)
+      .then(res => res.text())
+      .then(html => {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const newMessages = doc.getElementById('chat-messages');
+        const current = document.getElementById('chat-messages');
+        if (!newMessages || !current) return;
+        const atBottom = current.scrollHeight - current.scrollTop - current.clientHeight < 50;
+        current.innerHTML = newMessages.innerHTML;
+        if (atBottom) current.scrollTop = current.scrollHeight;
+      })
+      .catch(() => {}); // silent — don't spam console on network blip
+  }, 3000);
+
   // Track current state — seeded from server render
   let takeoverActive = <%= takeover ? 'true' : 'false' %>;
 
