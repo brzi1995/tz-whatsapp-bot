@@ -14,6 +14,7 @@ async function runOptInOutreach() {
         const [users] = await pool.query(
           `SELECT phone FROM users
            WHERE tenant_id = ? AND opt_in = 0 AND asked_opt_in = 0
+           AND human_takeover = 0
            AND last_message_at < NOW() - INTERVAL 5 MINUTE`,
           [tenant.id]
         );

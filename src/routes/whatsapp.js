@@ -347,6 +347,12 @@ router.post('/webhook', async (req, res) => {
     }
 
     // 5. GENERATE RESPONSE — AI called for every non-takeover message
+    console.log("AI ENTRY - TAKEOVER:", currentUser?.human_takeover);
+    if (Number(currentUser?.human_takeover) === 1) {
+      console.log("BLOCKED AI - TAKEOVER ACTIVE");
+      return res.send(emptyTwiml());
+    }
+
     const model = tenant.openai_model;
     console.log(`[webhook] AI CALLED — "${trimmedMsg}"`);
     const { lang, intent, response: aiResponse } = await parseMessage(trimmedMsg, tenant.system_prompt, model);
