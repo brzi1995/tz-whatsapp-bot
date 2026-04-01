@@ -273,12 +273,25 @@ async function getEventsFormatted(tenantId, period, lang) {
 async function upsertWhatsappUser(tenantId, phone) {
   const clean = normalizePhone(phone);
   console.log("RAW PHONE:", phone, "LOOKUP PHONE:", clean);
-  await pool.query(
-    `INSERT INTO users (tenant_id, phone, last_message_at)
-     VALUES (?, ?, NOW())
-     ON DUPLICATE KEY UPDATE last_message_at = NOW()`,
-    [tenantId, clean]
+
+  // Update existing row by normalized phone — handles both stored formats
+  // (whatsapp:+385... and +385...) without touching human_takeover
+  const [result] = await pool.query(
+    `UPDATE users SET phone = ?, last_message_at = NOW()
+     WHERE tenant_id = ? AND REPLACE(phone, 'whatsapp:', '') = ?`,
+    [clean, tenantId, clean]
   );
+
+  console.log("USER UPDATE:", clean, "affectedRows:", result.affectedRows);
+
+  if (result.affectedRows === 0) {
+    // No existing row — insert fresh (new user, human_takeover defaults to 0)
+    await pool.query(
+      `INSERT INTO users (tenant_id, phone, last_message_at) VALUES (?, ?, NOW())`,
+      [tenantId, clean]
+    );
+    console.log("USER INSERT (new):", clean);
+  }
 }
 
 /**
