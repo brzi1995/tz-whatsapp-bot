@@ -377,12 +377,37 @@ async function setUserTakeover(tenantId, phone, value) {
 
 async function setAwaitingConfirmation(tenantId, phone, value) {
   const clean = normalizePhone(phone);
-  console.log("RAW PHONE:", phone);
-  console.log("NORMALIZED PHONE:", clean);
   await pool.query(
     'UPDATE users_chat SET awaiting_human_confirmation = ? WHERE tenant_id = ? AND phone = ?',
     [value, tenantId, clean]
   );
+}
+
+/**
+ * Set asked_opt_in flag (1 = waiting for da/ne, 0 = not waiting).
+ */
+async function setAskedOptIn(tenantId, phone, value) {
+  const clean = normalizePhone(phone);
+  await pool.query(
+    'UPDATE users_chat SET asked_opt_in = ? WHERE tenant_id = ? AND phone = ?',
+    [value, tenantId, clean]
+  );
+}
+
+/**
+ * Store the detected language on the user record.
+ */
+async function setUserLang(tenantId, phone, lang) {
+  const clean = normalizePhone(phone);
+  try {
+    await pool.query(
+      'UPDATE users_chat SET language = ? WHERE tenant_id = ? AND phone = ?',
+      [lang, tenantId, clean]
+    );
+  } catch (err) {
+    // Column may not exist yet — migration runs on startup, ignore silently
+    console.warn('[bot] setUserLang error (column may be missing):', err.message);
+  }
 }
 
 async function getLastUserLang(tenantId, phone) {
@@ -394,4 +419,4 @@ async function getLastUserLang(tenantId, phone) {
   return (rows && rows[0] && rows[0].lang) || 'en';
 }
 
-module.exports = { normalizePhone, logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, detectLang, detectEventPeriod, getEventsFormatted, upsertWhatsappUser, getWhatsappUser, setOptIn, setUserTakeover, setAwaitingConfirmation, getLastUserLang };
+module.exports = { normalizePhone, logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, detectLang, detectEventPeriod, getEventsFormatted, upsertWhatsappUser, getWhatsappUser, setOptIn, setUserTakeover, setAwaitingConfirmation, setAskedOptIn, setUserLang, getLastUserLang };

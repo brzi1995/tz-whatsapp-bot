@@ -48,8 +48,10 @@ try {
     pool.query('ALTER TABLE faq ADD COLUMN IF NOT EXISTS link_url VARCHAR(500) DEFAULT NULL')
       .catch(err => console.warn('[migration] faq.link_url:', err.message));
     pool.query('ALTER TABLE faq ADD COLUMN IF NOT EXISTS link_image VARCHAR(500) DEFAULT NULL')
-      .then(() => console.log('[migration] all columns ensured'))
       .catch(err => console.warn('[migration] faq.link_image:', err.message));
+    pool.query('ALTER TABLE users_chat ADD COLUMN IF NOT EXISTS language VARCHAR(5) DEFAULT NULL')
+      .then(() => console.log('[migration] all columns ensured'))
+      .catch(err => console.warn('[migration] users_chat.language:', err.message));
   });
 
   module.exports = app;

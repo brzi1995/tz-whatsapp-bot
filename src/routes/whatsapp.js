@@ -2,114 +2,84 @@ const express = require('express');
 const router = express.Router();
 const { getTenant, getMessages, saveMessages } = require('../db/sessions');
 const { parseMessage } = require('../services/openai');
-const { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, upsertWhatsappUser, getWhatsappUser, setOptIn, detectLang } = require('../db/bot');
+const { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, upsertWhatsappUser, getWhatsappUser, setOptIn, setAskedOptIn, setUserLang, detectLang } = require('../db/bot');
 
 /**
- * Returns true when the message is plausibly tourism/destination-related.
- * Runs BEFORE any DB or AI work — pure in-memory check.
- * Blocks spam, math expressions, and completely off-topic messages.
+ * Blocks obvious spam only — math expressions and pure gibberish.
+ * Everything else is passed to AI so the bot stays helpful.
  */
-function isRelevantQuestion(message) {
+function isSpam(message) {
   const lower = message.toLowerCase().trim();
-
-  // Opt-in confirmations always pass (they answer a bot-initiated yes/no)
-  if (lower === 'da' || lower === 'ne') return true;
-
-  // Block math expressions (e.g. "2+2", "100/4", "x=5")
-  if (/\d\s*[+\-*/=]\s*\d/.test(lower)) return false;
-
-  // Block gibberish: longer than 4 chars with no vowels at all
+  if (/\d\s*[+\-*/=]\s*\d/.test(lower)) return true;
   const lettersOnly = lower.replace(/[^a-zčćšžđ]/g, '');
-  if (lettersOnly.length > 4 && !/[aeiouaeiou]/.test(lettersOnly)) return false;
-
-  // Tourism keywords, question words, greetings — any match is enough
-  const RELEVANT_KEYWORDS = [
-    // Destination
-    'brela', 'brelu', 'brelima',
-    // Beach / sea
-    'beach', 'plaža', 'plaži', 'plažu', 'more', 'sea', 'swim', 'kupanje',
-    // Food / drink
-    'restoran', 'restaurant', 'food', 'jelo', 'hrana', 'kava', 'coffee', 'bar', 'cafe',
-    // Getting around
-    'parking', 'prijevoz', 'bus', 'taxi', 'rent', 'najam', 'bicikl', 'bike',
-    // Accommodation
-    'hotel', 'apartman', 'smještaj', 'accommodation',
-    // Activities / events
-    'aktivnost', 'activities', 'event', 'događaj', 'izlet', 'excursion', 'tour',
-    // Practical
-    'atm', 'bankomat', 'wifi', 'ljekarna', 'pharmacy', 'doktor', 'doctor',
-    // Weather
-    'weather', 'vrijeme', 'prognoza', 'forecast', 'temperatura', 'temperature',
-    // Question words (multilingual)
-    'gdje', 'what', 'where', 'how', 'when', 'kada', 'koliko', 'ima',
-    'wie', 'wo', 'wann', 'dove', 'quando', 'où', 'quand', 'comment',
-    // Greetings (so bot can introduce itself)
-    'hello', 'hi', 'hey', 'bok', 'hej', 'zdravo', 'hallo', 'ciao', 'bonjour',
-    'dobar', 'dobro', 'salut',
-  ];
-
-  return RELEVANT_KEYWORDS.some(kw => lower.includes(kw));
+  if (lettersOnly.length > 4 && !/[aeiou]/.test(lettersOnly)) return true;
+  return false;
 }
 
-const NOT_RELEVANT_MSG = {
-  hr: 'Nisam siguran da sam razumio pitanje. Možeš pitati o plažama, parkingu, restoranima ili aktivnostima u Brelima 😊',
-  en: "I'm not sure I understood. You can ask about beaches, parking, restaurants, or activities in Brela 😊",
-  de: 'Ich bin nicht sicher, ob ich die Frage verstanden habe. Sie können nach Stränden, Parken, Restaurants oder Aktivitäten in Brela fragen 😊',
-  it: 'Non sono sicuro di aver capito. Puoi chiedere di spiagge, parcheggi, ristoranti o attività a Brela 😊',
-  fr: "Je ne suis pas sûr d'avoir compris. Vous pouvez demander des informations sur les plages, le parking, les restaurants ou les activités à Brela 😊",
-  sv: 'Jag är inte säker på att jag förstod frågan. Du kan fråga om stränder, parkering, restauranger eller aktiviteter i Brela 😊',
-  no: 'Jeg er ikke sikker på at jeg forstod spørsmålet. Du kan spørre om strender, parkering, restauranter eller aktiviteter i Brela 😊',
-  cs: 'Nejsem si jistý, že jsem otázce rozuměl. Můžete se ptát na pláže, parkování, restaurace nebo aktivity v Brele 😊',
-};
-function notRelevantReply(lang) {
-  return NOT_RELEVANT_MSG[lang] || NOT_RELEVANT_MSG.hr;
-}
-
-// Pure acknowledgements that need no reply
+// Pure acknowledgements — no reply needed
 const TRIVIAL = new Set([
   'ok', 'okay', 'k', 'yes', 'no', 'yep', 'nope', 'thanks', 'thx', 'ty', 'np',
-  'da', 'ne', 'hvala',
-  'nein', 'danke',
-  'si', 'grazie',
-  'non', 'merci',
+  'hvala', 'nein', 'danke', 'si', 'grazie', 'non', 'merci',
 ]);
 
-// Greetings — handled with a fixed intro reply, no AI call needed
+// Greetings — short messages only (≤3 words), handled without AI
 const GREETING_WORDS = [
   'hello', 'hi', 'hey', 'bok', 'hej', 'zdravo', 'hallo', 'ciao',
-  'bonjour', 'salut', 'dobar dan', 'guten tag', 'buongiorno', 'buenas',
+  'bonjour', 'salut', 'buenas', 'buongiorno', 'dobar dan', 'guten tag',
 ];
 function isGreeting(msg) {
-  const lower = msg.toLowerCase().trim();
-  return GREETING_WORDS.some(w => lower === w || lower.startsWith(w + ' ') || lower.startsWith(w + '!') || lower.startsWith(w + ','));
+  const lower = msg.toLowerCase().trim().replace(/[!?.,]*$/, '');
+  if (lower.split(/\s+/).length > 3) return false; // "hello where is parking" → not greeting
+  return GREETING_WORDS.some(w => lower === w || lower.startsWith(w));
 }
 const GREETING_MSG = {
-  hr: 'Bok! 👋 Ja sam turistički asistent. Mogu ti pomoći s informacijama o plažama, parkingu, restoranima i aktivnostima. Kako mogu pomoći?',
-  en: "Hello! 👋 I'm your tourist assistant. I can help you with beaches, parking, restaurants, and activities. How can I help?",
-  de: 'Hallo! 👋 Ich bin Ihr Touristenassistent. Ich kann Ihnen bei Stränden, Parken, Restaurants und Aktivitäten helfen. Wie kann ich helfen?',
-  it: 'Ciao! 👋 Sono il vostro assistente turistico. Posso aiutarvi con spiagge, parcheggi, ristoranti e attività. Come posso aiutare?',
-  fr: 'Bonjour! 👋 Je suis votre assistant touristique. Je peux vous aider avec les plages, le stationnement, les restaurants et les activités. Comment puis-je aider?',
-  sv: 'Hej! 👋 Jag är din turistassistent. Jag kan hjälpa dig med stränder, parkering, restauranger och aktiviteter. Hur kan jag hjälpa?',
-  no: 'Hei! 👋 Jeg er din turistassistent. Jeg kan hjelpe deg med strender, parkering, restauranter og aktiviteter. Hvordan kan jeg hjelpe?',
-  cs: 'Ahoj! 👋 Jsem váš turistický asistent. Mohu vám pomoci s plážemi, parkováním, restauracemi a aktivitami. Jak mohu pomoci?',
+  hr: 'Pozdrav! Ja sam vaš turistički asistent za Brela 😊\nMogu pomoći s plažama, parkingom, restoranima i događajima.',
+  en: "Hello! I'm your tourist assistant for Brela 😊\nI can help with beaches, parking, restaurants, and events.",
+  de: 'Hallo! Ich bin Ihr Touristenassistent für Brela 😊\nIch helfe gerne bei Stränden, Parken, Restaurants und Veranstaltungen.',
+  it: 'Ciao! Sono il vostro assistente turistico per Brela 😊\nPosso aiutare con spiagge, parcheggi, ristoranti ed eventi.',
+  fr: 'Bonjour! Je suis votre assistant touristique pour Brela 😊\nJe peux vous aider avec les plages, le parking, les restaurants et les événements.',
+  sv: 'Hej! Jag är din turistassistent för Brela 😊\nJag kan hjälpa dig med stränder, parkering, restauranger och evenemang.',
+  no: 'Hei! Jeg er din turistassistent for Brela 😊\nJeg kan hjelpe med strender, parkering, restauranter og arrangementer.',
+  cs: 'Ahoj! Jsem váš turistický asistent pro Brela 😊\nMohu pomoci s plážemi, parkováním, restauracemi a akcemi.',
 };
-function greetingReply(lang) {
-  return GREETING_MSG[lang] || GREETING_MSG.hr;
-}
+function greetingReply(lang) { return GREETING_MSG[lang] || GREETING_MSG.hr; }
 
+// Final fallback — used when AI returns nothing useful and for spam
 const FALLBACK_MSG = {
-  hr: 'Nisam siguran da sam razumio. Pokušaj pitati na drugi način 😊',
-  en: "I'm not sure I understood. Try asking differently 😊",
-  de: 'Ich bin nicht sicher, ob ich verstanden habe. Versuche es anders zu fragen 😊',
-  it: 'Non sono sicuro di aver capito. Prova a chiedere in modo diverso 😊',
-  fr: "Je ne suis pas sûr d'avoir compris. Essaie de reformuler ta question 😊",
-  sv: 'Jag är inte säker på att jag förstod. Försök fråga på ett annat sätt 😊',
-  no: 'Jeg er ikke sikker på at jeg forstod. Prøv å spørre på en annen måte 😊',
-  cs: 'Nejsem si jistý, že jsem rozuměl. Zkuste se zeptat jinak 😊',
+  hr: 'Nisam siguran da sam razumio 🤔\nMožeš pitati o plažama, parkingu, restoranima ili događajima.',
+  en: "I'm not sure I understood 🤔\nYou can ask about beaches, parking, restaurants, or events.",
+  de: 'Ich bin mir nicht sicher, ob ich das verstanden habe 🤔\nSie können nach Stränden, Parken, Restaurants oder Veranstaltungen fragen.',
+  it: 'Non sono sicuro di aver capito 🤔\nPuoi chiedere di spiagge, parcheggi, ristoranti o eventi.',
+  fr: "Je ne suis pas sûr d'avoir compris 🤔\nVous pouvez demander des informations sur les plages, le parking, les restaurants ou les événements.",
+  sv: 'Jag är inte säker på att jag förstod 🤔\nDu kan fråga om stränder, parkering, restauranger eller evenemang.',
+  no: 'Jeg er ikke sikker på at jeg forstod 🤔\nDu kan spørre om strender, parkering, restauranter eller arrangementer.',
+  cs: 'Nejsem si jistý, že jsem rozuměl 🤔\nMůžete se ptát na pláže, parkování, restaurace nebo akce.',
 };
-function fallbackReply(lang) {
-  return FALLBACK_MSG[lang] || FALLBACK_MSG.hr;
-}
+function fallbackReply(lang) { return FALLBACK_MSG[lang] || FALLBACK_MSG.hr; }
+
+// Consent prompt — sent after a few exchanges if user hasn't opted in/out yet
+const CONSENT_ASK = {
+  hr: 'Želiš li primati obavijesti o događajima u Brelima?\nOdgovori s DA ili NE 😊',
+  en: 'Would you like to receive notifications about events in Brela?\nReply with DA or NE 😊',
+  de: 'Möchten Sie Benachrichtigungen über Veranstaltungen in Brela erhalten?\nAntworten Sie mit DA oder NE 😊',
+  it: 'Vuoi ricevere notifiche sugli eventi a Brela?\nRispondi con DA o NE 😊',
+  fr: 'Souhaitez-vous recevoir des notifications sur les événements à Brela?\nRépondez avec DA ou NE 😊',
+  sv: 'Vill du ta emot notiser om evenemang i Brela?\nSvara med DA eller NE 😊',
+  no: 'Vil du motta varsler om arrangementer i Brela?\nSvar med DA eller NE 😊',
+  cs: 'Chcete dostávat oznámení o akcích v Brele?\nOdpovězte DA nebo NE 😊',
+};
+
+// Invalid reply while awaiting consent
+const CONSENT_INVALID = {
+  hr: 'Molim odgovorite s DA ili NE.',
+  en: 'Please reply with DA or NE.',
+  de: 'Bitte antworten Sie mit DA oder NE.',
+  it: 'Per favore rispondi con DA o NE.',
+  fr: 'Veuillez répondre avec DA ou NE.',
+  sv: 'Svara med DA eller NE.',
+  no: 'Svar med DA eller NE.',
+  cs: 'Odpovězte prosím DA nebo NE.',
+};
 
 const OPT_IN_CONFIRM = {
   hr: 'Super! Obavijestit ćemo te o događajima 🎉',
@@ -300,8 +270,16 @@ function twimlWithFaqLink(text, linkTitle, linkUrl, imageUrl) {
   return twiml(text);
 }
 
+/** Send two sequential WhatsApp messages in one TwiML response. */
+function twimlDouble(first, second) {
+  return `<?xml version="1.0" encoding="UTF-8"?><Response>` +
+    `<Message>${escapeXml(first)}</Message>` +
+    `<Message>${escapeXml(second)}</Message>` +
+    `</Response>`;
+}
+
 function emptyTwiml() {
-  return '<?xml version="1.0" encoding="UTF-8\"?><Response></Response>';
+  return '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
 }
 
 router.post('/webhook', async (req, res) => {
@@ -333,7 +311,7 @@ router.post('/webhook', async (req, res) => {
     // 3. Upsert user — ensure record exists before any per-user checks
     try { await upsertWhatsappUser(tenant.id, userPhone); } catch (_) {}
 
-    // 3.5. Fetch current user state (opt-in state)
+    // 3.5. Fetch current user state
     let currentUser = null;
     try {
       currentUser = await getWhatsappUser(tenant.id, userPhone);
@@ -341,40 +319,49 @@ router.post('/webhook', async (req, res) => {
       console.error("[webhook] getWhatsappUser failed:", userErr.message);
     }
 
-    // 4. Opt-in consent (da/ne in response to notification offer)
-    if ((lowerMsg === 'da' || lowerMsg === 'ne') && currentUser && currentUser.asked_opt_in) {
-      const optIn = lowerMsg === 'da' ? 1 : 0;
-      const msgLang = detectLang(trimmedMsg);
-      try {
-        await setOptIn(tenant.id, userPhone, optIn);
-        await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', msgLang);
-      } catch (optErr) {
-        console.error('[webhook] opt-in error:', optErr.message);
+    // Use stored language as default, fall back to keyword detection for this message
+    const msgLang = detectLang(trimmedMsg) || currentUser?.language || 'hr';
+
+    // 4. CONSENT GATE — highest priority when we're waiting for a da/ne reply
+    if (currentUser && Number(currentUser.asked_opt_in) === 1) {
+      if (lowerMsg === 'da') {
+        await setOptIn(tenant.id, userPhone, 1);
+        await setAskedOptIn(tenant.id, userPhone, 0);
+        await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', msgLang).catch(() => {});
+        console.log('[webhook] FINAL RESPONSE SENT — consent: opted in');
+        return res.send(twiml(OPT_IN_CONFIRM[msgLang] || OPT_IN_CONFIRM.hr));
+      } else if (lowerMsg === 'ne') {
+        await setOptIn(tenant.id, userPhone, 0);
+        await setAskedOptIn(tenant.id, userPhone, 0);
+        await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', msgLang).catch(() => {});
+        console.log('[webhook] FINAL RESPONSE SENT — consent: opted out');
+        return res.send(twiml(OPT_OUT_CONFIRM[msgLang] || OPT_OUT_CONFIRM.hr));
+      } else {
+        // Not a valid answer — remind and wait for next message
+        console.log('[webhook] FINAL RESPONSE SENT — consent: invalid reply');
+        return res.send(twiml(CONSENT_INVALID[msgLang] || CONSENT_INVALID.hr));
       }
-      const reply = optIn ? (OPT_IN_CONFIRM[msgLang] || OPT_IN_CONFIRM.hr) : (OPT_OUT_CONFIRM[msgLang] || OPT_OUT_CONFIRM.hr);
-      console.log('[webhook] FINAL RESPONSE SENT — opt-in');
-      return res.send(twiml(reply));
     }
 
-    // 5. Greeting — fast reply without AI
+    // 5. Greeting — fast static reply, no AI call
     if (isGreeting(trimmedMsg)) {
-      const msgLang = detectLang(trimmedMsg);
-      try { await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', msgLang); } catch (_) {}
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', msgLang).catch(() => {});
+      await setUserLang(tenant.id, userPhone, msgLang).catch(() => {});
       console.log(`[webhook] FINAL RESPONSE SENT — greeting (${msgLang})`);
       return res.send(twiml(greetingReply(msgLang)));
     }
 
     // 6. Trivial acknowledgements — no reply needed
     if (trimmedMsg.length < 2 || TRIVIAL.has(lowerMsg)) {
-      console.log(`[webhook] FINAL RESPONSE SENT — trivial (empty)`);
+      console.log('[webhook] FINAL RESPONSE SENT — trivial (empty)');
       return res.send(emptyTwiml());
     }
 
-    // 7. RELEVANCE GATE — blocks spam/nonsense before FAQ, AI, or events logic
-    if (!isRelevantQuestion(trimmedMsg)) {
-      const gateLang = detectLang(trimmedMsg);
-      console.log(`[webhook] BLOCKED — irrelevant message: "${trimmedMsg.slice(0, 60)}"`);
-      return res.send(twiml(notRelevantReply(gateLang)));
+    // 7. Spam filter — math and pure gibberish only; everything else reaches AI
+    if (isSpam(trimmedMsg)) {
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', msgLang).catch(() => {});
+      console.log(`[webhook] BLOCKED — spam: "${trimmedMsg.slice(0, 40)}"`);
+      return res.send(twiml(fallbackReply(msgLang)));
     }
 
     const model = tenant.openai_model;
@@ -406,6 +393,9 @@ router.post('/webhook', async (req, res) => {
     );
     console.log("AI RESPONSE:", aiResponse);
     console.log(`[webhook] intent=${intent} lang=${lang}`);
+
+    // Persist detected language on every AI interaction
+    await setUserLang(tenant.id, userPhone, lang).catch(() => {});
 
     // 11. Weather — real-time data from OpenWeather API
     if (intent === 'weather_current' || intent === 'weather_tomorrow' || intent === 'weather_multi') {
@@ -526,7 +516,7 @@ router.post('/webhook', async (req, res) => {
     if (intent === 'events') {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'events', lang);
       // AI crafted a contextual response using the pre-fetched eventContext
-      const reply = aiResponse || (NO_EVENTS[lang] || NO_EVENTS.en);
+      const reply = aiResponse || (NO_EVENTS[lang] || NO_EVENTS.hr);
       await saveMessages(tenant.id, userPhone, [
         ...history,
         { role: 'user',      content: trimmedMsg },
@@ -536,7 +526,7 @@ router.post('/webhook', async (req, res) => {
       return res.send(twiml(reply));
     }
 
-    // 13. Rate limit — per user/day, does NOT trigger takeover
+    // 13. Rate limit — per user/day
     const usage = await checkAndIncrementUsage(tenant.id, userPhone);
     if (!usage.allowed) {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', lang);
@@ -544,25 +534,54 @@ router.post('/webhook', async (req, res) => {
       return res.send(twiml(fallbackReply(lang)));
     }
 
-    // 14. AI response — default for faq-no-match, anything else
+    // 14. AI / FAQ response
     const reply = aiResponse || fallbackReply(lang);
 
-    // Save conversation turn so AI has context on the next message
+    // Persist conversation history
     await saveMessages(tenant.id, userPhone, [
       ...history,
       { role: 'user',      content: trimmedMsg },
       { role: 'assistant', content: reply },
     ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
-
     await logMessage(tenant.id, userPhone, trimmedMsg, intent === 'faq' ? 'faq' : 'ai', lang);
 
-    // Enrich FAQ replies with a link card when the matched FAQ has link data
+    // 15. Consent trigger — offer after ≥2 back-and-forth exchanges if never asked
+    const shouldAskConsent = (
+      currentUser &&
+      currentUser.opt_in === null &&
+      Number(currentUser.asked_opt_in) === 0 &&
+      history.length >= 4
+    );
+
+    if (shouldAskConsent) {
+      await setAskedOptIn(tenant.id, userPhone, 1).catch(() => {});
+      const consentQ = CONSENT_ASK[lang] || CONSENT_ASK.hr;
+      const hasFaqLink = intent === 'faq' && faqMatch && (faqMatch.link_url || faqMatch.link_image);
+      console.log(`[webhook] FINAL RESPONSE SENT — reply + consent prompt (${lang})`);
+      if (hasFaqLink) {
+        // FAQ with image: send image first, consent as third message
+        res.send(
+          `<?xml version="1.0" encoding="UTF-8"?><Response>` +
+          `<Message>${escapeXml(reply)}</Message>` +
+          `<Message><Body>${escapeXml((faqMatch.link_title ? faqMatch.link_title + '\n' : '') + (faqMatch.link_url || ''))}</Body>` +
+          (faqMatch.link_image ? `<Media>${escapeXml(faqMatch.link_image)}</Media>` : '') +
+          `</Message>` +
+          `<Message>${escapeXml(consentQ)}</Message>` +
+          `</Response>`
+        );
+      } else {
+        res.send(twimlDouble(reply, consentQ));
+      }
+      return;
+    }
+
+    // Normal send
     const hasFaqLink = intent === 'faq' && faqMatch && (faqMatch.link_url || faqMatch.link_image);
     if (hasFaqLink) {
       console.log(`[webhook] FINAL RESPONSE SENT — FAQ with link card ("${reply.slice(0, 60)}")`);
       res.send(twimlWithFaqLink(reply, faqMatch.link_title, faqMatch.link_url, faqMatch.link_image));
     } else {
-      console.log(`[webhook] FINAL RESPONSE SENT — AI ("${reply.slice(0, 60)}")`);
+      console.log(`[webhook] FINAL RESPONSE SENT — AI/FAQ ("${reply.slice(0, 60)}")`);
       res.send(twiml(reply));
     }
 
