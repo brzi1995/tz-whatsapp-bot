@@ -343,15 +343,17 @@ router.post('/events', requireAuth, async (req, res) => {
   const tenantId = req.session.tenantId;
   const { title, description, date, location_link, featured } = req.body;
 
+  if (!title || !title.trim()) return res.redirect('/admin/events');
+
   try {
     await pool.query(
       'INSERT INTO events (tenant_id, title, description, date, location_link, featured) VALUES (?, ?, ?, ?, ?, ?)',
-      [tenantId, title, description || null, date || null, location_link || null, featured ? 1 : 0]
+      [tenantId, title.trim(), description || '', date || null, location_link || null, featured ? 1 : 0]
     );
     res.redirect('/admin/events');
   } catch (err) {
     console.error('[admin] events insert error:', err.message);
-    res.status(500).send('Server error');
+    res.status(500).send('Greška pri dodavanju događaja');
   }
 });
 
@@ -398,15 +400,17 @@ router.post('/events/:id/edit', requireAuth, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const { title, description, date, location_link, featured } = req.body;
 
+  if (isNaN(id) || !title || !title.trim()) return res.redirect('/admin/events');
+
   try {
     await pool.query(
       'UPDATE events SET title = ?, description = ?, date = ?, location_link = ?, featured = ? WHERE id = ? AND tenant_id = ?',
-      [title, description || null, date || null, location_link || null, featured ? 1 : 0, id, tenantId]
+      [title.trim(), description || '', date || null, location_link || null, featured ? 1 : 0, id, tenantId]
     );
     res.redirect('/admin/events');
   } catch (err) {
     console.error('[admin] events edit post error:', err.message);
-    res.status(500).send('Server error');
+    res.status(500).send('Greška pri uređivanju događaja');
   }
 });
 
@@ -414,6 +418,8 @@ router.post('/events/:id/edit', requireAuth, async (req, res) => {
 router.post('/events/:id/toggle-featured', requireAuth, async (req, res) => {
   const tenantId = req.session.tenantId;
   const id = parseInt(req.params.id, 10);
+
+  if (isNaN(id)) return res.redirect('/admin/events');
 
   try {
     await pool.query(
@@ -423,7 +429,7 @@ router.post('/events/:id/toggle-featured', requireAuth, async (req, res) => {
     res.redirect('/admin/events');
   } catch (err) {
     console.error('[admin] events toggle-featured error:', err.message);
-    res.status(500).send('Server error');
+    res.redirect('/admin/events');
   }
 });
 
@@ -440,10 +446,18 @@ router.get('/broadcast', requireAuth, async (req, res) => {
       [tenantId]
     );
     const optedInCount = (countRows && countRows[0] && countRows[0].total) || 0;
-    const [events] = await pool.query(
-      'SELECT id, title, description, date, featured FROM events WHERE tenant_id = ? ORDER BY date ASC',
-      [tenantId]
-    );
+
+    let events = [];
+    try {
+      const [evRows] = await pool.query(
+        'SELECT id, title, description, date FROM events WHERE tenant_id = ? ORDER BY date ASC',
+        [tenantId]
+      );
+      events = evRows || [];
+    } catch (evErr) {
+      console.error('[admin] broadcast GET events query error:', evErr.message);
+    }
+
     res.render('broadcast', { optedInCount, sent: null, error: null, events });
   } catch (err) {
     console.error('BROADCAST GET ERROR FULL:', err);
@@ -458,10 +472,34 @@ router.post('/broadcast', requireAuth, async (req, res) => {
 
   if (!message) return res.redirect('/admin/broadcast');
 
+  let optedInCount = 0;
+  let events = [];
+
+  // Helper: fetch current state for re-rendering after send
+  async function loadPageData() {
+    try {
+      const [countRows] = await pool.query(
+        'SELECT COUNT(*) AS total FROM users_chat WHERE tenant_id = ? AND opt_in = 1',
+        [tenantId]
+      );
+      optedInCount = (countRows && countRows[0] && countRows[0].total) || 0;
+    } catch (_) {}
+    try {
+      const [evRows] = await pool.query(
+        'SELECT id, title, description, date FROM events WHERE tenant_id = ? ORDER BY date ASC',
+        [tenantId]
+      );
+      events = evRows || [];
+    } catch (_) {}
+  }
+
   try {
     const [tenantRows] = await pool.query('SELECT phone_number FROM tenants WHERE id = ?', [tenantId]);
     const tenant = (tenantRows && tenantRows[0]) || null;
-    if (!tenant) return res.status(404).send('Tenant not found');
+    if (!tenant) {
+      await loadPageData();
+      return res.render('broadcast', { optedInCount, sent: null, error: 'Tenant nije pronađen', events });
+    }
 
     const [users] = await pool.query(
       'SELECT phone FROM users_chat WHERE tenant_id = ? AND opt_in = 1',
@@ -471,27 +509,21 @@ router.post('/broadcast', requireAuth, async (req, res) => {
     let sentCount = 0;
     for (const user of users) {
       try {
-        await sendMessage('whatsapp:' + user.phone, tenant.phone_number, message);
+        // normalizePhone ensures correct format regardless of how the phone was stored
+        const toPhone = 'whatsapp:' + normalizePhone(user.phone);
+        await sendMessage(toPhone, tenant.phone_number, message);
         sentCount++;
       } catch (sendErr) {
         console.error(`[admin] broadcast send error for ${user.phone}:`, sendErr.message);
       }
     }
 
-    const [countRows] = await pool.query(
-      'SELECT COUNT(*) AS total FROM users_chat WHERE tenant_id = ? AND opt_in = 1',
-      [tenantId]
-    );
-    const optedInCount = (countRows && countRows[0] && countRows[0].total) || 0;
-    const [events] = await pool.query(
-      'SELECT id, title, description, date, featured FROM events WHERE tenant_id = ? ORDER BY date ASC',
-      [tenantId]
-    );
-
+    await loadPageData();
     res.render('broadcast', { optedInCount, sent: sentCount, error: null, events });
   } catch (err) {
     console.error('BROADCAST POST ERROR FULL:', err);
-    res.render('broadcast', { optedInCount: 0, sent: null, error: 'Greška slanja', events: [] });
+    await loadPageData();
+    res.render('broadcast', { optedInCount, sent: null, error: 'Greška slanja poruke', events });
   }
 });
 

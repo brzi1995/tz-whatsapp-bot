@@ -35,6 +35,11 @@ try {
   app.listen(PORT, () => {
     console.log(`Server listening on port ${PORT}`);
     startCron();
+    // Safe migration — add featured column for existing installs that predate the schema change
+    const pool = require('./src/db/index');
+    pool.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS featured TINYINT(1) NOT NULL DEFAULT 0')
+      .then(() => console.log('[migration] events.featured column ensured'))
+      .catch(err => console.warn('[migration] events.featured skipped:', err.message));
   });
 
   module.exports = app;
