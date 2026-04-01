@@ -12,7 +12,7 @@ async function runOptInOutreach() {
     for (const tenant of tenants) {
       try {
         const [users] = await pool.query(
-          `SELECT phone FROM whatsapp_users
+          `SELECT phone FROM users
            WHERE tenant_id = ? AND opt_in = 0 AND asked_opt_in = 0
            AND last_message_at < NOW() - INTERVAL 5 MINUTE`,
           [tenant.id]
@@ -39,7 +39,7 @@ async function runOptInOutreach() {
 
             await sendMessage(user.phone, tenant.phone_number, optInMsg);
             await pool.query(
-              'UPDATE whatsapp_users SET asked_opt_in = 1 WHERE tenant_id = ? AND phone = ?',
+              'UPDATE users SET asked_opt_in = 1 WHERE tenant_id = ? AND phone = ?',
               [tenant.id, user.phone]
             );
             console.log(`[cron] opt-in prompt (${lang}) sent to ${user.phone} for tenant ${tenant.id}`);

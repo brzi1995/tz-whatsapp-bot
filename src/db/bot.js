@@ -261,7 +261,7 @@ async function getEventsFormatted(tenantId, period, lang) {
  */
 async function upsertWhatsappUser(tenantId, phone) {
   await pool.query(
-    `INSERT INTO whatsapp_users (tenant_id, phone, last_message_at)
+    `INSERT INTO users (tenant_id, phone, last_message_at)
      VALUES (?, ?, NOW())
      ON DUPLICATE KEY UPDATE last_message_at = NOW()`,
     [tenantId, phone]
@@ -273,7 +273,7 @@ async function upsertWhatsappUser(tenantId, phone) {
  */
 async function getWhatsappUser(tenantId, phone) {
   const [rows] = await pool.query(
-    'SELECT opt_in, asked_opt_in, human_takeover FROM whatsapp_users WHERE tenant_id = ? AND phone = ?',
+    'SELECT opt_in, asked_opt_in, human_takeover FROM users WHERE tenant_id = ? AND phone = ?',
     [tenantId, phone]
   );
   return (rows && rows[0]) || null;
@@ -284,7 +284,7 @@ async function getWhatsappUser(tenantId, phone) {
  */
 async function setOptIn(tenantId, phone, value) {
   await pool.query(
-    'UPDATE whatsapp_users SET opt_in = ? WHERE tenant_id = ? AND phone = ?',
+    'UPDATE users SET opt_in = ? WHERE tenant_id = ? AND phone = ?',
     [value, tenantId, phone]
   );
 }
@@ -295,7 +295,7 @@ async function setOptIn(tenantId, phone, value) {
  */
 async function setUserTakeover(tenantId, phone, value) {
   await pool.query(
-    'UPDATE whatsapp_users SET human_takeover = ? WHERE tenant_id = ? AND phone = ?',
+    'UPDATE users SET human_takeover = ? WHERE tenant_id = ? AND phone = ?',
     [value, tenantId, phone]
   );
   console.log(`[bot] per-user takeover set to ${value} for ${phone} on tenant ${tenantId}`);

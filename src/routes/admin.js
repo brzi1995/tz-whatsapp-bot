@@ -153,7 +153,7 @@ router.get('/dashboard', requireAuth, async (req, res) => {
     let activeUserTakeovers = 0;
     try {
       const [tkRows] = await pool.query(
-        'SELECT COUNT(*) AS total FROM whatsapp_users WHERE tenant_id = ? AND human_takeover = 1',
+        'SELECT COUNT(*) AS total FROM users WHERE tenant_id = ? AND human_takeover = 1',
         [tenantId]
       );
       activeUserTakeovers = (tkRows && tkRows[0] && tkRows[0].total) || 0;
@@ -452,7 +452,7 @@ router.get('/conversations', requireAuth, async (req, res) => {
 router.get('/conversations/:phone', requireAuth, async (req, res) => {
   const tenantId  = req.session.tenantId;
   const fullPhone = 'whatsapp:' + req.params.phone;  // format in messages table
-  const cleanPhone = req.params.phone;               // format in whatsapp_users table
+  const cleanPhone = req.params.phone;               // format in users table
 
   try {
     const [messages] = await pool.query(
@@ -465,7 +465,7 @@ router.get('/conversations/:phone', requireAuth, async (req, res) => {
     let takeover = false;
     try {
       const [userRows] = await pool.query(
-        'SELECT human_takeover FROM whatsapp_users WHERE tenant_id = ? AND phone = ?',
+        'SELECT human_takeover FROM users WHERE tenant_id = ? AND phone = ?',
         [tenantId, fullPhone]
       );
       const userRecord = (userRows && userRows[0]) || null;
@@ -498,7 +498,7 @@ router.post('/takeover/:phone', requireAuth, async (req, res) => {
     console.log("RUNNING QUERY...");
 
     const [result] = await pool.query(
-      "UPDATE whatsapp_users SET human_takeover = NOT human_takeover WHERE REPLACE(phone, 'whatsapp:', '') = ?",
+      "UPDATE users SET human_takeover = NOT human_takeover WHERE REPLACE(phone, 'whatsapp:', '') = ?",
       [cleanPhone]
     );
 
@@ -530,18 +530,18 @@ router.post('/conversations/:phone/takeover', requireAuth, async (req, res) => {
 
   try {
     const [result] = await pool.query(
-      "UPDATE whatsapp_users SET human_takeover = NOT human_takeover WHERE REPLACE(phone, 'whatsapp:', '') = ?",
+      "UPDATE users SET human_takeover = NOT human_takeover WHERE REPLACE(phone, 'whatsapp:', '') = ?",
       [cleanPhone]
     );
 
     console.log(`[admin] takeover affectedRows: ${result.affectedRows}`);
     if (result.affectedRows === 0) {
       console.error(`[admin] takeover: no row found for ${cleanPhone}`);
-      return res.status(404).json({ success: false, error: 'User not found in whatsapp_users' });
+      return res.status(404).json({ success: false, error: 'User not found in users' });
     }
 
     const [rows] = await pool.query(
-      "SELECT human_takeover FROM whatsapp_users WHERE tenant_id = ? AND REPLACE(phone, 'whatsapp:', '') = ?",
+      "SELECT human_takeover FROM users WHERE tenant_id = ? AND REPLACE(phone, 'whatsapp:', '') = ?",
       [tenantId, cleanPhone]
     );
     const user = (rows && rows[0]) || null;
@@ -603,7 +603,7 @@ router.get('/broadcast', requireAuth, async (req, res) => {
   const tenantId = req.session.tenantId;
   try {
     const [countRows] = await pool.query(
-      'SELECT COUNT(*) AS total FROM whatsapp_users WHERE tenant_id = ? AND opt_in = 1',
+      'SELECT COUNT(*) AS total FROM users WHERE tenant_id = ? AND opt_in = 1',
       [tenantId]
     );
     const optedInCount = (countRows && countRows[0] && countRows[0].total) || 0;
@@ -627,7 +627,7 @@ router.post('/broadcast', requireAuth, async (req, res) => {
     if (!tenant) return res.status(404).send('Tenant not found');
 
     const [users] = await pool.query(
-      'SELECT phone FROM whatsapp_users WHERE tenant_id = ? AND opt_in = 1',
+      'SELECT phone FROM users WHERE tenant_id = ? AND opt_in = 1',
       [tenantId]
     );
 
@@ -642,7 +642,7 @@ router.post('/broadcast', requireAuth, async (req, res) => {
     }
 
     const [countRows] = await pool.query(
-      'SELECT COUNT(*) AS total FROM whatsapp_users WHERE tenant_id = ? AND opt_in = 1',
+      'SELECT COUNT(*) AS total FROM users WHERE tenant_id = ? AND opt_in = 1',
       [tenantId]
     );
     const optedInCount = (countRows && countRows[0] && countRows[0].total) || 0;
