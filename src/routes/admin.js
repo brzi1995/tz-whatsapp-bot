@@ -492,12 +492,13 @@ router.post('/conversations/:phone/takeover', requireAuth, async (req, res) => {
 
   try {
     const [result] = await pool.query(
-      "UPDATE whatsapp_users SET human_takeover = NOT human_takeover WHERE tenant_id = ? AND REPLACE(phone, 'whatsapp:', '') = ?",
-      [tenantId, cleanPhone]
+      "UPDATE whatsapp_users SET human_takeover = NOT human_takeover WHERE REPLACE(phone, 'whatsapp:', '') = ?",
+      [cleanPhone]
     );
 
+    console.log(`[admin] takeover affectedRows: ${result.affectedRows}`);
     if (result.affectedRows === 0) {
-      console.log(`[admin] takeover: no row found for ${cleanPhone}`);
+      console.error(`[admin] takeover: no row found for ${cleanPhone}`);
       return res.status(404).json({ success: false, error: 'User not found in whatsapp_users' });
     }
 
