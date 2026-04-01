@@ -20,26 +20,6 @@
     <p>Pregled aktivnosti vašeg WhatsApp bota</p>
   </div>
 
-  <!-- Human Takeover -->
-  <div style="background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow-sm);padding:16px 22px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-    <div style="display:flex;align-items:center;gap:12px">
-      <div id="takeover-icon" style="width:40px;height:40px;border-radius:10px;background:<%= humanTakeover ? '#f0fdf4' : '#eff6ff' %>;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0"><%= humanTakeover ? '🤝' : '🤖' %></div>
-      <div>
-        <div style="font-size:14px;font-weight:600;color:var(--text)">Status bota</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:1px">Prebacite na operatera kada trebate ručno preuzeti razgovor</div>
-      </div>
-    </div>
-    <div style="display:flex;align-items:center;gap:12px">
-      <span id="takeover-badge" style="padding:5px 13px;border-radius:20px;font-size:12px;font-weight:700;background:<%= humanTakeover ? '#f0fdf4' : '#f1f5f9' %>;color:<%= humanTakeover ? '#16a34a' : '#64748b' %>">
-        <%= humanTakeover ? '🤝 Operater odgovara' : '🤖 Bot odgovara' %>
-      </span>
-      <button id="takeover-btn" class="btn"
-              onclick="toggleTakeover(<%= tenantId %>)" style="background:<%= humanTakeover ? '#16a34a' : '#64748b' %>;color:#fff;min-width:160px">
-        <%= humanTakeover ? 'Deaktiviraj' : 'Aktiviraj takeover' %>
-      </button>
-    </div>
-  </div>
-
   <!-- AI Insights -->
   <div style="background:linear-gradient(135deg,#1e3a5f 0%,#1e40af 100%);border-radius:14px;padding:22px 28px;margin-bottom:28px;color:#fff;box-shadow:0 4px 20px rgba(37,99,235,.25)">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
@@ -288,31 +268,7 @@
     });
   })();
 
-  async function toggleTakeover(tenantId) {
-    const btn = document.getElementById('takeover-btn');
-    const badge = document.getElementById('takeover-badge');
-    btn.disabled = true;
-    btn.style.opacity = '0.6';
-    try {
-      const res = await fetch(`/admin/takeover/${tenantId}`, { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        const on = data.human_takeover;
-        const icon = document.getElementById('takeover-icon');
-        badge.style.background  = on ? '#f0fdf4' : '#f1f5f9';
-        badge.style.color       = on ? '#16a34a' : '#64748b';
-        badge.textContent       = on ? '🤝 Operater odgovara' : '🤖 Bot odgovara';
-        btn.style.background    = on ? '#16a34a' : '#64748b';
-        btn.textContent         = on ? 'Deaktiviraj' : 'Aktiviraj takeover';
-        if (icon) { icon.textContent = on ? '🤝' : '🤖'; icon.style.background = on ? '#f0fdf4' : '#eff6ff'; }
-      }
-    } catch (e) {
-      alert('Greška pri promjeni statusa. Pokušajte ponovo.');
-    } finally {
-      btn.disabled = false;
-      btn.style.opacity = '1';
-    }
-  }
+
 </script>
 
 <%- include('partials/foot') %>
