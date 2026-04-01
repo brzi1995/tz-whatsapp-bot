@@ -166,34 +166,38 @@ router.get('/dashboard', requireAuth, async (req, res) => {
 
     if (hasData) {
       const intentPhrases = {
-        faq:              'Most tourists ask FAQ questions',
-        weather_current:  'Most tourists ask about current weather',
-        weather_tomorrow: 'Most tourists ask about tomorrow\'s forecast',
-        weather_multi:    'Most tourists ask for multi-day forecasts',
-        events:           'Most tourists ask about local events',
-        ai:               'Most tourists use the AI chat',
-        other:            'Most messages are general questions',
+        faq:              'Najčešći upiti korisnika: opće informacije',
+        weather_current:  'Najčešći upiti korisnika: trenutno vrijeme',
+        weather_tomorrow: 'Najčešći upiti korisnika: prognoza za sutra',
+        weather_multi:    'Najčešći upiti korisnika: višednevna prognoza',
+        events:           'Najčešći upiti korisnika: lokalni događaji',
+        ai:               'Turisti uglavnom koriste AI razgovor',
+        other:            'Turisti uglavnom postavljaju opća pitanja',
       };
       const langPhrases = {
-        hr: 'Majority of users speak Croatian',
-        en: 'Majority of users speak English',
-        de: 'Majority of users speak German',
-        it: 'Majority of users speak Italian',
-        fr: 'Majority of users speak French',
+        hr: 'Većina korisnika govori hrvatski',
+        en: 'Većina korisnika govori engleski',
+        de: 'Većina korisnika govori njemački',
+        it: 'Većina korisnika govori talijanski',
+        fr: 'Većina korisnika govori francuski',
+        sv: 'Većina korisnika govori švedski',
+        no: 'Većina korisnika govori norveški',
+        cs: 'Većina korisnika govori češki',
       };
       const timePhrases = {
-        morning:   'Peak activity is in the morning (6–12)',
-        afternoon: 'Peak activity is in the afternoon (12–18)',
-        evening:   'Peak activity is in the evening (18–24)',
+        morning:   'Najviše aktivnosti: Jutro (6–12h)',
+        afternoon: 'Najviše aktivnosti: Popodne (12–18h)',
+        evening:   'Najviše aktivnosti: Večer (18–24h)',
       };
 
-      if (intents.length) {
-        const top = intents[0];
-        insights.push({ icon: '🎯', text: intentPhrases[top.intent] || `Most common intent: ${top.intent}` });
+      // Skip admin_reply and fallback when finding top user intent
+      const topUserIntent = intents.find(r => r.intent !== 'admin_reply' && r.intent !== 'fallback');
+      if (topUserIntent) {
+        insights.push({ icon: '🎯', text: intentPhrases[topUserIntent.intent] || `Najčešći upiti: ${topUserIntent.intent}` });
       }
       if (languages.length) {
         const top = languages[0];
-        insights.push({ icon: '🌍', text: langPhrases[top.lang] || `Most used language: ${top.lang.toUpperCase()}` });
+        insights.push({ icon: '🌍', text: langPhrases[top.lang] || `Najčešći jezik: ${top.lang.toUpperCase()}` });
       }
       if (timeOfDay) {
         const tod = { morning: Number(timeOfDay.morning)||0, afternoon: Number(timeOfDay.afternoon)||0, evening: Number(timeOfDay.evening)||0 };

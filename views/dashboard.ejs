@@ -33,15 +33,14 @@
     <p>Pregled aktivnosti vašeg WhatsApp bota</p>
   </div>
 
-  <!-- Uvidi (compact) -->
+  <!-- Uvidi (inline strip) -->
   <% if (insights && insights.length) { %>
-  <div class="uvidi-card">
-    <div class="uvidi-label">
-      <i data-lucide="sparkles"></i> Uvidi
-    </div>
-    <div class="uvidi-items">
-      <% insights.forEach(function(ins) { %>
-        <div class="uvidi-item"><%= ins.icon %> <%= ins.text %></div>
+  <div class="uvidi-strip">
+    <div class="uvidi-strip-title"><i data-lucide="sparkles"></i> Uvidi</div>
+    <div class="uvidi-strip-items">
+      <% insights.forEach(function(ins, i) { %>
+        <% if (i > 0) { %><span class="uvidi-strip-sep">·</span><% } %>
+        <div class="uvidi-strip-item"><%= ins.icon %> <%= ins.text %></div>
       <% }); %>
     </div>
   </div>
@@ -152,20 +151,19 @@
        weather:'Vrijeme', weather_current:'Vrijeme', weather_tomorrow:'Vrijeme', weather_multi:'Vrijeme',
        events:'Događaji',
        ai:'AI razgovor',
-       admin_reply:'Admin odgovori',
-       other:'Ostalo',
-       fallback:'Ostalo'
+       other:'Ostalo'
      };
-     const intentColors = { faq:'#2563eb', weather:'#0ea5e9', events:'#16a34a', ai:'#7c3aed', admin_reply:'#64748b' };
-     const intentTotal  = intents.reduce((s,r) => s + Number(r.count), 0) || 1;
+     const intentColors = { faq:'#2563eb', weather:'#0ea5e9', events:'#16a34a', ai:'#7c3aed' };
+     const _filteredIntents = intents.filter(r => r.intent !== 'admin_reply' && r.intent !== 'fallback');
+     const intentTotal  = _filteredIntents.reduce((s,r) => s + Number(r.count), 0) || 1;
   %>
-  <% if (intents.length) { %>
+  <% if (_filteredIntents.length) { %>
   <div class="chart-wrap" style="margin-bottom:0">
     <div class="chart-header">
       <h2>Upiti turista</h2>
       <span class="chart-badge">Po tipu</span>
     </div>
-    <% intents.forEach(function(r) {
+    <% _filteredIntents.forEach(function(r) {
          const pct = Math.round(Number(r.count) / intentTotal * 100);
          const col = intentColors[r.intent] || '#94a3b8';
          const lbl = intentLabels[r.intent] || r.intent;
