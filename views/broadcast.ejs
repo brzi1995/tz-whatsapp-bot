@@ -3,13 +3,13 @@
 
 <main class="content">
   <div class="page-header">
-    <h1>📣 Obavijesti turistima</h1>
-    <p>Pošalji WhatsApp poruku svim prijavljenim turistima</p>
+    <h1>Obavijesti</h1>
+    <p>WhatsApp obavijesti za prijavljene turiste</p>
   </div>
 
-  <% if (sent !== null) { %>
-    <div class="bc-success">
-      ✅ Poruka uspješno poslana na <%= sent %> korisnika
+  <% if (justSent) { %>
+    <div style="background:var(--green-light);border:1px solid #86efac;border-radius:var(--radius);padding:13px 18px;margin-bottom:20px;color:var(--green);font-weight:600;font-size:14px">
+      ✅ Obavijest je uspješno poslana
     </div>
   <% } %>
 
@@ -22,233 +22,68 @@
     <% } %>
   </div>
 
-  <!-- Quick send -->
-  <% if (optedInCount > 0) { %>
-    <div class="bc-send-card">
-      <form method="POST" action="/admin/broadcast">
-        <textarea id="bc-msg" name="message" rows="4"
-          placeholder="Upiši poruku za turiste..." required></textarea>
-        <button type="submit" class="btn btn-primary bc-send-btn">
-          📣 Pošalji obavijest
-        </button>
-      </form>
-    </div>
-  <% } %>
-
-  <!-- Events -->
+  <!-- Events queued for notification -->
   <% if (events && events.length > 0) { %>
-    <div class="bc-section-label">Događaji</div>
-    <div class="bc-event-list">
+    <div class="item-list">
       <% events.forEach(ev => {
            const dateStr = ev.date
              ? new Date(ev.date).toLocaleDateString('hr-HR', { day:'numeric', month:'long', year:'numeric' })
-             : '';
+             : null;
+           const isSent = ev.notification_status === 'sent';
       %>
-        <div class="bc-event-card">
-          <div class="bc-event-info">
-            <div class="bc-event-title">
-              <% if (ev.featured) { %><span class="bc-feat">⭐</span><% } %>
+        <div class="item-card">
+          <div class="item-card-body">
+            <div class="item-card-title">
               <%= ev.title %>
+              <% if (isSent) { %>
+                <span class="tag tag-green" style="margin-left:6px">✅ Poslano</span>
+              <% } else { %>
+                <span class="tag tag-amber" style="margin-left:6px">⏳ Na čekanju</span>
+              <% } %>
             </div>
-            <% if (dateStr) { %>
-              <div class="bc-event-date">📅 <%= dateStr %></div>
-            <% } %>
+            <div class="item-card-meta">
+              <% if (dateStr) { %><i data-lucide="calendar" style="width:12px;height:12px;vertical-align:middle;margin-right:3px"></i><%= dateStr %><% } %>
+              <% if (ev.description) { %><br><%= ev.description %><% } %>
+            </div>
           </div>
-          <div class="bc-event-actions">
+          <div class="item-card-actions">
             <% if (optedInCount > 0) { %>
-              <button class="btn btn-primary bc-btn-send"
-                data-title="<%= ev.title %>"
-                data-date="<%= dateStr %>"
-                data-desc="<%= ev.description || '' %>"
-                onclick="fillFromEvent(this)">
-                📨 Pošalji
-              </button>
+              <form method="POST" action="/admin/broadcast/<%= ev.id %>/send"
+                    onsubmit="return confirm('Poslati obavijest za ovaj događaj?')">
+                <button type="submit" class="btn btn-primary btn-sm">
+                  <i data-lucide="send"></i> Pošalji sada
+                </button>
+              </form>
             <% } %>
-            <form method="POST" action="/admin/events/<%= ev.id %>/toggle-featured">
-              <button type="submit" class="btn btn-secondary bc-btn-feat">
-                <%= ev.featured ? '⭐ Istaknuto' : '☆ Istakni' %>
+            <form method="POST" action="/admin/broadcast/<%= ev.id %>/remove"
+                  onsubmit="return confirm('Ukloniti iz obavijesti?')">
+              <button type="submit" class="btn btn-secondary btn-sm">
+                <i data-lucide="x"></i> Ukloni
               </button>
             </form>
           </div>
         </div>
-      <% }) %>
+      <% }); %>
     </div>
   <% } else { %>
-    <div class="bc-empty">
-      <div class="bc-empty-icon">📅</div>
-      <div>Nema događaja</div>
-      <a href="/admin/events" class="btn btn-secondary" style="margin-top:14px">Dodaj događaj →</a>
+    <div class="empty">
+      Nema događaja označenih za obavijest.<br>
+      <a href="/admin/events" style="color:var(--blue);text-decoration:none;font-weight:600;display:inline-block;margin-top:8px">Označi događaj za obavijest →</a>
     </div>
   <% } %>
 </main>
 
 <style>
-.bc-success {
-  background: var(--green-light);
-  border: 1px solid #86efac;
-  border-radius: var(--radius);
-  padding: 14px 18px;
-  margin-bottom: 20px;
-  color: var(--green);
-  font-weight: 600;
-  font-size: 14px;
-}
-
 .bc-stat {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 16px 20px;
+  padding: 14px 18px;
   margin-bottom: 20px;
-  font-size: 15px;
-  color: var(--text);
-  box-shadow: var(--shadow-sm);
-}
-
-.bc-send-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 20px;
-  margin-bottom: 28px;
-  box-shadow: var(--shadow-sm);
-}
-
-.bc-send-card textarea {
-  width: 100%;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 12px 14px;
-  font-size: 15px;
-  font-family: inherit;
-  resize: vertical;
-  margin-bottom: 12px;
-  background: var(--bg);
-  color: var(--text);
-  line-height: 1.5;
-}
-
-.bc-send-card textarea:focus {
-  outline: none;
-  border-color: var(--blue);
-  box-shadow: 0 0 0 3px rgba(37,99,235,.12);
-}
-
-.bc-send-btn {
-  width: 100%;
-  padding: 13px;
-  font-size: 15px;
-  justify-content: center;
-  font-weight: 600;
-}
-
-.bc-section-label {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .07em;
-  color: var(--muted);
-  margin-bottom: 10px;
-}
-
-.bc-event-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.bc-event-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px 18px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  box-shadow: var(--shadow-sm);
-}
-
-.bc-event-info { flex: 1; min-width: 0; }
-
-.bc-event-title {
-  font-weight: 700;
   font-size: 14px;
   color: var(--text);
-  margin-bottom: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.bc-feat { margin-right: 4px; }
-
-.bc-event-date {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.bc-event-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.bc-btn-send, .bc-btn-feat {
-  font-size: 13px;
-  padding: 7px 14px;
-  white-space: nowrap;
-}
-
-.bc-empty {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 40px 20px;
-  text-align: center;
-  color: var(--muted);
-  font-size: 14px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.bc-empty-icon { font-size: 36px; margin-bottom: 10px; }
-
-@media (max-width: 520px) {
-  .bc-event-card {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .bc-event-title { white-space: normal; }
-  .bc-event-actions {
-    flex-direction: row;
-  }
-  .bc-btn-send, .bc-btn-feat {
-    flex: 1;
-    text-align: center;
-    justify-content: center;
-  }
+  box-shadow: var(--shadow-sm);
 }
 </style>
-
-<script>
-function fillFromEvent(btn) {
-  const title = btn.dataset.title || '';
-  const date  = btn.dataset.date  || '';
-  const desc  = btn.dataset.desc  || '';
-
-  let msg = '📅 ' + title;
-  if (date) msg += '\n🗓 ' + date;
-  if (desc) msg += '\n\n' + desc;
-
-  const ta = document.getElementById('bc-msg');
-  if (!ta) return;
-  ta.value = msg;
-  ta.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  ta.focus();
-}
-</script>
 
 <%- include('partials/foot') %>

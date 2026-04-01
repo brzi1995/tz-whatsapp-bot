@@ -341,14 +341,16 @@ router.get('/events', requireAuth, async (req, res) => {
 // POST /admin/events
 router.post('/events', requireAuth, async (req, res) => {
   const tenantId = req.session.tenantId;
-  const { title, description, date, location_link, featured } = req.body;
+  const { title, description, date, location_link, featured, send_notification } = req.body;
 
   if (!title || !title.trim()) return res.redirect('/admin/events');
 
+  const notifStatus = send_notification ? 'pending' : 'none';
+
   try {
     await pool.query(
-      'INSERT INTO events (tenant_id, title, description, date, location_link, featured) VALUES (?, ?, ?, ?, ?, ?)',
-      [tenantId, title.trim(), description || '', date || null, location_link || null, featured ? 1 : 0]
+      'INSERT INTO events (tenant_id, title, description, date, location_link, featured, send_notification, notification_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [tenantId, title.trim(), description || '', date || null, location_link || null, featured ? 1 : 0, send_notification ? 1 : 0, notifStatus]
     );
     res.redirect('/admin/events');
   } catch (err) {
@@ -398,14 +400,30 @@ router.get('/events/:id/edit', requireAuth, async (req, res) => {
 router.post('/events/:id/edit', requireAuth, async (req, res) => {
   const tenantId = req.session.tenantId;
   const id = parseInt(req.params.id, 10);
-  const { title, description, date, location_link, featured } = req.body;
+  const { title, description, date, location_link, featured, send_notification } = req.body;
 
   if (isNaN(id) || !title || !title.trim()) return res.redirect('/admin/events');
 
+  // When send_notification is toggled off, reset status to 'none'.
+  // When toggled on and it was previously 'sent', keep 'sent' (don't re-queue).
+  // When toggled on fresh, set 'pending'.
+  let notifStatus;
+  if (!send_notification) {
+    notifStatus = 'none';
+  } else {
+    // Preserve existing sent status; only set pending for new/re-enabled notifications
+    const [existing] = await pool.query(
+      'SELECT notification_status FROM events WHERE id = ? AND tenant_id = ?',
+      [id, tenantId]
+    );
+    const prev = existing && existing[0] && existing[0].notification_status;
+    notifStatus = prev === 'sent' ? 'sent' : 'pending';
+  }
+
   try {
     await pool.query(
-      'UPDATE events SET title = ?, description = ?, date = ?, location_link = ?, featured = ? WHERE id = ? AND tenant_id = ?',
-      [title.trim(), description || '', date || null, location_link || null, featured ? 1 : 0, id, tenantId]
+      'UPDATE events SET title = ?, description = ?, date = ?, location_link = ?, featured = ?, send_notification = ?, notification_status = ? WHERE id = ? AND tenant_id = ?',
+      [title.trim(), description || '', date || null, location_link || null, featured ? 1 : 0, send_notification ? 1 : 0, notifStatus, id, tenantId]
     );
     res.redirect('/admin/events');
   } catch (err) {
@@ -450,7 +468,7 @@ router.get('/broadcast', requireAuth, async (req, res) => {
     let events = [];
     try {
       const [evRows] = await pool.query(
-        'SELECT id, title, description, date FROM events WHERE tenant_id = ? ORDER BY date ASC',
+        'SELECT id, title, description, date, location_link, notification_status FROM events WHERE tenant_id = ? AND send_notification = 1 ORDER BY date ASC',
         [tenantId]
       );
       events = evRows || [];
@@ -458,72 +476,84 @@ router.get('/broadcast', requireAuth, async (req, res) => {
       console.error('[admin] broadcast GET events query error:', evErr.message);
     }
 
-    res.render('broadcast', { optedInCount, sent: null, error: null, events });
+    const justSent = req.query.sent === '1';
+    res.render('broadcast', { optedInCount, events, justSent });
   } catch (err) {
-    console.error('BROADCAST GET ERROR FULL:', err);
-    res.render('broadcast', { optedInCount: 0, sent: null, error: 'Greška učitavanja', events: [] });
+    console.error('[admin] broadcast GET error:', err);
+    res.render('broadcast', { optedInCount: 0, events: [], justSent: false });
   }
 });
 
-// POST /admin/broadcast
-router.post('/broadcast', requireAuth, async (req, res) => {
+// POST /admin/broadcast/:id/send — send notification for a specific event
+router.post('/broadcast/:id/send', requireAuth, async (req, res) => {
   const tenantId = req.session.tenantId;
-  const message = (req.body.message || '').trim();
+  const id = parseInt(req.params.id, 10);
 
-  if (!message) return res.redirect('/admin/broadcast');
-
-  let optedInCount = 0;
-  let events = [];
-
-  // Helper: fetch current state for re-rendering after send
-  async function loadPageData() {
-    try {
-      const [countRows] = await pool.query(
-        'SELECT COUNT(*) AS total FROM users_chat WHERE tenant_id = ? AND opt_in = 1',
-        [tenantId]
-      );
-      optedInCount = (countRows && countRows[0] && countRows[0].total) || 0;
-    } catch (_) {}
-    try {
-      const [evRows] = await pool.query(
-        'SELECT id, title, description, date FROM events WHERE tenant_id = ? ORDER BY date ASC',
-        [tenantId]
-      );
-      events = evRows || [];
-    } catch (_) {}
-  }
+  if (isNaN(id)) return res.redirect('/admin/broadcast');
 
   try {
+    const [evRows] = await pool.query(
+      'SELECT * FROM events WHERE id = ? AND tenant_id = ? AND send_notification = 1',
+      [id, tenantId]
+    );
+    const ev = evRows && evRows[0];
+    if (!ev) return res.redirect('/admin/broadcast');
+
     const [tenantRows] = await pool.query('SELECT phone_number FROM tenants WHERE id = ?', [tenantId]);
-    const tenant = (tenantRows && tenantRows[0]) || null;
-    if (!tenant) {
-      await loadPageData();
-      return res.render('broadcast', { optedInCount, sent: null, error: 'Tenant nije pronađen', events });
-    }
+    const tenant = tenantRows && tenantRows[0];
+    if (!tenant) return res.redirect('/admin/broadcast');
 
     const [users] = await pool.query(
       'SELECT phone FROM users_chat WHERE tenant_id = ? AND opt_in = 1',
       [tenantId]
     );
 
-    let sentCount = 0;
+    const dateStr = ev.date
+      ? new Date(ev.date).toLocaleDateString('hr-HR', { day: 'numeric', month: 'long', year: 'numeric' })
+      : null;
+
+    let msg = `📢 Novi događaj: ${ev.title}`;
+    if (dateStr)         msg += `\n📅 ${dateStr}`;
+    if (ev.location_link) msg += `\n📍 ${ev.location_link}`;
+    if (ev.description)   msg += `\n${ev.description}`;
+
     for (const user of users) {
       try {
-        // normalizePhone ensures correct format regardless of how the phone was stored
-        const toPhone = 'whatsapp:' + normalizePhone(user.phone);
-        await sendMessage(toPhone, tenant.phone_number, message);
-        sentCount++;
+        await sendMessage('whatsapp:' + normalizePhone(user.phone), tenant.phone_number, msg);
       } catch (sendErr) {
-        console.error(`[admin] broadcast send error for ${user.phone}:`, sendErr.message);
+        console.error(`[admin] notification send error for ${user.phone}:`, sendErr.message);
       }
     }
 
-    await loadPageData();
-    res.render('broadcast', { optedInCount, sent: sentCount, error: null, events });
+    // Mark as sent; keep notification visible so the status is clear
+    await pool.query(
+      "UPDATE events SET notification_status = 'sent' WHERE id = ? AND tenant_id = ?",
+      [id, tenantId]
+    );
+
+    res.redirect('/admin/broadcast?sent=1');
   } catch (err) {
-    console.error('BROADCAST POST ERROR FULL:', err);
-    await loadPageData();
-    res.render('broadcast', { optedInCount, sent: null, error: 'Greška slanja poruke', events });
+    console.error('[admin] broadcast/:id/send error:', err.message);
+    res.redirect('/admin/broadcast');
+  }
+});
+
+// POST /admin/broadcast/:id/remove — remove event from notification queue
+router.post('/broadcast/:id/remove', requireAuth, async (req, res) => {
+  const tenantId = req.session.tenantId;
+  const id = parseInt(req.params.id, 10);
+
+  if (isNaN(id)) return res.redirect('/admin/broadcast');
+
+  try {
+    await pool.query(
+      "UPDATE events SET send_notification = 0, notification_status = 'none' WHERE id = ? AND tenant_id = ?",
+      [id, tenantId]
+    );
+    res.redirect('/admin/broadcast');
+  } catch (err) {
+    console.error('[admin] broadcast/:id/remove error:', err.message);
+    res.redirect('/admin/broadcast');
   }
 });
 
