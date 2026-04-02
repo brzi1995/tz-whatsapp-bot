@@ -606,13 +606,14 @@ const BRELA_TOPICS = [
   'izlet', 'smještaj', 'apartman', 'hotel', 'prijevoz', 'bus', 'brod', 'trajekt',
   'hrana', 'kupanj', 'ronjenje', 'bicikl', 'iznajm', 'brela', 'punta rata', 'baška',
   // English
-  'beach', 'sea', 'ocean', 'restaur', 'coffee', 'cafe', 'activit', 'excursion',
+  'beach', 'sea', 'ocean', 'restaur', 'restaurant', 'dinner', 'eat', 'food',
+  'coffee', 'cafe', 'activit', 'excursion',
   'accommodat', 'apartment', 'hotel', 'transport', 'ferry', 'boat', 'swim',
   'dive', 'snorkel', 'kayak', 'bike', 'rent', 'parking', 'spa', 'wellness',
   // German
   'strand', 'meer', 'ausflug', 'unterkunft', 'veranstaltung',
   // Italian
-  'spiaggia', 'mare', 'parcheggio', 'attività', 'escursione', 'alloggio',
+  'spiaggia', 'mare', 'parcheggio', 'attività', 'escursione', 'alloggio', 'ristor',
   // French
   'plage', 'mer', 'activité', 'hébergement',
   // General
@@ -876,10 +877,8 @@ router.post('/webhook', async (req, res) => {
     const langSignal = greetingLang
       ? { lang: greetingLang, ambiguous: false }
       : detectLanguageWithConfidence(trimmedMsg);
-    // Current message language should win. Short/ambiguous messages inherit chat lang; fallback to EN.
-    const lang = langSignal.ambiguous
-      ? (conversationState.lastLanguage || currentUser?.language || langSignal.lang || 'en')
-      : (langSignal.lang || conversationState.lastLanguage || currentUser?.language || 'en');
+    // Force language of current message; do not inherit from history.
+    const lang = langSignal.lang || detectLanguage(trimmedMsg) || 'en';
     const activeLang = lang;
 
     const YES_TOKENS = new Set(['da', 'yes', 'y', 'yep', 'oui', 'si']);
