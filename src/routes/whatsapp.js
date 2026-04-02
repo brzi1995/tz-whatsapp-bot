@@ -64,6 +64,29 @@ const GREETING_MSG = {
 };
 function greetingReply(lang) { return GREETING_MSG[lang] || GREETING_MSG.hr; }
 
+const YES_MSG = {
+  hr: 'Naravno — kako vam mogu pomoći?',
+  en: 'Naravno — kako vam mogu pomoći?',
+  de: 'Naravno — kako vam mogu pomoći?',
+  it: 'Naravno — kako vam mogu pomoći?',
+  fr: 'Naravno — kako vam mogu pomoći?',
+  sv: 'Naravno — kako vam mogu pomoći?',
+  no: 'Naravno — kako vam mogu pomoći?',
+  cs: 'Naravno — kako vam mogu pomoći?',
+};
+const NO_MSG = {
+  hr: 'U redu — tu sam ako vam nešto zatreba o Brelima.',
+  en: 'U redu — tu sam ako vam nešto zatreba o Brelima.',
+  de: 'U redu — tu sam ako vam nešto zatreba o Brelima.',
+  it: 'U redu — tu sam ako vam nešto zatreba o Brelima.',
+  fr: 'U redu — tu sam ako vam nešto zatreba o Brelima.',
+  sv: 'U redu — tu sam ako vam nešto zatreba o Brelima.',
+  no: 'U redu — tu sam ako vam nešto zatreba o Brelima.',
+  cs: 'U redu — tu sam ako vam nešto zatreba o Brelima.',
+};
+function yesReply(lang) { return YES_MSG[lang] || YES_MSG.hr; }
+function noReply(lang) { return NO_MSG[lang] || NO_MSG.hr; }
+
 // Final fallback — used when AI returns nothing useful and for spam
 const FALLBACK_MSG = {
   hr: 'Nisam razumio pitanje. Možete pojasniti koju informaciju trebate da odgovor bude točan?',
@@ -851,11 +874,14 @@ router.post('/webhook', async (req, res) => {
     const langSignal = greetingLang
       ? { lang: greetingLang, ambiguous: false }
       : detectLanguageWithConfidence(trimmedMsg);
-    // Current message language should win. Short/ambiguous messages should inherit the chat language.
+    // Current message language should win. Short/ambiguous messages inherit chat lang; fallback to HR.
     const lang = langSignal.ambiguous
-      ? (conversationState.lastLanguage || currentUser?.language || langSignal.lang || 'en')
-      : (langSignal.lang || conversationState.lastLanguage || currentUser?.language || 'en');
+      ? (conversationState.lastLanguage || currentUser?.language || langSignal.lang || 'hr')
+      : (langSignal.lang || conversationState.lastLanguage || currentUser?.language || 'hr');
     const activeLang = lang;
+
+    const YES_TOKENS = new Set(['da', 'yes', 'y', 'yep', 'oui', 'si']);
+    const NO_TOKENS  = new Set(['ne', 'no', 'nope', 'nah', 'non']);
 
     const persistTurn = async (assistantReply, statePatch = {}) => {
       const nextState = {
@@ -894,6 +920,22 @@ router.post('/webhook', async (req, res) => {
         console.log('[webhook] FINAL RESPONSE SENT — consent: invalid reply');
         return res.send(twiml(CONSENT_INVALID[lang] || CONSENT_INVALID.hr));
       }
+    }
+
+    // ── QUICK YES/NO (outside opt-in flow) ───────────────────────────────────
+    if (YES_TOKENS.has(lowerMsg)) {
+      const reply = yesReply(activeLang);
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'other', activeLang).catch(() => {});
+      await persistTurn(reply, { awaiting: null, lastTopic: 'other', lastLanguage: activeLang });
+      console.log('[webhook] FINAL RESPONSE SENT — simple YES');
+      return res.send(twiml(reply));
+    }
+    if (NO_TOKENS.has(lowerMsg)) {
+      const reply = noReply(activeLang);
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'other', activeLang).catch(() => {});
+      await persistTurn(reply, { awaiting: null, lastTopic: 'other', lastLanguage: activeLang });
+      console.log('[webhook] FINAL RESPONSE SENT — simple NO');
+      return res.send(twiml(reply));
     }
 
     const faqSelection = resolveFaqSelection(trimmedMsg, conversationState);
