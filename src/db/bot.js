@@ -38,6 +38,42 @@ async function logMessage(tenantId, userPhone, message, intent, lang = 'hr') {
   }
 }
 
+const FAQ_STOPWORDS = new Set([
+  'a', 'an', 'and', 'are', 'at', 'be', 'by', 'for', 'from', 'how', 'i', 'in', 'is', 'it',
+  'me', 'my', 'of', 'on', 'or', 'please', 'the', 'there', 'this', 'to', 'what', 'where',
+  'with', 'you', 'your', 'can', 'do', 'does', 'have', 'has', 'near', 'info', 'information',
+  'u', 'na', 'za', 'od', 'do', 'je', 'su', 'se', 'te', 'da', 'ili', 'koji', 'koja', 'koje',
+  'sto', 'sta', 'što', 'gdje', 'kako', 'ima', 'li', 'mi', 'me', 'tu', 'ovo', 'ono', 'molim',
+  'jel', 'gibt', 'es', 'der', 'die', 'das', 'und', 'ein', 'eine', 'ist', 'sind', 'ich',
+  'ci', 'sono', 'il', 'lo', 'la', 'gli', 'le', 'un', 'una', 'per', 'con', 'del', 'della',
+  'di', 'che', 'ou', 'et', 'de', 'des', 'est', 'sont', 'y', 'a', 'dans', 'sur', 'au',
+]);
+
+function normalizeFaqText(text) {
+  return String(text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function tokenizeFaqText(text) {
+  return normalizeFaqText(text)
+    .split(' ')
+    .filter(Boolean)
+    .filter(token => token.length > 1 && !FAQ_STOPWORDS.has(token));
+}
+
+function matchFaqToken(userToken, faqToken) {
+  if (userToken === faqToken) return 1;
+  if (userToken.length < 5 || faqToken.length < 5) return 0;
+  if (userToken.startsWith(faqToken) || faqToken.startsWith(userToken)) return 0.9;
+  if (userToken.includes(faqToken) || faqToken.includes(userToken)) return 0.7;
+  return 0;
+}
+
 /**
  * Try to match a user message against FAQ entries for the tenant.
  * Returns { answer, score } for the best match (score = 0–1, matched keywords / total),
@@ -54,15 +90,34 @@ async function getFaqMatch(tenantId, userMessage) {
     );
     if (!rows.length) return null;
 
-    const normalised = userMessage.toLowerCase();
+    const normalised = normalizeFaqText(userMessage);
+    const userTokens = tokenizeFaqText(userMessage);
     let best = null;
 
     for (const row of rows) {
-      const keywords = row.question.toLowerCase().split(/\s+/).filter(Boolean);
+      const questionNorm = normalizeFaqText(row.question);
+      const keywords = tokenizeFaqText(row.question);
       if (!keywords.length) continue;
-      const matchedCount = keywords.filter(kw => normalised.includes(kw)).length;
-      const score = matchedCount / keywords.length;
-      if (score > 0 && (!best || score > best.score)) {
+
+      let matchedWeight = 0;
+      let exactLongMatch = false;
+      let matchedKeywords = 0;
+
+      for (const kw of keywords) {
+        const bestMatch = userTokens.reduce((score, token) => Math.max(score, matchFaqToken(token, kw)), 0);
+        if (bestMatch > 0) {
+          matchedWeight += bestMatch;
+          matchedKeywords += 1;
+          if (bestMatch === 1 && kw.length >= 5) exactLongMatch = true;
+        }
+      }
+
+      const coverage = matchedWeight / keywords.length;
+      const phraseBonus = (questionNorm && (normalised.includes(questionNorm) || questionNorm.includes(normalised))) ? 0.35 : 0;
+      const score = coverage + phraseBonus + (exactLongMatch ? 0.15 : 0);
+      const isStrongMatch = score >= 0.45 || (exactLongMatch && keywords.length <= 4 && matchedKeywords >= 1);
+
+      if (isStrongMatch && (!best || score > best.score)) {
         best = {
           answer:      row.answer,
           score,

@@ -41,6 +41,15 @@ const VALID_INTENTS = [
  * @returns {string} ISO 639-1 code
  */
 function detectLanguage(message) {
+  const normalized = String(message || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/['’]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
   // Croatian-specific characters — highest confidence signal
   if (/[đšžćčĐŠŽĆČ]/.test(message)) return 'hr';
   // German-specific
@@ -57,21 +66,24 @@ function detectLanguage(message) {
   if (/[řůŘŮ]/.test(message)) return 'cs';
 
   // Keyword scoring for plain Latin script — default wins at score 0
-  const lower = message.toLowerCase();
+  const tokens = normalized.split(' ').filter(Boolean);
   const KEYWORDS = {
-    hr: ['danas', 'sutra', 'tjedan', 'hvala', 'bok', 'gdje', 'što', 'ima', 'nema', 'dobar', 'kako'],
-    en: ['the', 'is', 'are', 'what', 'where', 'how', 'can', 'please', 'hello', 'thanks', 'today', 'tomorrow', 'beach', 'restaurant', 'weather', 'good', 'have', 'need'],
-    de: ['heute', 'morgen', 'bitte', 'danke', 'hallo', 'wie', 'was', 'wo', 'ich', 'gibt'],
-    it: ['oggi', 'domani', 'grazie', 'ciao', 'dove', 'cosa', 'sono', 'come'],
-    fr: ["aujourd'hui", 'demain', 'merci', 'bonjour', 'comment', 'quoi', 'est'],
-    sv: ['idag', 'imorgon', 'tack', 'hej', 'vad', 'var', 'hur'],
-    no: ['i dag', 'i morgen', 'takk', 'hei', 'hva', 'hvor'],
-    cs: ['dnes', 'zítra', 'díky', 'ahoj', 'kde', 'jak', 'prosím'],
+    hr: ['danas', 'sutra', 'tjedan', 'hvala', 'bok', 'gdje', 'sto', 'sta', 'ima', 'nema', 'dobar', 'kako', 'dogadaj', 'dogadaja', 'vrijeme', 'plaza', 'parking', 'restoran', 'smjestaj', 'izlet', 'uvala', 'brela'],
+    en: ['what', 'where', 'how', 'can', 'please', 'hello', 'thanks', 'today', 'tomorrow', 'week', 'happening', 'events', 'beach', 'restaurant', 'weather', 'parking', 'rent', 'kayak', 'prices', 'locations'],
+    de: ['heute', 'morgen', 'bitte', 'danke', 'hallo', 'wie', 'was', 'wo', 'ich', 'gibt', 'veranstaltungen', 'wetter', 'strand', 'parken', 'restaurant'],
+    it: ['oggi', 'domani', 'grazie', 'ciao', 'dove', 'cosa', 'sono', 'come', 'eventi', 'parcheggio', 'spiaggia', 'tempo', 'ristorante'],
+    fr: ['aujourdhui', 'demain', 'merci', 'bonjour', 'comment', 'quoi', 'evenements', 'plage', 'meteo', 'parking', 'restaurant'],
+    sv: ['idag', 'imorgon', 'tack', 'hej', 'vad', 'var', 'hur', 'evenemang'],
+    no: ['i dag', 'i morgen', 'takk', 'hei', 'hva', 'hvor', 'arrangementer'],
+    cs: ['dnes', 'zitra', 'diky', 'ahoj', 'kde', 'jak', 'prosim', 'akce'],
   };
 
   let best = { lang: 'en', score: 0 }; // default English, not Croatian
   for (const [lang, kws] of Object.entries(KEYWORDS)) {
-    const score = kws.filter(kw => lower.includes(kw)).length;
+    const score = kws.reduce((total, kw) => {
+      if (kw.includes(' ')) return total + (normalized.includes(kw) ? 2 : 0);
+      return total + (tokens.includes(kw) ? 2 : normalized.includes(kw) ? 1 : 0);
+    }, 0);
     if (score > best.score) best = { lang, score };
   }
   return best.lang;
@@ -119,6 +131,7 @@ LANGUAGE RULE (CRITICAL):
 - If language is unclear or message is very short, check the conversation history for the last clear language used
 - If still unclear, default to ENGLISH
 - NEVER mix languages in one response
+- Ignore earlier messages written in other languages when answering the current message
 - Current message language detected: ${detectedLang}
 ${contextBlock ? `\n${contextBlock}\n` : ''}
 DATA PRIORITY:
@@ -233,6 +246,7 @@ async function rageMessage({ message, baseAnswer, history = [], faqContext, even
     systemPrompt,
     'You are Belly, a local tourism assistant for Brela, Croatia.',
     `CRITICAL: Respond ONLY in ${lang}. Never mix languages. Never switch to another language.`,
+    'Ignore previous messages written in other languages. Reply only in the language of the current user message.',
     'DATA PRIORITY — use this order only when the data is relevant to the user message:',
     '  1. VERIFIED EVENTS DATA (for event-related questions only)',
     '  2. VERIFIED FAQ DATA (use verbatim facts only)',

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getTenant, getMessages, saveMessages } = require('../db/sessions');
-const { parseMessage, detectLanguage, rageMessage } = require('../services/openai');
+const { detectLanguage, rageMessage } = require('../services/openai');
 const { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, detectEventPeriod, upsertWhatsappUser, getWhatsappUser, setOptIn, setAskedOptIn, setUserLang } = require('../db/bot');
 
 /**
@@ -57,6 +57,20 @@ const FALLBACK_MSG = {
 };
 function fallbackReply(lang) { return FALLBACK_MSG[lang] || FALLBACK_MSG.hr; }
 
+const BRELA_INFO_URL = 'https://brela.hr/';
+
+const OFF_TOPIC_MSG = {
+  hr: `Nažalost, trenutno nemam točnu informaciju za to.\nZa više informacija: ${BRELA_INFO_URL}`,
+  en: `I don't currently have that exact information.\nFor more information: ${BRELA_INFO_URL}`,
+  de: `Dazu habe ich im Moment leider keine genaue Information.\nMehr Infos: ${BRELA_INFO_URL}`,
+  it: `Al momento non ho questa informazione precisa.\nPer maggiori informazioni: ${BRELA_INFO_URL}`,
+  fr: `Je n'ai pas cette information précise pour le moment.\nPour plus d'informations : ${BRELA_INFO_URL}`,
+  sv: `Jag har tyvärr inte exakt den informationen just nu.\nMer information: ${BRELA_INFO_URL}`,
+  no: `Jeg har dessverre ikke akkurat den informasjonen akkurat nå.\nMer informasjon: ${BRELA_INFO_URL}`,
+  cs: `Tuto přesnou informaci teď bohužel nemám.\nVíce informací: ${BRELA_INFO_URL}`,
+};
+function offTopicReply(lang) { return OFF_TOPIC_MSG[lang] || OFF_TOPIC_MSG.en; }
+
 // Consent prompt — sent after a few exchanges if user hasn't opted in/out yet
 const CONSENT_ASK = {
   hr: 'Želiš li primati obavijesti o događajima u Brelima?\nOdgovori s DA ili NE 😊',
@@ -105,9 +119,9 @@ const OPT_OUT_CONFIRM = {
 // Language-aware labels and empty-state messages for time-specific event queries
 const EVENT_LABELS = {
   hr: {
-    today:    '📅 Događaji za danas:',
-    tomorrow: '📅 Događaji za sutra:',
-    week:     '📅 Događaji ovaj tjedan:',
+    today:    'Da, danas imamo događaje u Brelima:',
+    tomorrow: 'Da, sutra imamo događaje u Brelima:',
+    week:     'Evo događaja u Brelima ovaj tjedan:',
     empty: {
       today:    'Danas nema organiziranih događaja, ali evo par ideja:\n• Prošetajte starim gradom\n• Posjetite jednu od plaža\n• Isprobajte lokalne restorane 😊',
       tomorrow: 'Sutra nema organiziranih događaja, ali evo par ideja:\n• Prošetajte starim gradom\n• Posjetite jednu od plaža\n• Isprobajte lokalne restorane 😊',
@@ -115,9 +129,9 @@ const EVENT_LABELS = {
     },
   },
   en: {
-    today:    '📅 Events today:',
-    tomorrow: '📅 Events tomorrow:',
-    week:     '📅 Events this week:',
+    today:    'Yes, there are events in Brela today:',
+    tomorrow: 'Yes, there are events in Brela tomorrow:',
+    week:     'Here are the events in Brela this week:',
     empty: {
       today:    'No official events today, but here are some ideas:\n• Explore the old town and historic sites\n• Relax at one of the beautiful beaches\n• Discover local restaurants and cuisine 😊',
       tomorrow: 'No official events tomorrow, but here are some ideas:\n• Explore the old town and historic sites\n• Relax at one of the beautiful beaches\n• Discover local restaurants and cuisine 😊',
@@ -125,9 +139,9 @@ const EVENT_LABELS = {
     },
   },
   de: {
-    today:    '📅 Veranstaltungen heute:',
-    tomorrow: '📅 Veranstaltungen morgen:',
-    week:     '📅 Veranstaltungen diese Woche:',
+    today:    'Ja, heute gibt es Veranstaltungen in Brela:',
+    tomorrow: 'Ja, morgen gibt es Veranstaltungen in Brela:',
+    week:     'Hier sind die Veranstaltungen in Brela diese Woche:',
     empty: {
       today:    'Heute keine Veranstaltungen, aber hier ein paar Ideen:\n• Erkunden Sie die Altstadt und historische Stätten\n• Entspannen Sie an einem der schönen Strände\n• Entdecken Sie lokale Restaurants und die Küche 😊',
       tomorrow: 'Morgen keine Veranstaltungen, aber hier ein paar Ideen:\n• Erkunden Sie die Altstadt und historische Stätten\n• Entspannen Sie an einem der schönen Strände\n• Entdecken Sie lokale Restaurants und die Küche 😊',
@@ -135,9 +149,9 @@ const EVENT_LABELS = {
     },
   },
   it: {
-    today:    '📅 Eventi oggi:',
-    tomorrow: '📅 Eventi domani:',
-    week:     '📅 Eventi questa settimana:',
+    today:    'Sì, oggi ci sono eventi a Brela:',
+    tomorrow: 'Sì, domani ci sono eventi a Brela:',
+    week:     'Ecco gli eventi a Brela questa settimana:',
     empty: {
       today:    'Oggi nessun evento in programma, ma ecco alcune idee:\n• Esplora il centro storico e i luoghi d\'interesse\n• Rilassati su una delle splendide spiagge\n• Scopri i ristoranti locali e la cucina tipica 😊',
       tomorrow: 'Domani nessun evento in programma, ma ecco alcune idee:\n• Esplora il centro storico e i luoghi d\'interesse\n• Rilassati su una delle splendide spiagge\n• Scopri i ristoranti locali e la cucina tipica 😊',
@@ -145,9 +159,9 @@ const EVENT_LABELS = {
     },
   },
   fr: {
-    today:    "📅 Événements aujourd'hui:",
-    tomorrow: '📅 Événements demain:',
-    week:     '📅 Événements cette semaine:',
+    today:    "Oui, il y a des événements à Brela aujourd'hui :",
+    tomorrow: 'Oui, il y a des événements à Brela demain :',
+    week:     'Voici les événements à Brela cette semaine :',
     empty: {
       today:    "Aucun événement officiel aujourd'hui, mais voici quelques idées:\n• Explorez la vieille ville et les sites historiques\n• Détendez-vous sur l'une des belles plages\n• Découvrez les restaurants locaux et la cuisine 😊",
       tomorrow: "Aucun événement officiel demain, mais voici quelques idées:\n• Explorez la vieille ville et les sites historiques\n• Détendez-vous sur l'une des belles plages\n• Découvrez les restaurants locaux et la cuisine 😊",
@@ -187,11 +201,11 @@ const EVENT_LABELS = {
 };
 
 const UPCOMING_LABELS = {
-  hr: '📅 Nadolazeći događaji:',
-  en: '📅 Upcoming events:',
-  de: '📅 Kommende Veranstaltungen:',
-  it: '📅 Prossimi eventi:',
-  fr: '📅 Événements à venir:',
+  hr: 'Aktualni događaji u Brelima:',
+  en: 'Here are the upcoming events in Brela:',
+  de: 'Hier sind die kommenden Veranstaltungen in Brela:',
+  it: 'Ecco i prossimi eventi a Brela:',
+  fr: 'Voici les prochains événements à Brela :',
   sv: '📅 Kommande evenemang:',
   no: '📅 Kommende arrangementer:',
   cs: '📅 Nadcházející akce:',
@@ -199,29 +213,29 @@ const UPCOMING_LABELS = {
 
 const PERIOD_EMPTY_WITH_UPCOMING = {
   hr: {
-    today: 'Danas nema događaja.',
-    tomorrow: 'Sutra nema događaja.',
-    week: 'Ovaj tjedan nema događaja.',
+    today: 'Danas nema događaja u Brelima, ali uskoro dolazi ovo:',
+    tomorrow: 'Sutra nema događaja u Brelima, ali uskoro dolazi ovo:',
+    week: 'Ovaj tjedan nema događaja u Brelima, ali uskoro dolazi ovo:',
   },
   en: {
-    today: 'There are no events today.',
-    tomorrow: 'There are no events tomorrow.',
-    week: 'There are no events this week.',
+    today: 'There are no events in Brela today, but these are coming up soon:',
+    tomorrow: 'There are no events in Brela tomorrow, but these are coming up soon:',
+    week: 'There are no events in Brela this week, but these are coming up soon:',
   },
   de: {
-    today: 'Heute gibt es keine Veranstaltungen.',
-    tomorrow: 'Morgen gibt es keine Veranstaltungen.',
-    week: 'Diese Woche gibt es keine Veranstaltungen.',
+    today: 'Heute gibt es in Brela keine Veranstaltungen, aber das steht bald an:',
+    tomorrow: 'Morgen gibt es in Brela keine Veranstaltungen, aber das steht bald an:',
+    week: 'Diese Woche gibt es in Brela keine Veranstaltungen, aber das steht bald an:',
   },
   it: {
-    today: 'Oggi non ci sono eventi.',
-    tomorrow: 'Domani non ci sono eventi.',
-    week: 'Questa settimana non ci sono eventi.',
+    today: 'Oggi non ci sono eventi a Brela, ma questi arrivano presto:',
+    tomorrow: 'Domani non ci sono eventi a Brela, ma questi arrivano presto:',
+    week: 'Questa settimana non ci sono eventi a Brela, ma questi arrivano presto:',
   },
   fr: {
-    today: "Il n'y a pas d'événements aujourd'hui.",
-    tomorrow: "Il n'y a pas d'événements demain.",
-    week: "Il n'y a pas d'événements cette semaine.",
+    today: "Il n'y a pas d'événements à Brela aujourd'hui, mais voici ce qui arrive bientôt :",
+    tomorrow: "Il n'y a pas d'événements à Brela demain, mais voici ce qui arrive bientôt :",
+    week: "Il n'y a pas d'événements à Brela cette semaine, mais voici ce qui arrive bientôt :",
   },
   sv: {
     today: 'Det finns inga evenemang idag.',
@@ -299,12 +313,44 @@ const FORECAST_LONG_RANGE = {
   it: `Per le previsioni a 10 giorni:\n${FORECAST_LONG_RANGE_URL}`,
   fr: `Pour les prévisions à 10 jours:\n${FORECAST_LONG_RANGE_URL}`,
 };
+const WEATHER_LABELS = {
+  hr: {
+    current: 'Vrijeme u Brelima danas',
+    tomorrow: 'Vrijeme u Brelima sutra',
+    forecast: days => `Prognoza za sljedećih ${days} dana u Brelima`,
+    currentAndForecast: days => `Vrijeme danas i prognoza za sljedećih ${days} dana u Brelima`,
+  },
+  en: {
+    current: 'Weather in Brela today',
+    tomorrow: 'Weather in Brela tomorrow',
+    forecast: days => `Forecast for the next ${days} days in Brela`,
+    currentAndForecast: days => `Weather today and forecast for the next ${days} days in Brela`,
+  },
+  de: {
+    current: 'Wetter in Brela heute',
+    tomorrow: 'Wetter in Brela morgen',
+    forecast: days => `Vorhersage für die nächsten ${days} Tage in Brela`,
+    currentAndForecast: days => `Wetter heute und Vorhersage für die nächsten ${days} Tage in Brela`,
+  },
+  it: {
+    current: 'Meteo a Brela oggi',
+    tomorrow: 'Meteo a Brela domani',
+    forecast: days => `Previsioni per i prossimi ${days} giorni a Brela`,
+    currentAndForecast: days => `Meteo di oggi e previsioni per i prossimi ${days} giorni a Brela`,
+  },
+  fr: {
+    current: "Météo à Brela aujourd'hui",
+    tomorrow: 'Météo à Brela demain',
+    forecast: days => `Prévisions pour les ${days} prochains jours à Brela`,
+    currentAndForecast: days => `Météo du jour et prévisions pour les ${days} prochains jours à Brela`,
+  },
+};
 const NO_EVENTS = {
-  hr: 'Trenutno nema nadolazećih događaja, ali evo par ideja:\n• Prošetajte starim gradom\n• Posjetite jednu od plaža\n• Isprobajte lokalne restorane 😊',
-  en: 'No upcoming events at the moment, but here are some ideas:\n• Explore the old town and historic sites\n• Relax at one of the beautiful beaches\n• Discover local restaurants and cuisine 😊',
-  de: 'Aktuell keine Veranstaltungen, aber hier ein paar Ideen:\n• Erkunden Sie die Altstadt und historische Stätten\n• Entspannen Sie an einem der schönen Strände\n• Entdecken Sie lokale Restaurants und die Küche 😊',
-  it: 'Nessun evento in programma, ma ecco alcune idee:\n• Esplora il centro storico e i luoghi d\'interesse\n• Rilassati su una delle splendide spiagge\n• Scopri i ristoranti locali e la cucina tipica 😊',
-  fr: "Aucun événement à venir, mais voici quelques idées:\n• Explorez la vieille ville et les sites historiques\n• Détendez-vous sur l'une des belles plages\n• Découvrez les restaurants locaux et la cuisine 😊",
+  hr: 'Trenutno nema nadolazećih događaja u Brelima.',
+  en: 'There are no upcoming events in Brela at the moment.',
+  de: 'Derzeit gibt es keine kommenden Veranstaltungen in Brela.',
+  it: 'Al momento non ci sono eventi in arrivo a Brela.',
+  fr: "Il n'y a pas d'événements à venir à Brela pour le moment.",
   sv: 'Inga kommande evenemang, men här är några idéer:\n• Utforska gamla stan och historiska platser\n• Koppla av på en av de vackra stränderna\n• Upptäck lokala restauranger och köket 😊',
   no: 'Ingen kommende arrangementer, men her er noen forslag:\n• Utforsk gamlebyen og historiske steder\n• Slapp av på en av de vakre strendene\n• Oppdag lokale restauranter og kjøkkenet 😊',
   cs: 'Žádné nadcházející akce, ale zde je pár tipů:\n• Prozkoumejte staré město a historická místa\n• Odpočiňte si na jedné z krásných pláží\n• Objevte místní restaurace a kuchyni 😊',
@@ -440,6 +486,64 @@ function isWeatherQuery(msg) {
   return WEATHER_QUERY_WORDS.some(w => lower.includes(w));
 }
 
+function normalizeLookup(text) {
+  return String(text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/['’]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function getLanguageScopedHistory(history, lang) {
+  return history
+    .filter(msg => detectLanguage(msg.content || '') === lang)
+    .slice(-6);
+}
+
+function detectWeatherIntent(message) {
+  const normalized = normalizeLookup(message);
+  const requestedDaysMatch = normalized.match(/\b(\d{1,2})\b/);
+  const requestedDays = requestedDaysMatch ? parseInt(requestedDaysMatch[1], 10) : null;
+
+  const asksTomorrow = ['tomorrow', 'sutra', 'morgen', 'domani', 'demain'].some(word => normalized.includes(word));
+  const asksCurrent = ['today', 'danas', 'heute', 'oggi', 'aujourdhui', 'current', 'now', 'trenutno', 'sada'].some(word => normalized.includes(word));
+  const asksMulti = ['forecast', 'next', 'coming', 'days', 'day', 'dana', 'dan', 'week', 'tjedan', 'tage', 'giorni', 'jours', 'previsioni', 'prognoza'].some(word => normalized.includes(word));
+
+  if (requestedDays && requestedDays > 5) return { type: 'weather_long', days: requestedDays };
+  if ((requestedDays && requestedDays > 1) || asksMulti) {
+    return { type: asksCurrent ? 'weather_current_and_multi' : 'weather_multi', days: Math.min(requestedDays || 3, 5) };
+  }
+  if (asksTomorrow) return { type: 'weather_tomorrow', days: 1 };
+  return { type: 'weather_current', days: 0 };
+}
+
+function formatShortDate(dateInput) {
+  const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  return `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}.`;
+}
+
+function formatWeatherCurrent(city, temp, desc, lang) {
+  const labels = WEATHER_LABELS[lang] || WEATHER_LABELS.en;
+  return `🌤️ ${labels.current}: ${temp}°C, ${desc}`;
+}
+
+function formatWeatherTomorrow(city, temp, desc, lang) {
+  const labels = WEATHER_LABELS[lang] || WEATHER_LABELS.en;
+  return `🌤️ ${labels.tomorrow}: ${temp}°C, ${desc}`;
+}
+
+function formatWeatherForecast(city, forecastDays, lang, requestedDays, currentLine = null) {
+  const labels = WEATHER_LABELS[lang] || WEATHER_LABELS.en;
+  const lines = forecastDays.map(entry => `${formatShortDate(entry.date)}: ${entry.temp}°C, ${entry.desc}`);
+  const header = currentLine
+    ? labels.currentAndForecast(requestedDays)
+    : labels.forecast(requestedDays);
+  return [currentLine, `🌤️ ${header}:\n${lines.join('\n')}`].filter(Boolean).join('\n\n');
+}
+
 router.post('/webhook', async (req, res) => {
   console.log('WEBHOOK HIT');
   console.log('[webhook] incoming body:', JSON.stringify(req.body));
@@ -530,15 +634,13 @@ router.post('/webhook', async (req, res) => {
     if (EXACT_GREETINGS.has(greetingNorm) && history.length === 0) {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', activeLang).catch(() => {});
       console.log('[webhook] FINAL RESPONSE SENT — greeting (first message only)');
-      return res.send(twiml('Bok! Ja sam Belly, vaš lokalni vodič u Brelima 😊'));
+      return res.send(twiml(greetingReply(activeLang)));
     }
 
-    // ── WEATHER — keyword-detected, uses parseMessage only for period intent ─
+    // ── WEATHER — keyword-detected, API-first, no AI formatting ─────────────
     if (isWeatherQuery(trimmedMsg)) {
-      const { lang: aiLang, intent: weatherIntent } = await parseMessage(
-        trimmedMsg, tenant.system_prompt, model, history, {}
-      );
-      const wLang  = aiLang || activeLang;
+      const weatherIntent = detectWeatherIntent(trimmedMsg);
+      const wLang  = activeLang;
       const apiKey = process.env.OPENWEATHER_API_KEY;
       const city   = tenant.city || 'Brela';
       const owLang = ['hr', 'en', 'de', 'it', 'fr'].includes(wLang) ? wLang : 'en';
@@ -551,93 +653,97 @@ router.post('/webhook', async (req, res) => {
       }
 
       try {
-        let weatherText = null;
+        if (weatherIntent.type === 'weather_long') {
+          console.log('[webhook] FINAL RESPONSE SENT — weather long-range link');
+          return res.send(twiml(FORECAST_LONG_RANGE[wLang] || FORECAST_LONG_RANGE.en));
+        }
 
-        if (weatherIntent === 'weather_multi') {
-          const daysMatch     = trimmedMsg.match(/\d+/);
-          const requestedDays = daysMatch ? Math.min(parseInt(daysMatch[0], 10), 5) : 3;
+        let currentLine = null;
+        let forecastReply = null;
 
-          if (daysMatch && parseInt(daysMatch[0], 10) > 5) {
-            console.log('[webhook] FINAL RESPONSE SENT — weather long-range link');
-            return res.send(twiml(FORECAST_LONG_RANGE[wLang] || FORECAST_LONG_RANGE.en));
-          }
-
-          const url = `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric&lang=${owLang}`;
-          const forecastRes = await fetch(url);
-          const data = await forecastRes.json();
-
-          if (!forecastRes.ok) {
-            return res.send(twiml(FORECAST_UNAVAILABLE[wLang] || FORECAST_UNAVAILABLE.en));
-          }
-
-          const days = [];
-          for (let i = 1; i <= requestedDays; i++) {
-            const d = new Date();
-            d.setDate(d.getDate() + i);
-            const dateStr = d.toISOString().slice(0, 10);
-            const entry = data.list.find(e => e.dt_txt.startsWith(dateStr) && e.dt_txt.includes('12:00'))
-                       || data.list.find(e => e.dt_txt.startsWith(dateStr));
-            if (entry) {
-              const temp = Math.round(entry.main.temp);
-              const desc = entry.weather[0]?.description || '';
-              days.push(`${dateStr}: ${temp}°C, ${desc}`);
-            }
-          }
-
-          if (!days.length) return res.send(twiml(FORECAST_UNAVAILABLE[wLang] || FORECAST_UNAVAILABLE.en));
-
-          const label = { hr: 'Prognoza', en: 'Forecast', de: 'Vorhersage', it: 'Previsioni', fr: 'Prévisions' }[wLang] || 'Forecast';
-          weatherText = `🌤️ ${city} — ${label}:\n${days.join('\n')}`;
-
-        } else if (weatherIntent === 'weather_tomorrow') {
-          const url = `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric&lang=${owLang}`;
-          const forecastRes = await fetch(url);
-          const data = await forecastRes.json();
-
-          if (!forecastRes.ok) return res.send(twiml(FORECAST_UNAVAILABLE[wLang] || FORECAST_UNAVAILABLE.en));
-
-          const tomorrow    = new Date();
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          const tomorrowDate = tomorrow.toISOString().slice(0, 10);
-          const entry = data.list.find(e => e.dt_txt.startsWith(tomorrowDate) && e.dt_txt.includes('12:00'))
-                     || data.list.find(e => e.dt_txt.startsWith(tomorrowDate));
-
-          if (!entry) return res.send(twiml(FORECAST_UNAVAILABLE[wLang] || FORECAST_UNAVAILABLE.en));
-
-          const temp  = Math.round(entry.main.temp);
-          const desc  = entry.weather[0]?.description || '';
-          const label = { hr: 'Sutra', en: 'Tomorrow', de: 'Morgen', it: 'Domani', fr: 'Demain' }[wLang] || 'Tomorrow';
-          weatherText = `🌤️ ${city} — ${label}: ${temp}°C, ${desc}`;
-
-        } else {
-          // weather_current (default)
-          const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric&lang=${owLang}`;
-          const weatherRes = await fetch(url);
-          const data = await weatherRes.json();
+        if (weatherIntent.type === 'weather_current' || weatherIntent.type === 'weather_current_and_multi') {
+          const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric&lang=${owLang}`;
+          const weatherRes = await fetch(weatherUrl);
+          const currentData = await weatherRes.json();
 
           if (!weatherRes.ok) return res.send(twiml(WEATHER_UNAVAILABLE[wLang] || WEATHER_UNAVAILABLE.en));
 
-          const temp  = Math.round(data.main.temp);
-          const desc  = data.weather[0]?.description || '';
-          const label = { hr: 'Trenutno', en: 'Now', de: 'Jetzt', it: 'Ora', fr: 'Maintenant' }[wLang] || 'Now';
-          weatherText = `🌤️ ${city} — ${label}: ${temp}°C, ${desc}`;
+          currentLine = formatWeatherCurrent(
+            city,
+            Math.round(currentData.main.temp),
+            currentData.weather[0]?.description || '',
+            wLang
+          );
+
+          if (weatherIntent.type === 'weather_current') {
+            await saveMessages(tenant.id, userPhone, [
+              ...history,
+              { role: 'user', content: trimmedMsg },
+              { role: 'assistant', content: currentLine },
+            ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
+            console.log('[webhook] FINAL RESPONSE SENT — weather (current)');
+            return res.send(twiml(currentLine));
+          }
         }
 
-        // AI formats the raw data — raw API text is always the guaranteed fallback
-        let aiReply = null;
-        try {
-          aiReply = await rageMessage({
-            message: weatherText,
-            lang: wLang,
-            systemPrompt: tenant.system_prompt,
-            model,
-          });
-        } catch (e) {
-          console.error('[webhook] AI failed (weather):', e.message);
+        const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric&lang=${owLang}`;
+        const forecastRes = await fetch(forecastUrl);
+        const forecastData = await forecastRes.json();
+
+        if (!forecastRes.ok) {
+          const unavailable = weatherIntent.type === 'weather_tomorrow'
+            ? (FORECAST_UNAVAILABLE[wLang] || FORECAST_UNAVAILABLE.en)
+            : (FORECAST_UNAVAILABLE[wLang] || FORECAST_UNAVAILABLE.en);
+          return res.send(twiml(unavailable));
         }
 
-        const reply = aiReply || weatherText;
-        console.log(`[webhook] FINAL RESPONSE SENT — weather (${weatherIntent || 'current'})`);
+        if (weatherIntent.type === 'weather_tomorrow') {
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const tomorrowDate = tomorrow.toISOString().slice(0, 10);
+          const entry = forecastData.list.find(e => e.dt_txt.startsWith(tomorrowDate) && e.dt_txt.includes('12:00'))
+            || forecastData.list.find(e => e.dt_txt.startsWith(tomorrowDate));
+
+          if (!entry) return res.send(twiml(FORECAST_UNAVAILABLE[wLang] || FORECAST_UNAVAILABLE.en));
+
+          forecastReply = formatWeatherTomorrow(
+            city,
+            Math.round(entry.main.temp),
+            entry.weather[0]?.description || '',
+            wLang
+          );
+        } else {
+          const forecastDays = [];
+          const requestedDays = weatherIntent.days || 3;
+
+          for (let i = 1; i <= requestedDays; i += 1) {
+            const day = new Date();
+            day.setDate(day.getDate() + i);
+            const dateStr = day.toISOString().slice(0, 10);
+            const entry = forecastData.list.find(e => e.dt_txt.startsWith(dateStr) && e.dt_txt.includes('12:00'))
+              || forecastData.list.find(e => e.dt_txt.startsWith(dateStr));
+
+            if (entry) {
+              forecastDays.push({
+                date: dateStr,
+                temp: Math.round(entry.main.temp),
+                desc: entry.weather[0]?.description || '',
+              });
+            }
+          }
+
+          if (!forecastDays.length) return res.send(twiml(FORECAST_UNAVAILABLE[wLang] || FORECAST_UNAVAILABLE.en));
+          forecastReply = formatWeatherForecast(city, forecastDays, wLang, requestedDays, currentLine);
+        }
+
+        await saveMessages(tenant.id, userPhone, [
+          ...history,
+          { role: 'user', content: trimmedMsg },
+          { role: 'assistant', content: forecastReply },
+        ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
+
+        console.log(`[webhook] FINAL RESPONSE SENT — weather (${weatherIntent.type})`);
+        const reply = forecastReply || currentLine || (WEATHER_UNAVAILABLE[wLang] || WEATHER_UNAVAILABLE.en);
         return res.send(twiml(reply));
 
       } catch (weatherErr) {
@@ -691,26 +797,9 @@ router.post('/webhook', async (req, res) => {
         return res.send(twiml(noEventsReply));
       }
 
-      // DB data is the source of truth — always build raw text first
-      const rawEventsText = eventPeriod
+      reply = eventPeriod
         ? formatEventsList(events, eventPeriod, activeLang)
-        : formatEventsForContext(events);
-
-      let aiReply = null;
-      try {
-        aiReply = await rageMessage({
-          message: 'Format these events nicely for WhatsApp. Keep it short and engaging.',
-          eventContext: formatEventsForContext(events),
-          lang: activeLang,
-          systemPrompt: tenant.system_prompt,
-          model,
-        });
-      } catch (e) {
-        console.error('[webhook] AI failed (events):', e.message);
-      }
-
-      // AI only polishes — DB data is never lost
-      reply = aiReply || rawEventsText;
+        : formatUpcomingEventsList(events, activeLang);
 
       await saveMessages(tenant.id, userPhone, [
         ...history,
@@ -727,20 +816,34 @@ router.post('/webhook', async (req, res) => {
     if (faqMatch) {
       // FAQ is the source of truth — AI only polishes the wording
       const rawAnswer = faqMatch.answer;
-      let aiReply = null;
-      try {
-        aiReply = await rageMessage({
-          message:    trimmedMsg,
-          baseAnswer: rawAnswer,
-          history,
-          lang: activeLang,
-          systemPrompt: tenant.system_prompt,
-          model,
-        });
-      } catch (e) {
-        console.error('[webhook] AI failed (FAQ):', e.message);
+      const answerLang = detectLanguage(rawAnswer);
+      let faqReply = rawAnswer;
+
+      if (answerLang !== activeLang) {
+        try {
+          let aiReply = await rageMessage({
+            message: trimmedMsg,
+            baseAnswer: rawAnswer,
+            history: getLanguageScopedHistory(history, activeLang),
+            lang: activeLang,
+            systemPrompt: tenant.system_prompt,
+            model,
+          });
+          if (aiReply && detectLanguage(aiReply) !== activeLang) {
+            aiReply = await rageMessage({
+              message: trimmedMsg,
+              baseAnswer: rawAnswer,
+              history: [],
+              lang: activeLang,
+              systemPrompt: tenant.system_prompt,
+              model,
+            });
+          }
+          faqReply = aiReply || rawAnswer;
+        } catch (e) {
+          console.error('[webhook] AI failed (FAQ):', e.message);
+        }
       }
-      const faqReply = aiReply || rawAnswer;
 
       await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
       await saveMessages(tenant.id, userPhone, [
@@ -786,9 +889,7 @@ router.post('/webhook', async (req, res) => {
     if (!followUp && !isRelevant(trimmedMsg)) {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', activeLang).catch(() => {});
       console.log(`[webhook] FINAL RESPONSE SENT — off-topic: "${trimmedMsg.slice(0, 40)}"`);
-      return res.send(twiml(
-        'Nažalost nemam točnu informaciju za to.\nZa sve informacije obratite se Turističkoj zajednici Brela 😊'
-      ));
+      return res.send(twiml(offTopicReply(activeLang)));
     }
 
     // ── Rate limit ───────────────────────────────────────────────────────────
@@ -799,20 +900,27 @@ router.post('/webhook', async (req, res) => {
       return res.send(twiml(fallbackReply(activeLang)));
     }
 
-    // ── STEP 6: AI FALLBACK — rageMessage with event context ─────────────────
-    const upcomingEvents  = await getUpcomingEvents(tenant.id).catch(() => []);
-    const eventContextAI  = upcomingEvents.length ? formatEventsForContext(upcomingEvents) : null;
-
+    // ── STEP 6: AI FALLBACK — tourism questions not covered by DB ────────────
+    const scopedHistory = getLanguageScopedHistory(history, activeLang);
     let aiReply = null;
     try {
       aiReply = await rageMessage({
         message: trimmedMsg,
-        history,
-        eventContext: eventContextAI,
+        history: scopedHistory,
         lang: activeLang,
         systemPrompt: tenant.system_prompt,
         model,
       });
+
+      if (aiReply && detectLanguage(aiReply) !== activeLang) {
+        aiReply = await rageMessage({
+          message: trimmedMsg,
+          history: [],
+          lang: activeLang,
+          systemPrompt: tenant.system_prompt,
+          model,
+        });
+      }
     } catch (e) {
       console.error('[webhook] AI failed (general):', e.message);
     }
