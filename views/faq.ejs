@@ -116,8 +116,8 @@
 <style>
 /* Link section in create form */
 .faq-link-section {
-  background: #f4f6f8;
-  border: 1px solid #e4e4e7;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 14px 16px;
   margin-bottom: 16px;
@@ -125,13 +125,13 @@
 .faq-link-section-label {
   font-size: 12px;
   font-weight: 700;
-  color: #444;
+  color: var(--text);
   margin-bottom: 12px;
   text-transform: none;
   letter-spacing: 0;
 }
 .faq-link-section input {
-  background: #ffffff;
+  background: var(--surface);
 }
 .filter-bar {
   margin-bottom: 18px;
@@ -139,36 +139,60 @@
 .filter-form {
   display: flex;
   gap: 12px;
-  align-items: end;
+  align-items: flex-end;
   flex-wrap: wrap;
   padding: 14px 16px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
 }
+/* Zero out global input bottom-margin so baseline alignment works */
+.filter-form input,
+.filter-form select {
+  margin-bottom: 0;
+}
 .filter-group {
   min-width: 180px;
   flex: 0 0 auto;
 }
 .filter-group-grow {
-  flex: 1 1 280px;
+  flex: 1 1 240px;
 }
 .filter-actions {
   display: flex;
   gap: 8px;
-  align-items: end;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+@media (max-width: 640px) {
+  .filter-form {
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+  }
+  .filter-group,
+  .filter-group-grow {
+    min-width: 0;
+    width: 100%;
+  }
+  .filter-actions {
+    width: 100%;
+  }
+  .filter-actions .btn {
+    flex: 1;
+  }
 }
 .faq-badge {
   display: inline-flex;
   align-items: center;
-  padding: 4px 8px;
-  margin-bottom: 8px;
+  padding: 3px 8px;
+  margin-bottom: 6px;
   border-radius: 999px;
   font-size: 11px;
   font-weight: 700;
-  color: #93c5fd;
-  background: rgba(59,130,246,0.12);
-  border: 1px solid rgba(59,130,246,0.22);
+  color: #0A7EA4;
+  background: rgba(10,126,164,0.1);
+  border: 1px solid rgba(10,126,164,0.22);
 }
 
 /* Link preview card in FAQ list */
