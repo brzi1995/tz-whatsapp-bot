@@ -53,14 +53,14 @@ function detectGreetingLanguage(msg) {
   return GREETING_LANGUAGE[lower] || null;
 }
 const GREETING_MSG = {
-  hr: 'Pozdrav! Ja sam Belly, vaš lokalni turistički vodič za Brela.\nKako mogu pomoći s informacijama o Brelima i okolici?',
-  en: "Hello! I'm Belly, your local tourist guide for Brela.\nHow can I help with information about Brela and the surrounding area?",
-  de: 'Hallo! Ich bin Belly, Ihr lokaler Touristenführer für Brela.\nWie kann ich Ihnen mit Informationen über Brela und die Umgebung helfen?',
-  it: 'Ciao! Sono Belly, la vostra guida turistica locale per Brela.\nCome posso aiutarti con informazioni su Brela e dintorni?',
-  fr: 'Bonjour! Je suis Belly, votre guide touristique locale pour Brela.\nComment puis-je vous aider avec des informations sur Brela et les environs ?',
-  sv: 'Hej! Jag är Belly, din lokala turistguide för Brela.\nHur kan jag hjälpa dig med information om Brela och området runt omkring?',
-  no: 'Hei! Jeg er Belly, din lokale turistguide for Brela.\nHvordan kan jeg hjelpe med informasjon om Brela og området rundt?',
-  cs: 'Ahoj! Jsem Belly, váš místní turistický průvodce pro Brela.\nJak mohu pomoci s informacemi o Brele a okolí?',
+  hr: 'Bok! Ja sam Belly, vaš lokalni turistički vodič za Brela. Kako vam mogu pomoći?',
+  en: 'Bok! Ja sam Belly, vaš lokalni turistički vodič za Brela. Kako vam mogu pomoći?',
+  de: 'Bok! Ja sam Belly, vaš lokalni turistički vodič za Brela. Kako vam mogu pomoći?',
+  it: 'Bok! Ja sam Belly, vaš lokalni turistički vodič za Brela. Kako vam mogu pomoći?',
+  fr: 'Bok! Ja sam Belly, vaš lokalni turistički vodič za Brela. Kako vam mogu pomoći?',
+  sv: 'Bok! Ja sam Belly, vaš lokalni turistički vodič za Brela. Kako vam mogu pomoći?',
+  no: 'Bok! Ja sam Belly, vaš lokalni turistički vodič za Brela. Kako vam mogu pomoći?',
+  cs: 'Bok! Ja sam Belly, vaš lokalni turistički vodič za Brela. Kako vam mogu pomoći?',
 };
 function greetingReply(lang) { return GREETING_MSG[lang] || GREETING_MSG.hr; }
 
