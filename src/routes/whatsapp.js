@@ -66,14 +66,14 @@ function greetingReply(lang) { return GREETING_MSG[lang] || GREETING_MSG.hr; }
 
 // Final fallback — used when AI returns nothing useful and for spam
 const FALLBACK_MSG = {
-  hr: 'Nisam siguran da sam razumio 🤔\nMožeš pitati o plažama, parkingu, restoranima ili događajima.',
-  en: "I'm not sure I understood 🤔\nYou can ask about beaches, parking, restaurants, or events.",
-  de: 'Ich bin mir nicht sicher, ob ich das verstanden habe 🤔\nSie können nach Stränden, Parken, Restaurants oder Veranstaltungen fragen.',
-  it: 'Non sono sicuro di aver capito 🤔\nPuoi chiedere di spiagge, parcheggi, ristoranti o eventi.',
-  fr: "Je ne suis pas sûr d'avoir compris 🤔\nVous pouvez demander des informations sur les plages, le parking, les restaurants ou les événements.",
-  sv: 'Jag är inte säker på att jag förstod 🤔\nDu kan fråga om stränder, parkering, restauranger eller evenemang.',
-  no: 'Jeg er ikke sikker på at jeg forstod 🤔\nDu kan spørre om strender, parkering, restauranter eller arrangementer.',
-  cs: 'Nejsem si jistý, že jsem rozuměl 🤔\nMůžete se ptát na pláže, parkování, restaurace nebo akce.',
+  hr: 'Nisam razumio pitanje. Možete pojasniti koju informaciju trebate da odgovor bude točan?',
+  en: "I didn't understand the question. Please clarify what information you need so I can be precise.",
+  de: 'Ich habe die Frage nicht verstanden. Bitte sagen Sie, welche Information Sie brauchen, damit ich genau antworte.',
+  it: "Non ho capito la domanda. Puoi chiarire quale informazione ti serve così rispondo preciso?",
+  fr: "Je n'ai pas compris la question. Pouvez-vous préciser quelle info vous voulez pour que je réponde précisément ?",
+  sv: 'Jag förstod inte frågan. Förtydliga vilken information du behöver så svarar jag exakt.',
+  no: 'Jeg forsto ikke spørsmålet. Presiser hvilken informasjon du trenger, så svarer jeg presist.',
+  cs: 'Nerozuměl jsem otázce. Uveďte prosím, jakou informaci potřebujete, a odpovím přesně.',
 };
 function fallbackReply(lang) { return FALLBACK_MSG[lang] || FALLBACK_MSG.hr; }
 
