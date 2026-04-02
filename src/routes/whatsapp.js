@@ -54,35 +54,35 @@ function detectGreetingLanguage(msg) {
 }
 const GREETING_MSG = {
   hr: 'Bok! Ja sam Belly, vaš lokalni turistički vodič za Brela. Kako vam mogu pomoći?',
-  en: 'Bok! Ja sam Belly, vaš lokalni turistički vodič za Brela. Kako vam mogu pomoći?',
-  de: 'Bok! Ja sam Belly, vaš lokalni turistički vodič za Brela. Kako vam mogu pomoći?',
-  it: 'Bok! Ja sam Belly, vaš lokalni turistički vodič za Brela. Kako vam mogu pomoći?',
-  fr: 'Bok! Ja sam Belly, vaš lokalni turistički vodič za Brela. Kako vam mogu pomoći?',
-  sv: 'Bok! Ja sam Belly, vaš lokalni turistički vodič za Brela. Kako vam mogu pomoći?',
-  no: 'Bok! Ja sam Belly, vaš lokalni turistički vodič za Brela. Kako vam mogu pomoći?',
-  cs: 'Bok! Ja sam Belly, vaš lokalni turistički vodič za Brela. Kako vam mogu pomoći?',
+  en: "Hello! I'm Belly, your local guide for Brela. How can I help?",
+  de: 'Hallo! Ich bin Belly, Ihr lokaler Guide für Brela. Wie kann ich helfen?',
+  it: 'Ciao! Sono Belly, la tua guida locale per Brela. Come posso aiutarti?',
+  fr: "Bonjour ! Je suis Belly, votre guide local pour Brela. Comment puis-je aider ?",
+  sv: 'Hej! Jag är Belly, din lokala guide för Brela. Hur kan jag hjälpa till?',
+  no: 'Hei! Jeg er Belly, din lokale guide for Brela. Hvordan kan jeg hjelpe?',
+  cs: 'Ahoj! Jsem Belly, tvůj místní průvodce pro Brela. Jak mohu pomoci?',
 };
 function greetingReply(lang) { return GREETING_MSG[lang] || GREETING_MSG.hr; }
 
 const YES_MSG = {
   hr: 'Naravno — kako vam mogu pomoći?',
-  en: 'Naravno — kako vam mogu pomoći?',
-  de: 'Naravno — kako vam mogu pomoći?',
-  it: 'Naravno — kako vam mogu pomoći?',
-  fr: 'Naravno — kako vam mogu pomoći?',
-  sv: 'Naravno — kako vam mogu pomoći?',
-  no: 'Naravno — kako vam mogu pomoći?',
-  cs: 'Naravno — kako vam mogu pomoći?',
+  en: 'Sure — how can I help?',
+  de: 'Klar — wie kann ich helfen?',
+  it: 'Certo — come posso aiutarti?',
+  fr: 'Bien sûr — comment puis-je aider ?',
+  sv: 'Självklart — hur kan jag hjälpa till?',
+  no: 'Klart — hvordan kan jeg hjelpe?',
+  cs: 'Jasně — jak mohu pomoci?',
 };
 const NO_MSG = {
   hr: 'U redu — tu sam ako vam nešto zatreba o Brelima.',
-  en: 'U redu — tu sam ako vam nešto zatreba o Brelima.',
-  de: 'U redu — tu sam ako vam nešto zatreba o Brelima.',
-  it: 'U redu — tu sam ako vam nešto zatreba o Brelima.',
-  fr: 'U redu — tu sam ako vam nešto zatreba o Brelima.',
-  sv: 'U redu — tu sam ako vam nešto zatreba o Brelima.',
-  no: 'U redu — tu sam ako vam nešto zatreba o Brelima.',
-  cs: 'U redu — tu sam ako vam nešto zatreba o Brelima.',
+  en: "Alright — I'm here if you need anything about Brela.",
+  de: 'Alles klar — jsem tu, pokud něco potřebujete o Brela.', 
+  it: 'Va bene — sono qui se ti serve altro su Brela.',
+  fr: "D'accord — je suis là si vous avez besoin de quelque chose sur Brela.",
+  sv: 'Okej — jag är här om du behöver något om Brela.',
+  no: 'Greit — jeg er her hvis du trenger noe om Brela.',
+  cs: 'Dobře — jsem tu, pokud budete něco potřebovat o Brela.',
 };
 function yesReply(lang) { return YES_MSG[lang] || YES_MSG.hr; }
 function noReply(lang) { return NO_MSG[lang] || NO_MSG.hr; }
@@ -434,18 +434,18 @@ function formatPeriodFallbackWithUpcoming(events, period, lang) {
 
 // Language-aware templates used instead of extra AI calls
 const WEATHER_UNAVAILABLE = {
-  hr: '🌤️ Podaci o vremenu trenutno nisu dostupni.',
-  en: '🌤️ Weather data is temporarily unavailable.',
-  de: '🌤️ Wetterdaten sind derzeit nicht verfügbar.',
-  it: '🌤️ Dati meteo non disponibili al momento.',
-  fr: '🌤️ Données météo temporairement indisponibles.',
+  hr: `🌤️ Trenutne podatke nemam pri ruci. Pogledaj ovdje: ${FORECAST_LONG_RANGE_URL}`,
+  en: `🌤️ I don't have live data right now. Check here: ${FORECAST_LONG_RANGE_URL}`,
+  de: `🌤️ Keine Live-Daten gerade. Schau hier: ${FORECAST_LONG_RANGE_URL}`,
+  it: `🌤️ Non ho i dati live ora. Vedi qui: ${FORECAST_LONG_RANGE_URL}`,
+  fr: `🌤️ Pas de données en direct pour l'instant. Voir ici : ${FORECAST_LONG_RANGE_URL}`,
 };
 const FORECAST_UNAVAILABLE = {
-  hr: '🌤️ Prognoza trenutno nije dostupna.',
-  en: '🌤️ Forecast is temporarily unavailable.',
-  de: '🌤️ Wettervorhersage derzeit nicht verfügbar.',
-  it: '🌤️ Previsioni non disponibili al momento.',
-  fr: '🌤️ Prévisions temporairement indisponibles.',
+  hr: `🌤️ Prognoza mi nije pri ruci. Detaljna: ${FORECAST_LONG_RANGE_URL}`,
+  en: `🌤️ I don't have that forecast handy. Full details: ${FORECAST_LONG_RANGE_URL}`,
+  de: `🌤️ Keine Vorhersage verfügbar. Details: ${FORECAST_LONG_RANGE_URL}`,
+  it: `🌤️ Non ho quella previsione adesso. Dettagli: ${FORECAST_LONG_RANGE_URL}`,
+  fr: `🌤️ Prévision indisponible. Détails : ${FORECAST_LONG_RANGE_URL}`,
 };
 const FORECAST_LONG_RANGE_URL = 'https://weather.com/hr-HR/vrijeme/10dana/l/Brela+Splitsko+dalmatinska+%C5%BEupanija';
 const FORECAST_LONG_RANGE = {
@@ -1101,9 +1101,7 @@ router.post('/webhook', async (req, res) => {
         const forecastData = await forecastRes.json();
 
         if (!forecastRes.ok) {
-          const unavailable = weatherIntent.type === 'weather_tomorrow'
-            ? (FORECAST_UNAVAILABLE[wLang] || FORECAST_UNAVAILABLE.en)
-            : (FORECAST_UNAVAILABLE[wLang] || FORECAST_UNAVAILABLE.en);
+          const unavailable = FORECAST_UNAVAILABLE[wLang] || FORECAST_UNAVAILABLE.en;
           return res.send(twiml(unavailable));
         }
 
