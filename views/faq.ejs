@@ -10,6 +10,13 @@
   <div class="add-form">
     <h2>Dodaj novi unos</h2>
     <form method="POST" action="/admin/faq">
+      <label>Kategorija</label>
+      <select name="category">
+        <option value="">Bez kategorije</option>
+        <% categories.forEach(function(category) { %>
+          <option value="<%= category %>"><%= category %></option>
+        <% }); %>
+      </select>
       <label>Pitanje</label>
       <input type="text" name="question" placeholder="Npr. Kada je otvorena plaža?" required>
       <label>Odgovor</label>
@@ -37,6 +44,30 @@
     </form>
   </div>
 
+  <div class="filter-bar">
+    <form method="GET" action="/admin/faq" class="filter-form">
+      <div class="filter-group">
+        <label>Filtriraj po kategoriji</label>
+        <select name="category">
+          <option value="">Sve kategorije</option>
+          <% categories.forEach(function(category) { %>
+            <option value="<%= category %>" <%= activeCategory === category ? 'selected' : '' %>><%= category %></option>
+          <% }); %>
+        </select>
+      </div>
+      <div class="filter-group filter-group-grow">
+        <label>Pretraži FAQ</label>
+        <input type="text" name="q" value="<%= searchQuery || '' %>" placeholder="Pretraži po pitanju ili odgovoru">
+      </div>
+      <div class="filter-actions">
+        <button type="submit" class="btn btn-secondary">Primijeni</button>
+        <% if (activeCategory || searchQuery) { %>
+          <a href="/admin/faq" class="btn btn-secondary">Reset</a>
+        <% } %>
+      </div>
+    </form>
+  </div>
+
   <% if (faqs.length === 0) { %>
     <div class="empty">Nema FAQ unosa. Dodajte prvi unos gore.</div>
   <% } else { %>
@@ -44,6 +75,9 @@
       <% faqs.forEach(function(f) { %>
       <div class="item-card" style="align-items:flex-start">
         <div class="item-card-body">
+          <% if (f.category) { %>
+            <div class="faq-badge"><%= f.category %></div>
+          <% } %>
           <div class="item-card-title"><%= f.question %></div>
           <div class="item-card-meta"><%= f.answer %></div>
           <% if (f.link_url || f.link_image) { %>
@@ -98,6 +132,43 @@
 }
 .faq-link-section input {
   background: #ffffff;
+}
+.filter-bar {
+  margin-bottom: 18px;
+}
+.filter-form {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  background: #121214;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.filter-group {
+  min-width: 180px;
+  flex: 0 0 auto;
+}
+.filter-group-grow {
+  flex: 1 1 280px;
+}
+.filter-actions {
+  display: flex;
+  gap: 8px;
+  align-items: end;
+}
+.faq-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  margin-bottom: 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #93c5fd;
+  background: rgba(59,130,246,0.12);
+  border: 1px solid rgba(59,130,246,0.22);
 }
 
 /* Link preview card in FAQ list */

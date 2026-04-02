@@ -7,6 +7,14 @@
 
   <div class="add-form" style="max-width:620px">
     <form method="POST" action="/admin/faq/<%= faq.id %>/edit">
+      <label>Kategorija</label>
+      <select name="category">
+        <option value="">Bez kategorije</option>
+        <% categories.forEach(function(category) { %>
+          <option value="<%= category %>" <%= faq.category === category ? 'selected' : '' %>><%= category %></option>
+        <% }); %>
+      </select>
+
       <label>Pitanje</label>
       <input type="text" name="question" value="<%= faq.question %>" required>
 

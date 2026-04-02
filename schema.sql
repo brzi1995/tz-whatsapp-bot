@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS faq (
   tenant_id  INT          NOT NULL,
   question   VARCHAR(500) NOT NULL,
   answer     TEXT         NOT NULL,
+  category   VARCHAR(100) DEFAULT NULL,
   FOREIGN KEY (tenant_id) REFERENCES tenants(id)
 );
 

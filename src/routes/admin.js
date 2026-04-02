@@ -6,6 +6,27 @@ const { requireAuth } = require('../middleware/auth');
 const { sendMessage } = require('../services/twilio');
 const { normalizePhone } = require('../db/bot');
 
+const FAQ_CATEGORIES = [
+  'Općenito',
+  'Plaže',
+  'Priroda',
+  'Kulturna baština',
+  'Prijevoz',
+  'Parking',
+  'Wellness',
+  'Obitelj i djeca',
+  'Izleti',
+  'Hrana i piće',
+  'Servisne informacije',
+  'Karte',
+  'Smještaj',
+];
+
+function normalizeFaqCategory(value) {
+  const category = String(value || '').trim();
+  return category || null;
+}
+
 // ---------------------------------------------------------------------------
 // Auth routes
 // ---------------------------------------------------------------------------
@@ -233,13 +254,33 @@ router.get('/dashboard', requireAuth, async (req, res) => {
 // GET /admin/faq
 router.get('/faq', requireAuth, async (req, res) => {
   const tenantId = req.session.tenantId;
+  const activeCategory = normalizeFaqCategory(req.query.category);
+  const searchQuery = String(req.query.q || '').trim();
 
   try {
-    const [rows] = await pool.query(
-      'SELECT * FROM faq WHERE tenant_id = ? ORDER BY id DESC',
-      [tenantId]
-    );
-    res.render('faq', { faqs: rows });
+    let sql = 'SELECT * FROM faq WHERE tenant_id = ?';
+    const params = [tenantId];
+
+    if (activeCategory) {
+      sql += ' AND category = ?';
+      params.push(activeCategory);
+    }
+
+    if (searchQuery) {
+      sql += ' AND (question LIKE ? OR answer LIKE ?)';
+      const like = `%${searchQuery}%`;
+      params.push(like, like);
+    }
+
+    sql += ' ORDER BY id DESC';
+
+    const [rows] = await pool.query(sql, params);
+    res.render('faq', {
+      faqs: rows,
+      categories: FAQ_CATEGORIES,
+      activeCategory,
+      searchQuery,
+    });
   } catch (err) {
     console.error('[admin] faq list error:', err.message);
     res.status(500).send('Server error');
@@ -249,12 +290,12 @@ router.get('/faq', requireAuth, async (req, res) => {
 // POST /admin/faq
 router.post('/faq', requireAuth, async (req, res) => {
   const tenantId = req.session.tenantId;
-  const { question, answer, link_title, link_url, link_image } = req.body;
+  const { question, answer, category, link_title, link_url, link_image } = req.body;
 
   try {
     await pool.query(
-      'INSERT INTO faq (tenant_id, question, answer, link_title, link_url, link_image) VALUES (?, ?, ?, ?, ?, ?)',
-      [tenantId, question, answer, link_title || null, link_url || null, link_image || null]
+      'INSERT INTO faq (tenant_id, question, answer, category, link_title, link_url, link_image) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [tenantId, question, answer, normalizeFaqCategory(category), link_title || null, link_url || null, link_image || null]
     );
     res.redirect('/admin/faq');
   } catch (err) {
@@ -293,7 +334,7 @@ router.get('/faq/:id/edit', requireAuth, async (req, res) => {
     const row = faqRows && faqRows.length ? faqRows[0] : null;
 
     if (!row) return res.status(404).send('Not found');
-    res.render('faq-edit', { faq: row });
+    res.render('faq-edit', { faq: row, categories: FAQ_CATEGORIES });
   } catch (err) {
     console.error('[admin] faq edit get error:', err.message);
     res.status(500).send('Server error');
@@ -304,12 +345,12 @@ router.get('/faq/:id/edit', requireAuth, async (req, res) => {
 router.post('/faq/:id/edit', requireAuth, async (req, res) => {
   const tenantId = req.session.tenantId;
   const id = parseInt(req.params.id, 10);
-  const { question, answer, link_title, link_url, link_image } = req.body;
+  const { question, answer, category, link_title, link_url, link_image } = req.body;
 
   try {
     await pool.query(
-      'UPDATE faq SET question = ?, answer = ?, link_title = ?, link_url = ?, link_image = ? WHERE id = ? AND tenant_id = ?',
-      [question, answer, link_title || null, link_url || null, link_image || null, id, tenantId]
+      'UPDATE faq SET question = ?, answer = ?, category = ?, link_title = ?, link_url = ?, link_image = ? WHERE id = ? AND tenant_id = ?',
+      [question, answer, normalizeFaqCategory(category), link_title || null, link_url || null, link_image || null, id, tenantId]
     );
     res.redirect('/admin/faq');
   } catch (err) {
