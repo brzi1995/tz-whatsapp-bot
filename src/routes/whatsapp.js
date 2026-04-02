@@ -126,11 +126,11 @@ const PARKING_CLARIFY_MSG = {
 };
 
 const PARKING_FALLBACK = {
-  hr: `Parking u Brelima postoji uz plaže i na označenim lokacijama, ali nemam točnu informaciju za tu točnu lokaciju.\nZa više informacija: ${BRELA_INFO_URL}`,
-  en: `There is parking in Brela near the beaches and at marked locations, but I don't currently have exact information for that specific spot.\nFor more information: ${BRELA_INFO_URL}`,
-  de: `In Brela gibt es Parkplätze bei den Stränden und auf markierten Flächen, aber ich habe derzeit keine genaue Information für diesen genauen Ort.\nMehr Infos: ${BRELA_INFO_URL}`,
-  it: `A Brela ci sono parcheggi vicino alle spiagge e in aree segnalate, ma al momento non ho un'informazione precisa per quel punto specifico.\nPer maggiori informazioni: ${BRELA_INFO_URL}`,
-  fr: `Il y a des parkings à Brela près des plages et sur des zones indiquées, mais je n'ai pas d'information précise pour cet endroit exact.\nPour plus d'informations : ${BRELA_INFO_URL}`,
+  hr: `Parking je uz glavne plaže i u centru na označenim lokacijama. Najbliže opcije i karta: ${BRELA_INFO_URL}\nJavi uz koju plažu trebaš pa šaljem najbliže mjesto.`,
+  en: `Parking is available by the main beaches and in the center at marked spots. Nearest options and map: ${BRELA_INFO_URL}\nTell me which beach and I'll share the closest parking.`,
+  de: `Parken gibt es bei den Hauptstränden und im Zentrum an markierten Stellen. Nächste Optionen und Karte: ${BRELA_INFO_URL}\nSag mir bei welchem Strand, dann nenne ich den nächsten Parkplatz.`,
+  it: `Parcheggi ci sono vicino alle spiagge principali e in centro, nelle aree segnalate. Opzioni e mappa: ${BRELA_INFO_URL}\nDimmi quale spiaggia e indico il parcheggio più vicino.`,
+  fr: `Du stationnement est disponible près des plages principales et au centre, aux emplacements indiqués. Options et carte : ${BRELA_INFO_URL}\nDis-moi quelle plage et j'indiquerai le parking le plus proche.`,
 };
 function parkingFallbackReply(lang) {
   return PARKING_FALLBACK[lang] || PARKING_FALLBACK.en;
@@ -180,25 +180,8 @@ function clarificationReply(message, lang) {
 }
 
 function needsParkingClarification(message) {
-  const normalized = normalizeLookup(message);
-  const hasParking = ['parking', 'parkiranje', 'parkinga', 'parcheggio', 'parken', 'parkov', 'stationnement'].some(term => normalized.includes(term));
-  if (!hasParking) return false;
-
-  const detailHints = [
-    'centar', 'center', 'beach', 'plaza', 'plaze', 'plazi', 'plaža', 'plaže', 'plaži', 'kod plaze', 'kod plaže', 'near beach', 'smjestaj', 'smještaj',
-    'accommodation', 'hotel', 'apartman', 'apartment', 'punta rata',
-    'berulia', 'soline', 'podrace', 'podrače', 'ulica', 'street', 'harbor', 'luka',
-    'price', 'prices', 'cijena', 'cijene', 'tarifa', 'zone', 'zones', 'lokacija', 'lokacije', 'location', 'locations',
-  ];
-  const hasDetail = detailHints.some(term => normalized.includes(normalizeLookup(term)));
-  if (hasDetail) return false;
-
-  const genericHints = [
-    'parking', 'parkiranje', 'parkinga',
-    'i need help with parking', 'need help with parking',
-    'pomoc oko parkinga', 'pomoc s parkingom', 'help with parking',
-  ];
-  return genericHints.some(term => normalized === normalizeLookup(term) || normalized.includes(normalizeLookup(term)));
+  // Disable multi-step parking clarification; answer directly with fallback.
+  return false;
 }
 
 function isSpecificParkingQuestion(message) {
@@ -737,7 +720,7 @@ function cleanMixedLanguageReply(reply, lang) {
 }
 
 function isWeatherFollowUp(message, conversationState) {
-  if (conversationState?.lastTopic !== 'weather') return false;
+  if (conversationState?.lastTopic !== 'weather' && !conversationState?.lastWeatherIntent) return false;
   const normalized = normalizeLookup(message);
   if (!normalized) return false;
   if (isWeatherQuery(message)) return true;
