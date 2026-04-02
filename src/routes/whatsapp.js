@@ -101,16 +101,17 @@ const FALLBACK_MSG = {
 function fallbackReply(lang) { return FALLBACK_MSG[lang] || FALLBACK_MSG.hr; }
 
 const BRELA_INFO_URL = 'https://brela.hr/';
+const BRELA_CONTACT_URL = 'https://brela.hr/kontakt/';
 
 const OFF_TOPIC_MSG = {
-  hr: `Trenutno nemam tu informaciju.\nZa više informacija: ${BRELA_INFO_URL}`,
-  en: `I don't currently have that exact information.\nFor more information: ${BRELA_INFO_URL}`,
-  de: `Dazu habe ich im Moment leider keine genaue Information.\nMehr Infos: ${BRELA_INFO_URL}`,
-  it: `Al momento non ho questa informazione precisa.\nPer maggiori informazioni: ${BRELA_INFO_URL}`,
-  fr: `Je n'ai pas cette information précise pour le moment.\nPour plus d'informations : ${BRELA_INFO_URL}`,
-  sv: `Jag har tyvärr inte exakt den informationen just nu.\nMer information: ${BRELA_INFO_URL}`,
-  no: `Jeg har dessverre ikke akkurat den informasjonen akkurat nå.\nMer informasjon: ${BRELA_INFO_URL}`,
-  cs: `Tuto přesnou informaci teď bohužel nemám.\nVíce informací: ${BRELA_INFO_URL}`,
+  hr: `Dajem informacije o Brelima (plaže, parking, vrijeme, događaji). Javite što vas točno zanima, a dodatne kontakte imate ovdje: ${BRELA_CONTACT_URL}`,
+  en: `I share info about Brela (beaches, parking, weather, events). Tell me what you need for Brela; contacts are here: ${BRELA_CONTACT_URL}`,
+  de: `Ich gebe Infos zu Brela (Strände, Parken, Wetter, Events). Sagen Sie mir, was Sie für Brela brauchen; Kontakte hier: ${BRELA_CONTACT_URL}`,
+  it: `Posso dati info su Brela (spiagge, parcheggio, meteo, eventi). Dimmi cosa ti serve per Brela; contatti qui: ${BRELA_CONTACT_URL}`,
+  fr: `Je fournis des infos sur Brela (plages, parking, météo, événements). Dites-moi ce qu'il vous faut pour Brela; contacts ici : ${BRELA_CONTACT_URL}`,
+  sv: `Jag ger info om Brela (stränder, parkering, väder, evenemang). Säg vad du behöver för Brela; kontakter här: ${BRELA_CONTACT_URL}`,
+  no: `Jeg gir info om Brela (strender, parkering, vær, arrangementer). Si hva du trenger for Brela; kontakter her: ${BRELA_CONTACT_URL}`,
+  cs: `Poskytuji info o Brele (pláže, parkování, počasí, akce). Napište, co přesně potřebujete; kontakty jsou zde: ${BRELA_CONTACT_URL}`,
 };
 function offTopicReply(lang) { return OFF_TOPIC_MSG[lang] || OFF_TOPIC_MSG.en; }
 
@@ -149,11 +150,11 @@ const PARKING_CLARIFY_MSG = {
 };
 
 const PARKING_FALLBACK = {
-  hr: `Parking je uz glavne plaže i u centru na označenim lokacijama. Najbliže opcije i karta: ${BRELA_INFO_URL}\nJavi uz koju plažu trebaš pa šaljem najbliže mjesto.`,
-  en: `Parking is available by the main beaches and in the center at marked spots. Nearest options and map: ${BRELA_INFO_URL}\nTell me which beach and I'll share the closest parking.`,
-  de: `Parken gibt es bei den Hauptstränden und im Zentrum an markierten Stellen. Nächste Optionen und Karte: ${BRELA_INFO_URL}\nSag mir bei welchem Strand, dann nenne ich den nächsten Parkplatz.`,
-  it: `Parcheggi ci sono vicino alle spiagge principali e in centro, nelle aree segnalate. Opzioni e mappa: ${BRELA_INFO_URL}\nDimmi quale spiaggia e indico il parcheggio più vicino.`,
-  fr: `Du stationnement est disponible près des plages principales et au centre, aux emplacements indiqués. Options et carte : ${BRELA_INFO_URL}\nDis-moi quelle plage et j'indiquerai le parking le plus proche.`,
+  hr: `Javni parking je u centru (Trg A. Stepinca) i uz glavne plaže (Punta Rata, Soline, Podrače). Karta i točne lokacije: ${BRELA_INFO_URL}\nNapišite uz koju plažu trebate pa šaljem najbliže mjesto.`,
+  en: `Public parking is in the center (Trg A. Stepinca) and by main beaches (Punta Rata, Soline, Podrače). Map: ${BRELA_INFO_URL}\nTell me which beach and I'll send the nearest spot.`,
+  de: `Öffentliches Parken gibt es im Zentrum (Trg A. Stepinca) und bei den Hauptstränden (Punta Rata, Soline, Podrače). Karte: ${BRELA_INFO_URL}\nSag mir, bei welchem Strand du parkst, dann nenne ich den nächsten Platz.`,
+  it: `Parcheggi pubblici sono in centro (Trg A. Stepinca) e presso le spiagge principali (Punta Rata, Soline, Podrače). Mappa: ${BRELA_INFO_URL}\nDimmi quale spiaggia e invio il parcheggio più vicino.`,
+  fr: `Parking public au centre (Trg A. Stepinca) et près des plages principales (Punta Rata, Soline, Podrače). Carte : ${BRELA_INFO_URL}\nDis-moi quelle plage et j’indiquerai le parking le plus proche.`,
 };
 function parkingFallbackReply(lang) {
   return PARKING_FALLBACK[lang] || PARKING_FALLBACK.en;

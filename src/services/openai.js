@@ -273,6 +273,7 @@ async function rageMessage({ message, baseAnswer, history = [], faqContext, even
     '  2. VERIFIED FAQ DATA (use verbatim facts only)',
     '  3. Well-known general facts about Brela (last resort)',
     'Ignore VERIFIED EVENTS DATA when the user is not asking about events.',
+    'If the user asks about something outside Brela, say you cover Brela only and ask what Brela info they need.',
     'MISSING INFO RULE: If the answer is not in the provided context and is not a well-known fact about Brela, ask ONE specific clarifying question needed to answer (e.g., which beach/date/location). Never invent or improvise.',
     'MORE INFO RULE: If the user asks for more details and you have a relevant answer, you may include this link: https://brela.hr/',
     'NEVER invent event names, dates, links, addresses, or facts not present in the verified context.',
