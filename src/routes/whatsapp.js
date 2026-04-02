@@ -53,14 +53,14 @@ function detectGreetingLanguage(msg) {
   return GREETING_LANGUAGE[lower] || null;
 }
 const GREETING_MSG = {
-  hr: 'Pozdrav! Ja sam Belly, vaš lokalni vodič za Brela 😊\nMogu pomoći s plažama, parkingom, restoranima i događajima.',
-  en: "Hello! I'm Belly, your local guide for Brela 😊\nI can help with beaches, parking, restaurants, and events.",
-  de: 'Hallo! Ich bin Belly, Ihr lokaler Guide für Brela 😊\nIch helfe gerne bei Stränden, Parken, Restaurants und Veranstaltungen.',
-  it: 'Ciao! Sono Belly, la vostra guida locale per Brela 😊\nPosso aiutare con spiagge, parcheggi, ristoranti ed eventi.',
-  fr: 'Bonjour! Je suis Belly, votre guide locale pour Brela 😊\nJe peux vous aider avec les plages, le parking, les restaurants et les événements.',
-  sv: 'Hej! Jag är Belly, din lokala guide för Brela 😊\nJag kan hjälpa dig med stränder, parkering, restauranger och evenemang.',
-  no: 'Hei! Jeg er Belly, din lokale guide for Brela 😊\nJeg kan hjelpe med strender, parkering, restauranter og arrangementer.',
-  cs: 'Ahoj! Jsem Belly, váš místní průvodce pro Brela 😊\nMohu pomoci s plážemi, parkováním, restauracemi a akcemi.',
+  hr: 'Pozdrav! Ja sam Belly, vaš lokalni turistički vodič za Brela.\nKako mogu pomoći s informacijama o Brelima i okolici?',
+  en: "Hello! I'm Belly, your local tourist guide for Brela.\nHow can I help with information about Brela and the surrounding area?",
+  de: 'Hallo! Ich bin Belly, Ihr lokaler Touristenführer für Brela.\nWie kann ich Ihnen mit Informationen über Brela und die Umgebung helfen?',
+  it: 'Ciao! Sono Belly, la vostra guida turistica locale per Brela.\nCome posso aiutarti con informazioni su Brela e dintorni?',
+  fr: 'Bonjour! Je suis Belly, votre guide touristique locale pour Brela.\nComment puis-je vous aider avec des informations sur Brela et les environs ?',
+  sv: 'Hej! Jag är Belly, din lokala turistguide för Brela.\nHur kan jag hjälpa dig med information om Brela och området runt omkring?',
+  no: 'Hei! Jeg er Belly, din lokale turistguide for Brela.\nHvordan kan jeg hjelpe med informasjon om Brela og området rundt?',
+  cs: 'Ahoj! Jsem Belly, váš místní turistický průvodce pro Brela.\nJak mohu pomoci s informacemi o Brele a okolí?',
 };
 function greetingReply(lang) { return GREETING_MSG[lang] || GREETING_MSG.hr; }
 
@@ -125,6 +125,17 @@ const PARKING_CLARIFY_MSG = {
   cs: 'Mohu pomoci s parkováním, ale potřebuji trochu více podrobností.\nMyslíte:\n1. parkování v centru\n2. parkování blízko pláže\n3. parkování u vašeho ubytování\nVíce informací: https://brela.hr/',
 };
 
+const PARKING_FALLBACK = {
+  hr: `Parking u Brelima postoji uz plaže i na označenim lokacijama, ali nemam točnu informaciju za tu točnu lokaciju.\nZa više informacija: ${BRELA_INFO_URL}`,
+  en: `There is parking in Brela near the beaches and at marked locations, but I don't currently have exact information for that specific spot.\nFor more information: ${BRELA_INFO_URL}`,
+  de: `In Brela gibt es Parkplätze bei den Stränden und auf markierten Flächen, aber ich habe derzeit keine genaue Information für diesen genauen Ort.\nMehr Infos: ${BRELA_INFO_URL}`,
+  it: `A Brela ci sono parcheggi vicino alle spiagge e in aree segnalate, ma al momento non ho un'informazione precisa per quel punto specifico.\nPer maggiori informazioni: ${BRELA_INFO_URL}`,
+  fr: `Il y a des parkings à Brela près des plages et sur des zones indiquées, mais je n'ai pas d'information précise pour cet endroit exact.\nPour plus d'informations : ${BRELA_INFO_URL}`,
+};
+function parkingFallbackReply(lang) {
+  return PARKING_FALLBACK[lang] || PARKING_FALLBACK.en;
+}
+
 function clarificationReply(message, lang) {
   const normalized = normalizeLookup(message);
   const isParking = ['parking', 'parkiranje', 'parkinga', 'parcheggio', 'parken', 'parkov', 'stationnement'].some(term => normalized.includes(term));
@@ -138,7 +149,7 @@ function needsParkingClarification(message) {
   if (!hasParking) return false;
 
   const detailHints = [
-    'centar', 'center', 'beach', 'plaza', 'plazi', 'plaža', 'plaži', 'smjestaj', 'smještaj',
+    'centar', 'center', 'beach', 'plaza', 'plaze', 'plazi', 'plaža', 'plaže', 'plaži', 'kod plaze', 'kod plaže', 'near beach', 'smjestaj', 'smještaj',
     'accommodation', 'hotel', 'apartman', 'apartment', 'punta rata',
     'berulia', 'soline', 'podrace', 'podrače', 'ulica', 'street', 'harbor', 'luka',
     'price', 'prices', 'cijena', 'cijene', 'tarifa', 'zone', 'zones', 'lokacija', 'lokacije', 'location', 'locations',
@@ -152,6 +163,12 @@ function needsParkingClarification(message) {
     'pomoc oko parkinga', 'pomoc s parkingom', 'help with parking',
   ];
   return genericHints.some(term => normalized === normalizeLookup(term) || normalized.includes(normalizeLookup(term)));
+}
+
+function isSpecificParkingQuestion(message) {
+  const normalized = normalizeLookup(message);
+  const hasParking = ['parking', 'parkiranje', 'parkinga', 'parcheggio', 'parken', 'parkov', 'stationnement'].some(term => normalized.includes(term));
+  return hasParking && !needsParkingClarification(message);
 }
 
 // Consent prompt — sent after a few exchanges if user hasn't opted in/out yet
@@ -513,6 +530,9 @@ const EVENT_STEMS = [
 const EVENT_PHRASES = [
   'što ima', 'sta ima', 'sto ima',
   'što se događa', 'sta se dogadja', 'sta se dogada', 'sto se dogada', 'šta se dešava',
+  'ima li ista', 'ima li ista ovih dana', 'ovih dana', 'ovaj tjedan',
+  'sta ima ovih dana', 'sto ima ovih dana',
+  'sta se dogada ovaj tjedan', 'sto se dogada ovaj tjedan',
   'ima li događ', 'ima li dogadj',
   "what's happening", "what's on", 'whats happening', 'what is happening',
   'what happening', 'what is on', 'whats on',
@@ -1109,6 +1129,19 @@ router.post('/webhook', async (req, res) => {
         return res.send(twimlWithFaqLink(faqReply, faqMatch.link_title, faqMatch.link_url, faqMatch.link_image));
       }
       return res.send(twiml(faqReply));
+    }
+
+    if (isSpecificParkingQuestion(effectiveMsg)) {
+      const parkingReply = parkingFallbackReply(activeLang);
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
+      await saveMessages(tenant.id, userPhone, [
+        ...history,
+        { role: 'user', content: trimmedMsg },
+        { role: 'assistant', content: parkingReply },
+      ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
+
+      console.log('[webhook] FINAL RESPONSE SENT — parking specific fallback');
+      return res.send(twiml(parkingReply));
     }
 
     // ── STEPS 4+5: RELEVANCE FILTER (follow-ups bypass it) ───────────────────
