@@ -877,8 +877,10 @@ router.post('/webhook', async (req, res) => {
     const langSignal = greetingLang
       ? { lang: greetingLang, ambiguous: false }
       : detectLanguageWithConfidence(trimmedMsg);
-    // Force language of current message; do not inherit from history.
-    const lang = langSignal.lang || detectLanguage(trimmedMsg) || 'en';
+    // Force language of current message; if ambiguous, prefer last known, else EN.
+    const lang = langSignal.ambiguous
+      ? (conversationState.lastLanguage || currentUser?.language || 'en')
+      : (langSignal.lang || detectLanguage(trimmedMsg) || conversationState.lastLanguage || currentUser?.language || 'en');
     const activeLang = lang;
 
     const YES_TOKENS = new Set(['da', 'yes', 'y', 'yep', 'oui', 'si']);
@@ -1361,18 +1363,18 @@ router.post('/webhook', async (req, res) => {
     }
 
     // ── STEPS 4+5: RELEVANCE FILTER (follow-ups bypass it) ───────────────────
-    const followUp = isFollowUp(trimmedMsg) || Boolean(parkingSelection);
-    if (!followUp && !isRelevant(effectiveMsg)) {
-      await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', activeLang).catch(() => {});
-      await persistTurn(offTopicReply(activeLang), {
-        awaiting: null,
-        lastTopic: 'fallback',
-        lastWeatherIntent: null,
-        lastEventPeriod: null,
-      });
-      console.log(`[webhook] FINAL RESPONSE SENT — off-topic: "${trimmedMsg.slice(0, 40)}"`);
-      return res.send(twiml(offTopicReply(activeLang)));
-    }
+  const followUp = isFollowUp(trimmedMsg) || Boolean(parkingSelection);
+  if (!followUp && !isRelevant(effectiveMsg)) {
+    await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', activeLang).catch(() => {});
+    await persistTurn(offTopicReply(activeLang), {
+      awaiting: null,
+      lastTopic: 'fallback',
+      lastWeatherIntent: null,
+      lastEventPeriod: null,
+    });
+    console.log(`[webhook] FINAL RESPONSE SENT — off-topic: "${trimmedMsg.slice(0, 40)}"`);
+    return res.send(twiml(offTopicReply(activeLang)));
+  }
 
     // ── Rate limit ───────────────────────────────────────────────────────────
     const usage = await checkAndIncrementUsage(tenant.id, userPhone);
