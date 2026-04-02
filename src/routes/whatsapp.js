@@ -874,10 +874,10 @@ router.post('/webhook', async (req, res) => {
     const langSignal = greetingLang
       ? { lang: greetingLang, ambiguous: false }
       : detectLanguageWithConfidence(trimmedMsg);
-    // Current message language should win. Short/ambiguous messages inherit chat lang; fallback to HR.
+    // Current message language should win. Short/ambiguous messages inherit chat lang; fallback to EN.
     const lang = langSignal.ambiguous
-      ? (conversationState.lastLanguage || currentUser?.language || langSignal.lang || 'hr')
-      : (langSignal.lang || conversationState.lastLanguage || currentUser?.language || 'hr');
+      ? (conversationState.lastLanguage || currentUser?.language || langSignal.lang || 'en')
+      : (langSignal.lang || conversationState.lastLanguage || currentUser?.language || 'en');
     const activeLang = lang;
 
     const YES_TOKENS = new Set(['da', 'yes', 'y', 'yep', 'oui', 'si']);
