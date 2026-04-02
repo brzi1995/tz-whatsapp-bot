@@ -161,7 +161,14 @@ async function getFaqMatch(tenantId, userMessage) {
     const clarificationOptions = candidates
       .sort((a, b) => b.score - a.score)
       .slice(0, 3)
-      .map(({ question, score }) => ({ question, score }));
+      .map(({ question, answer, score, link_title, link_url, link_image }) => ({
+        question,
+        answer,
+        score,
+        link_title: link_title || null,
+        link_url: link_url || null,
+        link_image: link_image || null,
+      }));
 
     if (clarificationOptions.length) {
       return {

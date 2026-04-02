@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getTenant, getMessages, saveMessages } = require('../db/sessions');
+const { getTenant, getConversation, saveConversation } = require('../db/sessions');
 const { detectLanguage, detectLanguageWithConfidence, rageMessage } = require('../services/openai');
 const { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, detectEventPeriod, upsertWhatsappUser, getWhatsappUser, setOptIn, setAskedOptIn, setUserLang } = require('../db/bot');
 
@@ -134,6 +134,42 @@ const PARKING_FALLBACK = {
 };
 function parkingFallbackReply(lang) {
   return PARKING_FALLBACK[lang] || PARKING_FALLBACK.en;
+}
+
+const FAQ_CHOICE_INTRO = {
+  hr: 'Nisam siguran na koje pitanje točno mislite. Možda vas zanima:',
+  en: "I'm not sure which question you mean. Maybe you mean:",
+  de: 'Ich bin nicht sicher, welche Frage Sie genau meinen. Vielleicht meinen Sie:',
+  it: 'Non sono sicuro a quale domanda ti riferisci esattamente. Forse intendi:',
+  fr: 'Je ne suis pas sûr de savoir à quelle question vous faites référence. Peut-être voulez-vous dire :',
+};
+const FAQ_CHOICE_PROMPT = {
+  hr: 'Odgovorite s 1, 2 ili 3.',
+  en: 'Reply with 1, 2, or 3.',
+  de: 'Antworten Sie mit 1, 2 oder 3.',
+  it: 'Rispondi con 1, 2 o 3.',
+  fr: 'Répondez avec 1, 2 ou 3.',
+};
+function formatFaqClarifyReply(options, lang) {
+  const intro = FAQ_CHOICE_INTRO[lang] || FAQ_CHOICE_INTRO.en;
+  const prompt = FAQ_CHOICE_PROMPT[lang] || FAQ_CHOICE_PROMPT.en;
+  const lines = options.slice(0, 3).map((option, index) => `${index + 1}. ${option.question}`);
+  return `${intro}\n${lines.join('\n')}\n${prompt}`;
+}
+
+function normalizeConversationState(state) {
+  const safe = state && typeof state === 'object' && !Array.isArray(state) ? state : {};
+  const awaiting = safe.awaiting && typeof safe.awaiting === 'object' && !Array.isArray(safe.awaiting)
+    ? safe.awaiting
+    : null;
+  return {
+    lastLanguage: safe.lastLanguage || null,
+    lastTopic: safe.lastTopic || null,
+    lastWeatherIntent: safe.lastWeatherIntent || null,
+    lastEventPeriod: safe.lastEventPeriod || null,
+    lastFaq: safe.lastFaq || null,
+    awaiting,
+  };
 }
 
 function clarificationReply(message, lang) {
@@ -640,16 +676,19 @@ function detectShortReplyLanguage(message, fallbackLang) {
   return fallbackLang;
 }
 
-function resolveParkingSelection(message, history, lang) {
+function resolveParkingSelection(message, lang, conversationState, history = []) {
   const normalized = normalizeLookup(message);
   if (!['1', '2', '3'].includes(normalized)) return null;
 
-  const lastAssistant = [...history].reverse().find(msg => msg.role === 'assistant' && typeof msg.content === 'string');
-  if (!lastAssistant) return null;
+  const awaitingParking = conversationState?.awaiting?.type === 'parking_choice';
+  if (!awaitingParking) {
+    const lastAssistant = [...history].reverse().find(msg => msg.role === 'assistant' && typeof msg.content === 'string');
+    if (!lastAssistant) return null;
 
-  const assistantNorm = normalizeLookup(lastAssistant.content);
-  if (!assistantNorm.includes('parking') || !assistantNorm.includes('1') || !assistantNorm.includes('2') || !assistantNorm.includes('3')) {
-    return null;
+    const assistantNorm = normalizeLookup(lastAssistant.content);
+    if (!assistantNorm.includes('parking') || !assistantNorm.includes('1') || !assistantNorm.includes('2') || !assistantNorm.includes('3')) {
+      return null;
+    }
   }
 
   const map = {
@@ -661,6 +700,15 @@ function resolveParkingSelection(message, history, lang) {
   };
   const selectedMap = map[lang] || map.en;
   return selectedMap[normalized] || null;
+}
+
+function resolveFaqSelection(message, conversationState) {
+  const normalized = normalizeLookup(message);
+  if (conversationState?.awaiting?.type !== 'faq_choice') return null;
+  const options = Array.isArray(conversationState.awaiting.options) ? conversationState.awaiting.options : [];
+  if (!['1', '2', '3'].includes(normalized)) return null;
+  const selected = options[Number(normalized) - 1];
+  return selected || null;
 }
 
 function cleanMixedLanguageReply(reply, lang) {
@@ -686,6 +734,31 @@ function cleanMixedLanguageReply(reply, lang) {
     .replace(/ \./g, '.')
     .replace(/ ,/g, ',')
     .trim();
+}
+
+function isWeatherFollowUp(message, conversationState) {
+  if (conversationState?.lastTopic !== 'weather') return false;
+  const normalized = normalizeLookup(message);
+  if (!normalized) return false;
+  if (isWeatherQuery(message)) return true;
+  if (/\b\d{1,2}\b/.test(normalized)) return true;
+  return [
+    'a sutra', 'a danas', 'iducih dana', 'sljedecih dana',
+    'and tomorrow', 'and today', 'next days',
+    'sutra', 'danas', 'tomorrow', 'today',
+  ].some(term => normalized.includes(normalizeLookup(term)));
+}
+
+function isEventFollowUp(message, conversationState) {
+  if (conversationState?.lastTopic !== 'events') return false;
+  const normalized = normalizeLookup(message);
+  if (!normalized) return false;
+  if (isEventQuery(message)) return true;
+  if (detectEventPeriod(message)) return true;
+  return [
+    'ovih dana', 'ovaj tjedan', 'a sutra', 'a danas',
+    'this week', 'today', 'tomorrow', 'tonight', 'this weekend',
+  ].some(term => normalized.includes(normalizeLookup(term)));
 }
 
 function detectWeatherIntent(message) {
@@ -771,6 +844,12 @@ router.post('/webhook', async (req, res) => {
       console.error('[webhook] getWhatsappUser failed:', userErr.message);
     }
 
+    // Load conversation history + lightweight state
+    const conversation = await getConversation(tenant.id, userPhone).catch(() => ({ messages: [], state: {} }));
+    const history = Array.isArray(conversation.messages) ? conversation.messages : [];
+    let conversationState = normalizeConversationState(conversation.state);
+    console.log(`[webhook] history length: ${history.length}`);
+
     const greetingNorm = lowerMsg
       .replace(/[!?.,;:]*$/, '')
       .replace(/[^a-zčćšžđ\s]/g, '') // strip emojis and non-letter characters
@@ -781,7 +860,28 @@ router.post('/webhook', async (req, res) => {
       ? { lang: greetingLang, ambiguous: false }
       : detectLanguageWithConfidence(trimmedMsg);
     // Current message language should win. Short/ambiguous messages should inherit the chat language.
-    const lang = langSignal.lang || currentUser?.language || 'en';
+    const lang = langSignal.ambiguous
+      ? (conversationState.lastLanguage || currentUser?.language || langSignal.lang || 'en')
+      : (langSignal.lang || conversationState.lastLanguage || currentUser?.language || 'en');
+    const activeLang = lang;
+
+    const persistTurn = async (assistantReply, statePatch = {}) => {
+      const nextState = {
+        ...conversationState,
+        lastLanguage: statePatch.lastLanguage || activeLang,
+        ...statePatch,
+      };
+      await saveConversation(tenant.id, userPhone, {
+        messages: [
+          ...history,
+          { role: 'user', content: trimmedMsg },
+          { role: 'assistant', content: assistantReply },
+        ],
+        state: nextState,
+      }).catch(err => console.error('[webhook] saveConversation failed:', err.message));
+      conversationState = nextState;
+      return nextState;
+    };
 
     // ── CONSENT GATE — highest priority ──────────────────────────────────────
     if (currentUser && Number(currentUser.asked_opt_in) === 1) {
@@ -803,26 +903,23 @@ router.post('/webhook', async (req, res) => {
       }
     }
 
-    // Load conversation history (needed for greeting check and AI context)
-    const history = await getMessages(tenant.id, userPhone).catch(() => []);
-    console.log(`[webhook] history length: ${history.length}`);
-
-    const parkingSelection = resolveParkingSelection(trimmedMsg, history, lang);
+    const faqSelection = resolveFaqSelection(trimmedMsg, conversationState);
+    const parkingSelection = resolveParkingSelection(trimmedMsg, activeLang, conversationState, history);
     const effectiveMsg = parkingSelection || trimmedMsg;
 
-    if (!parkingSelection && (trimmedMsg.length < 2 || TRIVIAL.has(lowerMsg))) {
+    if (!parkingSelection && !faqSelection && TRIVIAL.has(lowerMsg)) {
       console.log('[webhook] FINAL RESPONSE SENT — trivial (empty)');
       return res.send(emptyTwiml());
     }
 
-    if (!parkingSelection && (SHORT_UNCLEAR.has(lowerMsg) || /^[1-3]$/.test(lowerMsg))) {
+    if (conversationState.awaiting && !faqSelection && !parkingSelection && !/^[1-3]$/.test(normalizeLookup(trimmedMsg))) {
+      conversationState = { ...conversationState, awaiting: null };
+    }
+
+    if (!parkingSelection && !faqSelection && (SHORT_UNCLEAR.has(lowerMsg) || /^[1-3]$/.test(lowerMsg))) {
       const replyLang = detectShortReplyLanguage(trimmedMsg, lang);
       const reply = unclearReply(replyLang);
-      await saveMessages(tenant.id, userPhone, [
-        ...history,
-        { role: 'user', content: trimmedMsg },
-        { role: 'assistant', content: reply },
-      ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
+      await persistTurn(reply, { awaiting: null, lastTopic: 'fallback', lastLanguage: replyLang });
       await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', replyLang).catch(() => {});
       console.log('[webhook] FINAL RESPONSE SENT — unclear short reply');
       return res.send(twiml(reply));
@@ -831,6 +928,12 @@ router.post('/webhook', async (req, res) => {
     // ── Spam filter ──────────────────────────────────────────────────────────
     if (isSpam(effectiveMsg)) {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', lang).catch(() => {});
+      await persistTurn(fallbackReply(lang), {
+        awaiting: null,
+        lastTopic: 'fallback',
+        lastWeatherIntent: null,
+        lastEventPeriod: null,
+      });
       console.log(`[webhook] BLOCKED — spam: "${trimmedMsg.slice(0, 40)}"`);
       return res.send(twiml(fallbackReply(lang)));
     }
@@ -838,24 +941,78 @@ router.post('/webhook', async (req, res) => {
     const model = tenant.openai_model;
 
     await setUserLang(tenant.id, userPhone, lang).catch(() => {});
-    const activeLang = lang;
+
+    if (faqSelection) {
+      const rawAnswer = faqSelection.answer;
+      const answerLang = detectLanguage(rawAnswer);
+      let faqReply = rawAnswer;
+
+      if (answerLang !== activeLang) {
+        try {
+          let aiReply = await rageMessage({
+            message: faqSelection.question,
+            baseAnswer: rawAnswer,
+            history: getLanguageScopedHistory(history, activeLang),
+            lang: activeLang,
+            systemPrompt: tenant.system_prompt,
+            model,
+          });
+          if (aiReply && detectLanguage(aiReply) !== activeLang) {
+            aiReply = await rageMessage({
+              message: faqSelection.question,
+              baseAnswer: rawAnswer,
+              history: [],
+              lang: activeLang,
+              systemPrompt: tenant.system_prompt,
+              model,
+            });
+          }
+          faqReply = cleanMixedLanguageReply(aiReply || rawAnswer, activeLang);
+        } catch (e) {
+          console.error('[webhook] AI failed (FAQ selection):', e.message);
+        }
+      }
+
+      faqReply = cleanMixedLanguageReply(faqReply, activeLang);
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
+      await persistTurn(faqReply, {
+        awaiting: null,
+        lastTopic: 'faq',
+        lastWeatherIntent: null,
+        lastEventPeriod: null,
+        lastFaq: {
+          question: faqSelection.question,
+          answer: rawAnswer,
+          link_title: faqSelection.link_title || null,
+          link_url: faqSelection.link_url || null,
+          link_image: faqSelection.link_image || null,
+        },
+      });
+
+      console.log('[webhook] FINAL RESPONSE SENT — FAQ selection');
+      if (faqSelection.link_url || faqSelection.link_image) {
+        return res.send(twimlWithFaqLink(faqReply, faqSelection.link_title, faqSelection.link_url, faqSelection.link_image));
+      }
+      return res.send(twiml(faqReply));
+    }
 
     // ── STEP 1: GREETING — one-time only, exact match, empty history ─────────
     const EXACT_GREETINGS = new Set(['pozdrav', 'bok', 'hej', 'zdravo', 'dobar dan', 'hello', 'hi', 'hey', 'hallo', 'guten tag', 'ciao', 'buongiorno', 'bonjour', 'salut']);
     if (EXACT_GREETINGS.has(greetingNorm) && history.length === 0) {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', activeLang).catch(() => {});
       const reply = greetingReply(activeLang);
-      await saveMessages(tenant.id, userPhone, [
-        ...history,
-        { role: 'user', content: trimmedMsg },
-        { role: 'assistant', content: reply },
-      ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
+      await persistTurn(reply, {
+        awaiting: null,
+        lastTopic: 'greeting',
+        lastWeatherIntent: null,
+        lastEventPeriod: null,
+      });
       console.log('[webhook] FINAL RESPONSE SENT — greeting (first message only)');
       return res.send(twiml(reply));
     }
 
     // ── WEATHER — keyword-detected, API-first, no AI formatting ─────────────
-    if (isWeatherQuery(effectiveMsg) || (historyLooksLikeWeather(history) && /\b\d{1,2}\b/.test(normalizeLookup(effectiveMsg)))) {
+    if (isWeatherQuery(effectiveMsg) || isWeatherFollowUp(effectiveMsg, conversationState) || (historyLooksLikeWeather(history) && /\b\d{1,2}\b/.test(normalizeLookup(effectiveMsg)))) {
       const weatherIntent = detectWeatherIntent(effectiveMsg);
       const wLang  = activeLang;
       const apiKey = process.env.OPENWEATHER_API_KEY;
@@ -893,11 +1050,12 @@ router.post('/webhook', async (req, res) => {
           );
 
           if (weatherIntent.type === 'weather_current') {
-            await saveMessages(tenant.id, userPhone, [
-              ...history,
-              { role: 'user', content: trimmedMsg },
-              { role: 'assistant', content: currentLine },
-            ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
+            await persistTurn(currentLine, {
+              awaiting: null,
+              lastTopic: 'weather',
+              lastWeatherIntent: weatherIntent,
+              lastEventPeriod: null,
+            });
             console.log('[webhook] FINAL RESPONSE SENT — weather (current)');
             return res.send(twiml(currentLine));
           }
@@ -953,11 +1111,12 @@ router.post('/webhook', async (req, res) => {
           forecastReply = formatWeatherForecast(city, forecastDays, wLang, requestedDays, currentLine);
         }
 
-        await saveMessages(tenant.id, userPhone, [
-          ...history,
-          { role: 'user', content: trimmedMsg },
-          { role: 'assistant', content: forecastReply },
-        ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
+        await persistTurn(forecastReply, {
+          awaiting: null,
+          lastTopic: 'weather',
+          lastWeatherIntent: weatherIntent,
+          lastEventPeriod: null,
+        });
 
         console.log(`[webhook] FINAL RESPONSE SENT — weather (${weatherIntent.type})`);
         const reply = forecastReply || currentLine || (WEATHER_UNAVAILABLE[wLang] || WEATHER_UNAVAILABLE.en);
@@ -970,7 +1129,7 @@ router.post('/webhook', async (req, res) => {
     }
 
     // ── STEP 3: EVENTS — keyword-detected, DB-first, AI format only ──────────
-    if (isEventQuery(effectiveMsg)) {
+    if (isEventQuery(effectiveMsg) || isEventFollowUp(effectiveMsg, conversationState)) {
       const eventPeriod = detectEventPeriod(effectiveMsg); // today/tomorrow/week/null
       await logMessage(tenant.id, userPhone, trimmedMsg, 'events', activeLang).catch(() => {});
 
@@ -986,11 +1145,12 @@ router.post('/webhook', async (req, res) => {
             ? formatPeriodFallbackWithUpcoming(upcomingEvents, eventPeriod, activeLang)
             : (EVENT_LABELS[activeLang] || EVENT_LABELS.en).empty[eventPeriod];
 
-          await saveMessages(tenant.id, userPhone, [
-            ...history,
-            { role: 'user', content: trimmedMsg },
-            { role: 'assistant', content: reply },
-          ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
+          await persistTurn(reply, {
+            awaiting: null,
+            lastTopic: 'events',
+            lastEventPeriod: eventPeriod,
+            lastWeatherIntent: null,
+          });
 
           console.log(`[webhook] FINAL RESPONSE SENT — events (${eventPeriod}, fallback ${upcomingEvents.length ? 'upcoming' : 'none'})`);
           return res.send(twiml(reply));
@@ -1004,11 +1164,12 @@ router.post('/webhook', async (req, res) => {
           ? (EVENT_LABELS[activeLang] || EVENT_LABELS.en).empty[eventPeriod]
           : (NO_EVENTS[activeLang] || NO_EVENTS.hr);
 
-        await saveMessages(tenant.id, userPhone, [
-          ...history,
-          { role: 'user', content: trimmedMsg },
-          { role: 'assistant', content: noEventsReply },
-        ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
+        await persistTurn(noEventsReply, {
+          awaiting: null,
+          lastTopic: 'events',
+          lastEventPeriod: eventPeriod || 'general',
+          lastWeatherIntent: null,
+        });
 
         console.log('[webhook] FINAL RESPONSE SENT — events (none found)');
         return res.send(twiml(noEventsReply));
@@ -1018,11 +1179,12 @@ router.post('/webhook', async (req, res) => {
         ? formatEventsList(events, eventPeriod, activeLang)
         : formatUpcomingEventsList(events, activeLang);
 
-      await saveMessages(tenant.id, userPhone, [
-        ...history,
-        { role: 'user', content: trimmedMsg },
-        { role: 'assistant', content: reply },
-      ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
+      await persistTurn(reply, {
+        awaiting: null,
+        lastTopic: 'events',
+        lastEventPeriod: eventPeriod || 'general',
+        lastWeatherIntent: null,
+      });
 
       console.log(`[webhook] FINAL RESPONSE SENT — events (${eventPeriod || 'general'}, ${events.length} found)`);
       return res.send(twiml(reply));
@@ -1033,11 +1195,12 @@ router.post('/webhook', async (req, res) => {
     if (needsParkingClarification(effectiveMsg)) {
       const clarifyReply = clarificationReply(effectiveMsg, activeLang);
       await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
-      await saveMessages(tenant.id, userPhone, [
-        ...history,
-        { role: 'user', content: trimmedMsg },
-        { role: 'assistant', content: clarifyReply },
-      ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
+      await persistTurn(clarifyReply, {
+        awaiting: { type: 'parking_choice' },
+        lastTopic: 'parking',
+        lastWeatherIntent: null,
+        lastEventPeriod: null,
+      });
 
       console.log('[webhook] FINAL RESPONSE SENT — parking clarification');
       return res.send(twiml(clarifyReply));
@@ -1046,14 +1209,24 @@ router.post('/webhook', async (req, res) => {
     // ── STEP 2: FAQ — database first, AI polish only ─────────────────────────
     const faqMatch = await getFaqMatch(tenant.id, effectiveMsg).catch(() => null);
     if (faqMatch?.matchType === 'clarify') {
-      const clarifyReply = clarificationReply(trimmedMsg, activeLang);
+      const clarifyReply = formatFaqClarifyReply(faqMatch.options || [], activeLang);
 
       await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
-      await saveMessages(tenant.id, userPhone, [
-        ...history,
-        { role: 'user', content: trimmedMsg },
-        { role: 'assistant', content: clarifyReply },
-      ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
+      await persistTurn(clarifyReply, {
+        awaiting: {
+          type: 'faq_choice',
+          options: (faqMatch.options || []).map(option => ({
+            question: option.question,
+            answer: option.answer,
+            link_title: option.link_title || null,
+            link_url: option.link_url || null,
+            link_image: option.link_image || null,
+          })),
+        },
+        lastTopic: 'faq',
+        lastWeatherIntent: null,
+        lastEventPeriod: null,
+      });
 
       console.log('[webhook] FINAL RESPONSE SENT — FAQ clarification');
       return res.send(twiml(clarifyReply));
@@ -1093,11 +1266,19 @@ router.post('/webhook', async (req, res) => {
       faqReply = cleanMixedLanguageReply(faqReply, activeLang);
 
       await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
-      await saveMessages(tenant.id, userPhone, [
-        ...history,
-        { role: 'user',      content: trimmedMsg },
-        { role: 'assistant', content: faqReply },
-      ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
+      await persistTurn(faqReply, {
+        awaiting: null,
+        lastTopic: 'faq',
+        lastWeatherIntent: null,
+        lastEventPeriod: null,
+        lastFaq: {
+          question: faqMatch.question,
+          answer: rawAnswer,
+          link_title: faqMatch.link_title || null,
+          link_url: faqMatch.link_url || null,
+          link_image: faqMatch.link_image || null,
+        },
+      });
 
       // Consent trigger
       const shouldAskConsent = (
@@ -1134,11 +1315,12 @@ router.post('/webhook', async (req, res) => {
     if (isSpecificParkingQuestion(effectiveMsg)) {
       const parkingReply = parkingFallbackReply(activeLang);
       await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
-      await saveMessages(tenant.id, userPhone, [
-        ...history,
-        { role: 'user', content: trimmedMsg },
-        { role: 'assistant', content: parkingReply },
-      ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
+      await persistTurn(parkingReply, {
+        awaiting: null,
+        lastTopic: 'parking',
+        lastWeatherIntent: null,
+        lastEventPeriod: null,
+      });
 
       console.log('[webhook] FINAL RESPONSE SENT — parking specific fallback');
       return res.send(twiml(parkingReply));
@@ -1148,6 +1330,12 @@ router.post('/webhook', async (req, res) => {
     const followUp = isFollowUp(trimmedMsg) || Boolean(parkingSelection);
     if (!followUp && !isRelevant(effectiveMsg)) {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', activeLang).catch(() => {});
+      await persistTurn(offTopicReply(activeLang), {
+        awaiting: null,
+        lastTopic: 'fallback',
+        lastWeatherIntent: null,
+        lastEventPeriod: null,
+      });
       console.log(`[webhook] FINAL RESPONSE SENT — off-topic: "${trimmedMsg.slice(0, 40)}"`);
       return res.send(twiml(offTopicReply(activeLang)));
     }
@@ -1156,6 +1344,12 @@ router.post('/webhook', async (req, res) => {
     const usage = await checkAndIncrementUsage(tenant.id, userPhone);
     if (!usage.allowed) {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', activeLang).catch(() => {});
+      await persistTurn(fallbackReply(activeLang), {
+        awaiting: null,
+        lastTopic: 'fallback',
+        lastWeatherIntent: null,
+        lastEventPeriod: null,
+      });
       console.log('[webhook] FINAL RESPONSE SENT — rate limited');
       return res.send(twiml(fallbackReply(activeLang)));
     }
@@ -1190,11 +1384,12 @@ router.post('/webhook', async (req, res) => {
     const reply = aiReply || fallbackReply(activeLang);
 
     // Persist conversation history
-    await saveMessages(tenant.id, userPhone, [
-      ...history,
-      { role: 'user',      content: trimmedMsg },
-      { role: 'assistant', content: reply },
-    ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
+    await persistTurn(reply, {
+      awaiting: null,
+      lastTopic: aiReply ? 'ai' : 'fallback',
+      lastWeatherIntent: null,
+      lastEventPeriod: null,
+    });
     await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', activeLang).catch(() => {});
 
     // Consent trigger — offer after ≥2 back-and-forth exchanges if never asked
