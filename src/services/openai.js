@@ -197,4 +197,50 @@ async function generateOptInMessage(lang = 'hr') {
   }
 }
 
-module.exports = { chat, parseMessage, generateOptInMessage, detectLanguage };
+/**
+ * Polish/format pre-fetched data or generate a contextual reply.
+ * Returns just the reply string — no intent detection, no JSON parsing.
+ * Used for FAQ polishing, event formatting, and AI fallback responses.
+ *
+ * @param {Object} opts
+ * @param {string} opts.message        - User message (or formatting instruction for events)
+ * @param {string} [opts.baseAnswer]   - Verified FAQ answer to rephrase naturally
+ * @param {Array}  [opts.history]      - Conversation history [{role,content},...]
+ * @param {string} [opts.faqContext]   - Raw FAQ data as additional context
+ * @param {string} [opts.eventContext] - Pre-formatted events string (no AI additions allowed)
+ * @param {string} [opts.lang]         - ISO 639-1 language code for response
+ * @param {string} [opts.systemPrompt] - Tenant system prompt (bot personality)
+ * @param {string} [opts.model]        - OpenAI model ID
+ * @returns {Promise<string>}
+ */
+async function rageMessage({ message, baseAnswer, history = [], faqContext, eventContext, lang = 'en', systemPrompt = '', model = 'gpt-4o-mini' }) {
+  const contextParts = [];
+  if (baseAnswer) {
+    contextParts.push(`VERIFIED ANSWER (rephrase naturally in ${lang} — keep ALL facts exact, do NOT add or change any information):\n${baseAnswer}`);
+  }
+  if (faqContext) {
+    contextParts.push(`VERIFIED FAQ DATA (use as the basis for your answer — do not deviate from these facts):\n${faqContext}`);
+  }
+  if (eventContext) {
+    contextParts.push(`VERIFIED EVENTS (list ONLY these — do NOT add, invent, or change any dates or details):\n${eventContext}`);
+  }
+
+  const sysContent = [
+    systemPrompt,
+    'You are Belly, a friendly local tourism assistant for Brela, Croatia.',
+    `CRITICAL: Always respond in ${lang} language only. Never mix languages.`,
+    'Style: WhatsApp-friendly — short, warm, concise. Use bullet points when listing multiple items.',
+    'Do NOT re-introduce yourself. Do NOT greet the user. Answer directly and naturally.',
+    'Never invent facts, places, or events not present in the verified context above.',
+    contextParts.length ? '\n' + contextParts.join('\n\n') : '',
+  ].filter(Boolean).join('\n');
+
+  const messages = [
+    ...history.slice(-10),
+    { role: 'user', content: message },
+  ];
+
+  return chat(sysContent, messages, model);
+}
+
+module.exports = { chat, parseMessage, generateOptInMessage, detectLanguage, rageMessage };

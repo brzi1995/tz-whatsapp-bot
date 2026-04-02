@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { getTenant, getMessages, saveMessages } = require('../db/sessions');
-const { parseMessage } = require('../services/openai');
-const { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, upsertWhatsappUser, getWhatsappUser, setOptIn, setAskedOptIn, setUserLang, detectLang } = require('../db/bot');
+const { parseMessage, detectLanguage, rageMessage } = require('../services/openai');
+const { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, detectEventPeriod, upsertWhatsappUser, getWhatsappUser, setOptIn, setAskedOptIn, setUserLang } = require('../db/bot');
 
 /**
  * Blocks obvious spam only — math expressions and pure gibberish.
@@ -282,13 +282,98 @@ function emptyTwiml() {
   return '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// NEW FLOW HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Format a DB events array into a plain-text context string for AI polishing. */
+function formatEventsForContext(events) {
+  return events.map(ev => {
+    const d = ev.date instanceof Date ? ev.date : new Date(ev.date);
+    const dateStr = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.`;
+    let line = `• ${ev.title} (${dateStr})`;
+    if (ev.description) line += `: ${ev.description}`;
+    if (ev.location_link) line += ` 📍 ${ev.location_link}`;
+    return line;
+  }).join('\n');
+}
+
+/** Detect if a message is asking about events (not time-specific period). */
+const EVENT_STEMS = [
+  'događaj', 'dogadjaj',
+  'event', 'events',
+  'veranstaltung', 'veranstaltungen',
+  'evento', 'eventi',
+  'événement', 'événements',
+  'evenemang', 'arrangement',
+  'akce', 'události',
+];
+const EVENT_PHRASES = [
+  'što se događa', 'sta se dogadja', 'šta se dešava',
+  'ima li događ', 'ima li dogadj',
+  "what's happening", "what's on", 'whats happening', 'what is happening',
+];
+function isEventQuery(msg) {
+  const lower = msg.toLowerCase();
+  return EVENT_STEMS.some(s => lower.includes(s)) ||
+         EVENT_PHRASES.some(p => lower.includes(p));
+}
+
+/** Check if message is relevant to Brela tourism. */
+const BRELA_TOPICS = [
+  // Croatian
+  'plaž', 'more', 'restoran', 'kavana', 'kafić', 'bar', 'parking', 'aktivnost',
+  'izlet', 'smještaj', 'apartman', 'hotel', 'prijevoz', 'bus', 'brod', 'trajekt',
+  'hrana', 'kupanj', 'ronjenje', 'bicikl', 'iznajm', 'brela', 'punta rata', 'baška',
+  // English
+  'beach', 'sea', 'ocean', 'restaur', 'coffee', 'cafe', 'activit', 'excursion',
+  'accommodat', 'apartment', 'hotel', 'transport', 'ferry', 'boat', 'swim',
+  'dive', 'snorkel', 'kayak', 'bike', 'rent', 'parking',
+  // German
+  'strand', 'meer', 'ausflug', 'unterkunft', 'veranstaltung',
+  // Italian
+  'spiaggia', 'mare', 'parcheggio', 'attività', 'escursione', 'alloggio',
+  // French
+  'plage', 'mer', 'activité', 'hébergement',
+  // General
+  'croatia', 'hrvatska', 'dalmatia', 'dalmacija', 'adriatic', 'jadran',
+  'makarska', 'omiš',
+];
+function isRelevant(msg) {
+  const lower = msg.toLowerCase();
+  return BRELA_TOPICS.some(topic => lower.includes(topic));
+}
+
+/**
+ * Detect follow-up messages: short (≤3 words) or starting with "a " (Croatian
+ * continuation particle). These always bypass the relevance filter.
+ */
+function isFollowUp(msg) {
+  const lower = msg.toLowerCase().trim();
+  const words = lower.split(/\s+/).filter(Boolean);
+  return lower.startsWith('a ') || words.length <= 3;
+}
+
+/** Check if message is asking about weather (to route to weather path). */
+const WEATHER_QUERY_WORDS = [
+  'weather', 'forecast', 'rain', 'sun', 'wind', 'cloud', 'hot', 'cold', 'temperature',
+  'vrijeme', 'prognoza', 'kiša', 'sunce', 'vjetar', 'temperatura',
+  'wetter', 'regen', 'sonne', 'temperatur',
+  'tempo', 'pioggia', 'sole', 'previsione',
+  'météo', 'pluie', 'soleil', 'pogoda',
+];
+function isWeatherQuery(msg) {
+  const lower = msg.toLowerCase();
+  return WEATHER_QUERY_WORDS.some(w => lower.includes(w));
+}
+
 router.post('/webhook', async (req, res) => {
   console.log('WEBHOOK HIT');
   console.log('[webhook] incoming body:', JSON.stringify(req.body));
   res.type('text/xml');
 
   try {
-    // 1. Extract + validate — the only exits that don't require a reply
+    // ── Extract + validate ───────────────────────────────────────────────────
     const { From: userPhone, To: tenantPhone, Body: userMsg } = req.body || {};
     console.log(`[webhook] From=${userPhone} To=${tenantPhone} Body="${userMsg}"`);
 
@@ -298,9 +383,9 @@ router.post('/webhook', async (req, res) => {
     }
 
     const trimmedMsg = userMsg.trim();
-    const lowerMsg   = trimmedMsg.toLowerCase();
+    const lowerMsg   = trimmedMsg.toLowerCase().trim();
 
-    // 2. Resolve tenant
+    // ── Resolve tenant ───────────────────────────────────────────────────────
     const tenant = await getTenant(tenantPhone);
     if (!tenant) {
       console.warn(`[webhook] no tenant for number: ${tenantPhone}`);
@@ -308,116 +393,98 @@ router.post('/webhook', async (req, res) => {
     }
     console.log(`[webhook] tenant: ${tenant.name}`);
 
-    // 3. Upsert user — ensure record exists before any per-user checks
+    // ── Upsert user ──────────────────────────────────────────────────────────
     try { await upsertWhatsappUser(tenant.id, userPhone); } catch (_) {}
 
-    // 3.5. Fetch current user state
+    // ── Fetch user state ─────────────────────────────────────────────────────
     let currentUser = null;
     try {
       currentUser = await getWhatsappUser(tenant.id, userPhone);
     } catch (userErr) {
-      console.error("[webhook] getWhatsappUser failed:", userErr.message);
+      console.error('[webhook] getWhatsappUser failed:', userErr.message);
     }
 
-    // Use stored language as default, fall back to keyword detection for this message
-    const msgLang = detectLang(trimmedMsg) || currentUser?.language || 'hr';
+    // Use stored language as base, override with current message detection
+    const lang = currentUser?.language || detectLanguage(trimmedMsg);
 
-    // 4. CONSENT GATE — highest priority when we're waiting for a da/ne reply
+    // ── CONSENT GATE — highest priority ──────────────────────────────────────
     if (currentUser && Number(currentUser.asked_opt_in) === 1) {
       if (lowerMsg === 'da') {
         await setOptIn(tenant.id, userPhone, 1);
         await setAskedOptIn(tenant.id, userPhone, 0);
-        await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', msgLang).catch(() => {});
+        await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', lang).catch(() => {});
         console.log('[webhook] FINAL RESPONSE SENT — consent: opted in');
-        return res.send(twiml(OPT_IN_CONFIRM[msgLang] || OPT_IN_CONFIRM.hr));
+        return res.send(twiml(OPT_IN_CONFIRM[lang] || OPT_IN_CONFIRM.hr));
       } else if (lowerMsg === 'ne') {
         await setOptIn(tenant.id, userPhone, 0);
         await setAskedOptIn(tenant.id, userPhone, 0);
-        await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', msgLang).catch(() => {});
+        await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', lang).catch(() => {});
         console.log('[webhook] FINAL RESPONSE SENT — consent: opted out');
-        return res.send(twiml(OPT_OUT_CONFIRM[msgLang] || OPT_OUT_CONFIRM.hr));
+        return res.send(twiml(OPT_OUT_CONFIRM[lang] || OPT_OUT_CONFIRM.hr));
       } else {
-        // Not a valid answer — remind and wait for next message
         console.log('[webhook] FINAL RESPONSE SENT — consent: invalid reply');
-        return res.send(twiml(CONSENT_INVALID[msgLang] || CONSENT_INVALID.hr));
+        return res.send(twiml(CONSENT_INVALID[lang] || CONSENT_INVALID.hr));
       }
     }
 
-    // 5. Greeting — fast static reply, no AI call
-    if (isGreeting(trimmedMsg)) {
-      await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', msgLang).catch(() => {});
-      await setUserLang(tenant.id, userPhone, msgLang).catch(() => {});
-      console.log(`[webhook] FINAL RESPONSE SENT — greeting (${msgLang})`);
-      return res.send(twiml(greetingReply(msgLang)));
-    }
-
-    // 6. Trivial acknowledgements — no reply needed
+    // ── Trivial acknowledgements — no reply needed ───────────────────────────
     if (trimmedMsg.length < 2 || TRIVIAL.has(lowerMsg)) {
       console.log('[webhook] FINAL RESPONSE SENT — trivial (empty)');
       return res.send(emptyTwiml());
     }
 
-    // 7. Spam filter — math and pure gibberish only; everything else reaches AI
+    // ── Spam filter ──────────────────────────────────────────────────────────
     if (isSpam(trimmedMsg)) {
-      await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', msgLang).catch(() => {});
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', lang).catch(() => {});
       console.log(`[webhook] BLOCKED — spam: "${trimmedMsg.slice(0, 40)}"`);
-      return res.send(twiml(fallbackReply(msgLang)));
+      return res.send(twiml(fallbackReply(lang)));
     }
 
     const model = tenant.openai_model;
 
-    // Load conversation history — empty array on first interaction
+    // Load conversation history (needed for greeting check and AI context)
     const history = await getMessages(tenant.id, userPhone).catch(() => []);
     console.log(`[webhook] history length: ${history.length}`);
 
-    // Pre-fetch FAQ + upcoming events in parallel (cheap DB reads)
-    const [faqMatch, upcomingEvents] = await Promise.all([
-      getFaqMatch(tenant.id, trimmedMsg).catch(() => null),
-      getUpcomingEvents(tenant.id).catch(() => []),
-    ]);
+    // Detect language from current message now that we have history context
+    const msgLang = detectLanguage(trimmedMsg);
+    await setUserLang(tenant.id, userPhone, msgLang).catch(() => {});
+    const activeLang = msgLang || lang;
 
-    // Build context for AI — FAQ answer (any match) and upcoming events
-    const faqContext   = faqMatch ? faqMatch.answer : null;
-    const eventContext = upcomingEvents.length
-      ? upcomingEvents.map(ev => {
-          const dateStr = new Date(ev.date).toISOString().slice(0, 10);
-          let line = `${ev.title} (${dateStr})`;
-          if (ev.description) line += `: ${ev.description}`;
-          return line;
-        }).join('\n')
-      : null;
+    // ── STEP 1: GREETING — one-time only, exact match, empty history ─────────
+    const EXACT_GREETINGS = new Set(['pozdrav', 'bok', 'hej', 'hello', 'hi']);
+    const greetingNorm = lowerMsg.replace(/[!?.,;:]*$/, '');
+    if (EXACT_GREETINGS.has(greetingNorm) && history.length === 0) {
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', activeLang).catch(() => {});
+      console.log('[webhook] FINAL RESPONSE SENT — greeting (first message only)');
+      return res.send(twiml('Bok! Ja sam Belly, vaš lokalni vodič u Brelima 😊'));
+    }
 
-    console.log("USER MESSAGE:", trimmedMsg);
-    const { lang, intent, response: aiResponse } = await parseMessage(
-      trimmedMsg, tenant.system_prompt, model, history, { faqContext, eventContext }
-    );
-    console.log("AI RESPONSE:", aiResponse);
-    console.log(`[webhook] intent=${intent} lang=${lang}`);
-
-    // Persist detected language on every AI interaction
-    await setUserLang(tenant.id, userPhone, lang).catch(() => {});
-
-    // 11. Weather — real-time data from OpenWeather API
-    if (intent === 'weather_current' || intent === 'weather_tomorrow' || intent === 'weather_multi') {
-      await logMessage(tenant.id, userPhone, trimmedMsg, 'weather', lang);
-
+    // ── WEATHER — keyword-detected, uses parseMessage only for period intent ─
+    if (isWeatherQuery(trimmedMsg)) {
+      const { lang: aiLang, intent: weatherIntent } = await parseMessage(
+        trimmedMsg, tenant.system_prompt, model, history, {}
+      );
+      const wLang  = aiLang || activeLang;
       const apiKey = process.env.OPENWEATHER_API_KEY;
       const city   = tenant.city || 'Brela';
-      const owLang = ['hr','en','de','it','fr'].includes(lang) ? lang : 'en';
+      const owLang = ['hr', 'en', 'de', 'it', 'fr'].includes(wLang) ? wLang : 'en';
+
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'weather', wLang).catch(() => {});
 
       if (!apiKey) {
         console.log('[webhook] FINAL RESPONSE SENT — weather (no API key)');
-        return res.send(twiml(WEATHER_UNAVAILABLE[lang] || WEATHER_UNAVAILABLE.en));
+        return res.send(twiml(WEATHER_UNAVAILABLE[wLang] || WEATHER_UNAVAILABLE.en));
       }
 
       try {
-        if (intent === 'weather_multi') {
-          const daysMatch = trimmedMsg.match(/\d+/);
+        if (weatherIntent === 'weather_multi') {
+          const daysMatch     = trimmedMsg.match(/\d+/);
           const requestedDays = daysMatch ? Math.min(parseInt(daysMatch[0], 10), 5) : 3;
 
           if (daysMatch && parseInt(daysMatch[0], 10) > 5) {
             console.log('[webhook] FINAL RESPONSE SENT — weather long-range link');
-            return res.send(twiml(FORECAST_LONG_RANGE[lang] || FORECAST_LONG_RANGE.en));
+            return res.send(twiml(FORECAST_LONG_RANGE[wLang] || FORECAST_LONG_RANGE.en));
           }
 
           const url = `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric&lang=${owLang}`;
@@ -425,8 +492,7 @@ router.post('/webhook', async (req, res) => {
           const data = await forecastRes.json();
 
           if (!forecastRes.ok) {
-            console.log('[webhook] FINAL RESPONSE SENT — forecast unavailable');
-            return res.send(twiml(FORECAST_UNAVAILABLE[lang] || FORECAST_UNAVAILABLE.en));
+            return res.send(twiml(FORECAST_UNAVAILABLE[wLang] || FORECAST_UNAVAILABLE.en));
           }
 
           const days = [];
@@ -443,99 +509,187 @@ router.post('/webhook', async (req, res) => {
             }
           }
 
-          if (!days.length) {
-            console.log('[webhook] FINAL RESPONSE SENT — forecast unavailable (no data)');
-            return res.send(twiml(FORECAST_UNAVAILABLE[lang] || FORECAST_UNAVAILABLE.en));
-          }
+          if (!days.length) return res.send(twiml(FORECAST_UNAVAILABLE[wLang] || FORECAST_UNAVAILABLE.en));
 
-          const label = { hr: 'Prognoza', en: 'Forecast', de: 'Vorhersage', it: 'Previsioni', fr: 'Prévisions' }[lang] || 'Forecast';
+          const label = { hr: 'Prognoza', en: 'Forecast', de: 'Vorhersage', it: 'Previsioni', fr: 'Prévisions' }[wLang] || 'Forecast';
           console.log('[webhook] FINAL RESPONSE SENT — weather multi-day');
           return res.send(twiml(`🌤️ ${city} — ${label}:\n${days.join('\n')}`));
 
-        } else if (intent === 'weather_tomorrow') {
+        } else if (weatherIntent === 'weather_tomorrow') {
           const url = `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric&lang=${owLang}`;
           const forecastRes = await fetch(url);
           const data = await forecastRes.json();
 
-          if (!forecastRes.ok) {
-            console.log('[webhook] FINAL RESPONSE SENT — tomorrow forecast unavailable');
-            return res.send(twiml(FORECAST_UNAVAILABLE[lang] || FORECAST_UNAVAILABLE.en));
-          }
+          if (!forecastRes.ok) return res.send(twiml(FORECAST_UNAVAILABLE[wLang] || FORECAST_UNAVAILABLE.en));
 
-          const tomorrow = new Date();
+          const tomorrow    = new Date();
           tomorrow.setDate(tomorrow.getDate() + 1);
           const tomorrowDate = tomorrow.toISOString().slice(0, 10);
           const entry = data.list.find(e => e.dt_txt.startsWith(tomorrowDate) && e.dt_txt.includes('12:00'))
                      || data.list.find(e => e.dt_txt.startsWith(tomorrowDate));
 
-          if (!entry) {
-            console.log('[webhook] FINAL RESPONSE SENT — tomorrow forecast unavailable (no entry)');
-            return res.send(twiml(FORECAST_UNAVAILABLE[lang] || FORECAST_UNAVAILABLE.en));
-          }
+          if (!entry) return res.send(twiml(FORECAST_UNAVAILABLE[wLang] || FORECAST_UNAVAILABLE.en));
 
-          const temp = Math.round(entry.main.temp);
-          const desc = entry.weather[0]?.description || '';
-          const label = { hr: 'Sutra', en: 'Tomorrow', de: 'Morgen', it: 'Domani', fr: 'Demain' }[lang] || 'Tomorrow';
+          const temp  = Math.round(entry.main.temp);
+          const desc  = entry.weather[0]?.description || '';
+          const label = { hr: 'Sutra', en: 'Tomorrow', de: 'Morgen', it: 'Domani', fr: 'Demain' }[wLang] || 'Tomorrow';
           console.log('[webhook] FINAL RESPONSE SENT — weather tomorrow');
           return res.send(twiml(`🌤️ ${city} — ${label}: ${temp}°C, ${desc}`));
 
         } else {
-          // weather_current
+          // weather_current (default)
           const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric&lang=${owLang}`;
           const weatherRes = await fetch(url);
           const data = await weatherRes.json();
 
-          if (!weatherRes.ok) {
-            console.log('[webhook] FINAL RESPONSE SENT — current weather unavailable');
-            return res.send(twiml(WEATHER_UNAVAILABLE[lang] || WEATHER_UNAVAILABLE.en));
-          }
+          if (!weatherRes.ok) return res.send(twiml(WEATHER_UNAVAILABLE[wLang] || WEATHER_UNAVAILABLE.en));
 
-          const temp = Math.round(data.main.temp);
-          const desc = data.weather[0]?.description || '';
-          const label = { hr: 'Trenutno', en: 'Now', de: 'Jetzt', it: 'Ora', fr: 'Maintenant' }[lang] || 'Now';
+          const temp  = Math.round(data.main.temp);
+          const desc  = data.weather[0]?.description || '';
+          const label = { hr: 'Trenutno', en: 'Now', de: 'Jetzt', it: 'Ora', fr: 'Maintenant' }[wLang] || 'Now';
           console.log('[webhook] FINAL RESPONSE SENT — weather current');
           return res.send(twiml(`🌤️ ${city} — ${label}: ${temp}°C, ${desc}`));
         }
-
       } catch (weatherErr) {
         console.error('[webhook] weather fetch exception:', weatherErr.message);
-        console.log('[webhook] FINAL RESPONSE SENT — weather exception fallback');
-        return res.send(twiml(WEATHER_UNAVAILABLE[lang] || WEATHER_UNAVAILABLE.en));
+        return res.send(twiml(WEATHER_UNAVAILABLE[wLang] || WEATHER_UNAVAILABLE.en));
       }
     }
 
-    // 12. Events — DB-driven
-    if (intent === 'events_today' || intent === 'events_tomorrow' || intent === 'events_week') {
-      await logMessage(tenant.id, userPhone, trimmedMsg, 'events', lang);
-      const period = intent === 'events_today' ? 'today' : intent === 'events_tomorrow' ? 'tomorrow' : 'week';
-      const events = await getEventsByPeriod(tenant.id, period);
-      console.log(`[webhook] FINAL RESPONSE SENT — events (${period}, ${events.length} found)`);
-      return res.send(twiml(formatEventsList(events, period, lang)));
+    // ── STEP 3: EVENTS — keyword-detected, DB-first, AI format only ──────────
+    if (isEventQuery(trimmedMsg)) {
+      const eventPeriod = detectEventPeriod(trimmedMsg); // today/tomorrow/week/null
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'events', activeLang).catch(() => {});
+
+      const events = eventPeriod
+        ? await getEventsByPeriod(tenant.id, eventPeriod).catch(() => [])
+        : await getUpcomingEvents(tenant.id).catch(() => []);
+
+      if (!events.length) {
+        const noEventsReply = eventPeriod
+          ? (EVENT_LABELS[activeLang] || EVENT_LABELS.en).empty[eventPeriod]
+          : (NO_EVENTS[activeLang] || NO_EVENTS.hr);
+        console.log('[webhook] FINAL RESPONSE SENT — events (none found)');
+        return res.send(twiml(noEventsReply));
+      }
+
+      const eventContext = formatEventsForContext(events);
+      let eventsReply;
+      try {
+        eventsReply = await rageMessage({
+          message: 'Format these events nicely for WhatsApp. Keep it short and engaging.',
+          eventContext,
+          lang: activeLang,
+          systemPrompt: tenant.system_prompt,
+          model,
+        });
+      } catch (evErr) {
+        console.error('[webhook] rageMessage (events) failed:', evErr.message);
+      }
+
+      // Fallback to template formatting if AI fails
+      const finalEventsReply = eventsReply ||
+        (eventPeriod ? formatEventsList(events, eventPeriod, activeLang) : eventContext);
+
+      console.log(`[webhook] FINAL RESPONSE SENT — events (${eventPeriod || 'general'}, ${events.length} found)`);
+      return res.send(twiml(finalEventsReply));
     }
 
-    if (intent === 'events') {
-      await logMessage(tenant.id, userPhone, trimmedMsg, 'events', lang);
-      // AI crafted a contextual response using the pre-fetched eventContext
-      const reply = aiResponse || (NO_EVENTS[lang] || NO_EVENTS.hr);
+    // ── STEP 2: FAQ — database first, AI polish only ─────────────────────────
+    const faqMatch = await getFaqMatch(tenant.id, trimmedMsg).catch(() => null);
+    if (faqMatch) {
+      let faqReply;
+      try {
+        faqReply = await rageMessage({
+          message:    trimmedMsg,
+          baseAnswer: faqMatch.answer,
+          history,
+          lang: activeLang,
+          systemPrompt: tenant.system_prompt,
+          model,
+        });
+      } catch (faqErr) {
+        console.error('[webhook] rageMessage (FAQ) failed:', faqErr.message);
+        faqReply = faqMatch.answer; // raw answer as safe fallback
+      }
+
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
       await saveMessages(tenant.id, userPhone, [
         ...history,
         { role: 'user',      content: trimmedMsg },
-        { role: 'assistant', content: reply },
+        { role: 'assistant', content: faqReply },
       ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
-      console.log(`[webhook] FINAL RESPONSE SENT — events general (AI contextual)`);
-      return res.send(twiml(reply));
+
+      // Consent trigger
+      const shouldAskConsent = (
+        currentUser &&
+        currentUser.opt_in === null &&
+        Number(currentUser.asked_opt_in) === 0 &&
+        history.length >= 4
+      );
+      if (shouldAskConsent) {
+        await setAskedOptIn(tenant.id, userPhone, 1).catch(() => {});
+        const consentQ = CONSENT_ASK[activeLang] || CONSENT_ASK.hr;
+        console.log('[webhook] FINAL RESPONSE SENT — FAQ + consent prompt');
+        if (faqMatch.link_url || faqMatch.link_image) {
+          return res.send(
+            `<?xml version="1.0" encoding="UTF-8"?><Response>` +
+            `<Message>${escapeXml(faqReply)}</Message>` +
+            `<Message><Body>${escapeXml((faqMatch.link_title ? faqMatch.link_title + '\n' : '') + (faqMatch.link_url || ''))}</Body>` +
+            (faqMatch.link_image ? `<Media>${escapeXml(faqMatch.link_image)}</Media>` : '') +
+            `</Message>` +
+            `<Message>${escapeXml(consentQ)}</Message>` +
+            `</Response>`
+          );
+        }
+        return res.send(twimlDouble(faqReply, consentQ));
+      }
+
+      console.log(`[webhook] FINAL RESPONSE SENT — FAQ ("${faqReply.slice(0, 60)}")`);
+      if (faqMatch.link_url || faqMatch.link_image) {
+        return res.send(twimlWithFaqLink(faqReply, faqMatch.link_title, faqMatch.link_url, faqMatch.link_image));
+      }
+      return res.send(twiml(faqReply));
     }
 
-    // 13. Rate limit — per user/day
+    // ── STEPS 4+5: RELEVANCE FILTER (follow-ups bypass it) ───────────────────
+    const followUp = isFollowUp(trimmedMsg);
+    if (!followUp && !isRelevant(trimmedMsg)) {
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', activeLang).catch(() => {});
+      console.log(`[webhook] FINAL RESPONSE SENT — off-topic: "${trimmedMsg.slice(0, 40)}"`);
+      return res.send(twiml(
+        'Nažalost nemam točnu informaciju za to.\nZa sve informacije obratite se Turističkoj zajednici Brela 😊'
+      ));
+    }
+
+    // ── Rate limit ───────────────────────────────────────────────────────────
     const usage = await checkAndIncrementUsage(tenant.id, userPhone);
     if (!usage.allowed) {
-      await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', lang);
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', activeLang).catch(() => {});
       console.log('[webhook] FINAL RESPONSE SENT — rate limited');
-      return res.send(twiml(fallbackReply(lang)));
+      return res.send(twiml(fallbackReply(activeLang)));
     }
 
-    // 14. AI / FAQ response
-    const reply = aiResponse || fallbackReply(lang);
+    // ── STEP 6: AI FALLBACK — rageMessage with event context ─────────────────
+    const upcomingEvents  = await getUpcomingEvents(tenant.id).catch(() => []);
+    const eventContextAI  = upcomingEvents.length ? formatEventsForContext(upcomingEvents) : null;
+
+    let reply;
+    try {
+      reply = await rageMessage({
+        message: trimmedMsg,
+        history,
+        eventContext: eventContextAI,
+        lang: activeLang,
+        systemPrompt: tenant.system_prompt,
+        model,
+      });
+    } catch (aiErr) {
+      console.error('[webhook] rageMessage (AI fallback) failed:', aiErr.message);
+    }
+
+    // STEP 8: Final fallback — only if everything else failed
+    if (!reply) reply = fallbackReply(activeLang);
 
     // Persist conversation history
     await saveMessages(tenant.id, userPhone, [
@@ -543,47 +697,24 @@ router.post('/webhook', async (req, res) => {
       { role: 'user',      content: trimmedMsg },
       { role: 'assistant', content: reply },
     ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
-    await logMessage(tenant.id, userPhone, trimmedMsg, intent === 'faq' ? 'faq' : 'ai', lang);
+    await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', activeLang).catch(() => {});
 
-    // 15. Consent trigger — offer after ≥2 back-and-forth exchanges if never asked
+    // Consent trigger — offer after ≥2 back-and-forth exchanges if never asked
     const shouldAskConsent = (
       currentUser &&
       currentUser.opt_in === null &&
       Number(currentUser.asked_opt_in) === 0 &&
       history.length >= 4
     );
-
     if (shouldAskConsent) {
       await setAskedOptIn(tenant.id, userPhone, 1).catch(() => {});
-      const consentQ = CONSENT_ASK[lang] || CONSENT_ASK.hr;
-      const hasFaqLink = intent === 'faq' && faqMatch && (faqMatch.link_url || faqMatch.link_image);
-      console.log(`[webhook] FINAL RESPONSE SENT — reply + consent prompt (${lang})`);
-      if (hasFaqLink) {
-        // FAQ with image: send image first, consent as third message
-        res.send(
-          `<?xml version="1.0" encoding="UTF-8"?><Response>` +
-          `<Message>${escapeXml(reply)}</Message>` +
-          `<Message><Body>${escapeXml((faqMatch.link_title ? faqMatch.link_title + '\n' : '') + (faqMatch.link_url || ''))}</Body>` +
-          (faqMatch.link_image ? `<Media>${escapeXml(faqMatch.link_image)}</Media>` : '') +
-          `</Message>` +
-          `<Message>${escapeXml(consentQ)}</Message>` +
-          `</Response>`
-        );
-      } else {
-        res.send(twimlDouble(reply, consentQ));
-      }
-      return;
+      const consentQ = CONSENT_ASK[activeLang] || CONSENT_ASK.hr;
+      console.log(`[webhook] FINAL RESPONSE SENT — AI reply + consent prompt`);
+      return res.send(twimlDouble(reply, consentQ));
     }
 
-    // Normal send
-    const hasFaqLink = intent === 'faq' && faqMatch && (faqMatch.link_url || faqMatch.link_image);
-    if (hasFaqLink) {
-      console.log(`[webhook] FINAL RESPONSE SENT — FAQ with link card ("${reply.slice(0, 60)}")`);
-      res.send(twimlWithFaqLink(reply, faqMatch.link_title, faqMatch.link_url, faqMatch.link_image));
-    } else {
-      console.log(`[webhook] FINAL RESPONSE SENT — AI/FAQ ("${reply.slice(0, 60)}")`);
-      res.send(twiml(reply));
-    }
+    console.log(`[webhook] FINAL RESPONSE SENT — AI ("${reply.slice(0, 60)}")`);
+    return res.send(twiml(reply));
 
   } catch (err) {
     console.error('[webhook] error:', err.message);
