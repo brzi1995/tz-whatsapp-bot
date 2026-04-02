@@ -27,195 +27,349 @@
   const _peakTotal = _todSlots.reduce((s, x) => s + x.val, 0);
 %>
 
-<main class="content">
-  <div class="page-header">
-    <h1>Dashboard</h1>
-    <p>Pregled aktivnosti vašeg WhatsApp bota</p>
-  </div>
+<main class="content dashboard">
+  <section class="hero-shell">
+    <div class="hero-top">
+      <div>
+        <p class="eyebrow">TZ Brela • Live pregled</p>
+        <h1>Vidi što gosti traže u nekoliko sekundi</h1>
+        <p class="lede">Sažetak poruka, jezika i interesa gostiju na jednom mjestu — brzo za odluke i spremno za prodaju.</p>
+        <div class="hero-actions">
+          <a href="/admin/faq" class="btn btn-primary">Uredi FAQ</a>
+          <a href="/admin/events" class="btn btn-ghost">Planiraj događaje</a>
+        </div>
+      </div>
+      <div class="hero-chip">
+        <span class="chip-label">Peak vrijeme</span>
+        <% if (_peakTotal > 0) { %>
+          <strong><%= _peakSlot.icon %> <%= _peakSlot.label %></strong>
+        <% } else { %>
+          <strong>—</strong>
+        <% } %>
+        <span class="chip-sub">Najviše aktivnosti u zadnjih 7 dana</span>
+      </div>
+    </div>
 
-  <!-- Uvidi (inline strip) -->
-  <% if (insights && insights.length) { %>
-  <div class="uvidi-strip">
-    <div class="uvidi-strip-title"><i data-lucide="sparkles"></i> Uvidi</div>
-    <div class="uvidi-strip-items">
-      <% insights.forEach(function(ins, i) { %>
-        <% if (i > 0) { %><span class="uvidi-strip-sep">·</span><% } %>
-        <div class="uvidi-strip-item"><%= ins.icon %> <%= ins.text %></div>
+    <div class="hero-kpis">
+      <div class="kpi-card highlight">
+        <div class="kpi-icon"><i data-lucide="message-circle"></i></div>
+        <div class="kpi-label">Ukupno poruka</div>
+        <div class="kpi-value"><%= totalMessages %></div>
+        <div class="kpi-sub">zadnjih 7 dana</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon"><i data-lucide="users"></i></div>
+        <div class="kpi-label">Korisnici</div>
+        <div class="kpi-value"><%= totalUsers %></div>
+        <div class="kpi-sub">ukupno osoba</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon"><i data-lucide="globe"></i></div>
+        <div class="kpi-label">Top jezik</div>
+        <% if (_topLang) { %>
+          <div class="kpi-value"><%= _topLangPct %>%</div>
+          <div class="kpi-sub"><%= _topLang %></div>
+        <% } else { %>
+          <div class="kpi-value muted">—</div>
+          <div class="kpi-sub">čeka prve goste</div>
+        <% } %>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon"><i data-lucide="sparkles"></i></div>
+        <div class="kpi-label">Aktivni uvidi</div>
+        <div class="kpi-value"><%= insights.length || 0 %></div>
+        <div class="kpi-sub">otkriveni trendovi</div>
+      </div>
+    </div>
+
+    <% if (insights && insights.length) { %>
+    <div class="pill-row">
+      <% insights.forEach(function(ins) { %>
+        <span class="pill"><%= ins.icon %> <%= ins.text %></span>
       <% }); %>
     </div>
-  </div>
-  <% } %>
-
-  <!-- Stats grid: hero + 3 secondary -->
-  <div class="stats-grid">
-
-    <!-- Hero: total messages -->
-    <div class="hero-card">
-      <div class="hero-icon">
-        <i data-lucide="message-circle"></i>
-      </div>
-      <div class="label">Ukupno poruka</div>
-      <div class="hero-num"><%= totalMessages %></div>
-    </div>
-
-    <!-- Users -->
-    <div class="stat-card">
-      <div class="stat-card-top">
-        <div class="label">Korisnici</div>
-        <div class="stat-card-icon icon-blue">
-          <i data-lucide="users"></i>
-        </div>
-      </div>
-      <div class="num"><%= totalUsers %></div>
-    </div>
-
-    <!-- Top language -->
-    <div class="stat-card">
-      <div class="stat-card-top">
-        <div class="label">Jezik</div>
-        <div class="stat-card-icon icon-purple">
-          <i data-lucide="globe"></i>
-        </div>
-      </div>
-      <% if (_topLang) { %>
-        <div class="num num-text"><%= _topLangPct %>%</div>
-        <div class="stat-sub"><%= _topLang %></div>
-      <% } else { %>
-        <div class="num" style="color:var(--muted)">—</div>
-      <% } %>
-    </div>
-
-    <!-- Peak activity -->
-    <div class="stat-card">
-      <div class="stat-card-top">
-        <div class="label">Najaktivnije</div>
-        <div class="stat-card-icon icon-amber">
-          <i data-lucide="clock"></i>
-        </div>
-      </div>
-      <% if (_peakTotal > 0) { %>
-        <div class="num num-text"><%= _peakSlot.icon %> <%= _peakSlot.label %></div>
-      <% } else { %>
-        <div class="num" style="color:var(--muted)">—</div>
-      <% } %>
-    </div>
-
-  </div>
-
-  <!-- Featured Events -->
-  <div class="chart-wrap">
-    <div class="chart-header">
-      <div style="display:flex;align-items:center;gap:8px">
-        <h2>Izdvojeni događaji</h2>
-      </div>
-      <a href="/admin/events" class="btn btn-secondary btn-sm">
-        <i data-lucide="settings-2"></i> Upravljaj
-      </a>
-    </div>
-    <% if (!featuredEvents || !featuredEvents.length) { %>
-      <div style="padding:12px 0;color:var(--muted);font-size:13px">
-        Nema izdvojenih događaja —
-        <a href="/admin/events" style="color:var(--blue);text-decoration:none;font-weight:600">označi ih u listi</a>
-      </div>
-    <% } else { %>
-      <div style="display:flex;flex-direction:column;gap:7px">
-        <% featuredEvents.forEach(function(ev) {
-             const dateStr = ev.date ? new Date(ev.date).toLocaleDateString('hr-HR') : '—';
-        %>
-        <div class="feat-row">
-          <div class="feat-body">
-            <div class="feat-title"><%= ev.title %></div>
-            <% if (ev.description) { %>
-              <div class="feat-desc"><%= ev.description %></div>
-            <% } %>
-          </div>
-          <div class="feat-date"><%= dateStr %></div>
-        </div>
-        <% }); %>
-      </div>
     <% } %>
-  </div>
+  </section>
 
-  <!-- Chart: messages per day -->
-  <div class="chart-wrap">
-    <div class="chart-header">
-      <h2>Poruke po danu</h2>
-      <span class="chart-badge">Posljednjih 7 dana</span>
-    </div>
-    <canvas id="msgChart" height="80"></canvas>
-  </div>
-
-  <!-- Intent distribution -->
-  <% const intentLabels = {
-       faq:'Opće informacije',
-       weather:'Vrijeme', weather_current:'Vrijeme', weather_tomorrow:'Vrijeme', weather_multi:'Vrijeme',
-       events:'Događaji',
-       ai:'AI razgovor',
-       other:'Ostalo'
-     };
-     const intentColors = { faq:'#3b82f6', weather:'#38bdf8', events:'#10b981', ai:'#8b5cf6' };
-     const _filteredIntents = intents.filter(r => r.intent !== 'admin_reply' && r.intent !== 'fallback');
-     const intentTotal  = _filteredIntents.reduce((s,r) => s + Number(r.count), 0) || 1;
-  %>
-  <% if (_filteredIntents.length) { %>
-  <div class="chart-wrap" style="margin-bottom:0">
-    <div class="chart-header">
-      <h2>Upiti turista</h2>
-      <span class="chart-badge">Po tipu</span>
-    </div>
-    <% _filteredIntents.forEach(function(r) {
-         const pct = Math.round(Number(r.count) / intentTotal * 100);
-         const col = intentColors[r.intent] || '#94a3b8';
-         const lbl = intentLabels[r.intent] || r.intent;
-    %>
-      <div class="ibar">
-        <div class="ibar-label">
-          <span><%= lbl %></span>
-          <span class="ibar-count"><%= r.count %> (<%= pct %>%)</span>
+  <section class="grid-panels">
+    <div class="panel panel-featured">
+      <div class="panel-header">
+        <div>
+          <p class="eyebrow">Događaji</p>
+          <h2>Izdvojeni događaji</h2>
         </div>
-        <div class="ibar-track">
-          <div class="ibar-fill" style="width:<%= pct %>%;background:<%= col %>"></div>
-        </div>
+        <a href="/admin/events" class="btn btn-secondary btn-sm">
+          <i data-lucide="settings-2"></i> Upravljaj
+        </a>
       </div>
-    <% }); %>
-  </div>
-  <% } %>
+      <% if (!featuredEvents || !featuredEvents.length) { %>
+        <div class="panel-empty">
+          Nema izdvojenih događaja — označi ih u listi događaja.
+        </div>
+      <% } else { %>
+        <div class="feat-list">
+          <% featuredEvents.forEach(function(ev) {
+               const dateStr = ev.date ? new Date(ev.date).toLocaleDateString('hr-HR') : '—';
+          %>
+          <div class="feat-row">
+            <div class="feat-body">
+              <div class="feat-title"><%= ev.title %></div>
+              <% if (ev.description) { %>
+                <div class="feat-desc"><%= ev.description %></div>
+              <% } %>
+            </div>
+            <div class="feat-date"><%= dateStr %></div>
+          </div>
+          <% }); %>
+        </div>
+      <% } %>
+    </div>
+  </section>
+
+  <section class="grid-panels two-col">
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <p class="eyebrow">Tempo poruka</p>
+          <h2>Poruke po danu</h2>
+        </div>
+        <span class="chart-badge">Posljednjih 7 dana</span>
+      </div>
+      <canvas id="msgChart" height="80"></canvas>
+    </div>
+
+    <% const intentLabels = {
+         faq:'Opće informacije',
+         weather:'Vrijeme', weather_current:'Vrijeme', weather_tomorrow:'Vrijeme', weather_multi:'Vrijeme',
+         events:'Događaji',
+         ai:'AI razgovor',
+         other:'Ostalo'
+       };
+       const intentColors = { faq:'#3b82f6', weather:'#0ea5e9', events:'#22c55e', ai:'#a855f7' };
+       const _filteredIntents = intents.filter(r => r.intent !== 'admin_reply' && r.intent !== 'fallback');
+       const intentTotal  = _filteredIntents.reduce((s,r) => s + Number(r.count), 0) || 1;
+    %>
+    <% if (_filteredIntents.length) { %>
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <p class="eyebrow">Interes gostiju</p>
+          <h2>Upiti turista</h2>
+        </div>
+        <span class="chart-badge">Po tipu</span>
+      </div>
+      <% _filteredIntents.forEach(function(r) {
+           const pct = Math.round(Number(r.count) / intentTotal * 100);
+           const col = intentColors[r.intent] || '#94a3b8';
+           const lbl = intentLabels[r.intent] || r.intent;
+      %>
+        <div class="ibar">
+          <div class="ibar-label">
+            <span><%= lbl %></span>
+            <span class="ibar-count"><%= r.count %> (<%= pct %>%)</span>
+          </div>
+          <div class="ibar-track">
+            <div class="ibar-fill" style="width:<%= pct %>%;background:<%= col %>"></div>
+          </div>
+        </div>
+      <% }); %>
+    </div>
+    <% } %>
+  </section>
 
 </main>
 
 <style>
+.dashboard {
+  --accent: #0ea5e9;
+  --accent-2: #fbbf24;
+  --accent-soft: rgba(14,165,233,0.14);
+  --sand: #f5d0a9;
+  --navy: #0c1324;
+  --panel: #11141d;
+  --panel-2: #0f172a;
+  --stroke: rgba(255,255,255,0.06);
+}
+.dashboard h1 { font-size: 26px; margin-bottom: 8px; letter-spacing: -.4px; }
+.dashboard .lede { color: #cbd5e1; max-width: 540px; font-size: 14px; }
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.hero-shell {
+  background: radial-gradient(circle at 12% 20%, rgba(14,165,233,0.22), transparent 32%), radial-gradient(circle at 88% 12%, rgba(245,158,11,0.18), transparent 30%), linear-gradient(145deg, #0b1221 0%, #0d162b 50%, #0c1222 100%);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 22px;
+  padding: 28px 28px 26px;
+  box-shadow: 0 18px 50px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(255,255,255,0.02);
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+.hero-shell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 65% 50%, rgba(255,255,255,0.06), transparent 55%);
+  opacity: .6;
+  pointer-events: none;
+}
+.hero-shell > * { position: relative; z-index: 1; }
+.hero-top {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.hero-actions {
+  display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px;
+}
+.dashboard .btn-primary {
+  background: linear-gradient(135deg, #0891b2, #0ea5e9);
+  border-color: rgba(14,165,233,0.35);
+}
+.dashboard .btn-primary:hover { box-shadow: 0 6px 22px rgba(14,165,233,0.35); }
+.dashboard .btn-ghost { color: #cbd5e1; border-color: rgba(255,255,255,0.08); }
+.dashboard .btn-ghost:hover { border-color: rgba(255,255,255,0.14); }
+.hero-chip {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  min-width: 200px;
+  color: #e2e8f0;
+}
+.chip-label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: #94a3b8; margin-bottom: 6px; }
+.chip-sub { display: block; color: #94a3b8; font-size: 12.5px; margin-top: 4px; }
+
+.hero-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+.kpi-card {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.kpi-card.highlight {
+  background: linear-gradient(135deg, rgba(14,165,233,0.22), rgba(15,23,42,0.7));
+  border-color: rgba(14,165,233,0.35);
+  box-shadow: 0 14px 40px rgba(14,165,233,0.25);
+}
+.kpi-icon { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 10px; background: rgba(255,255,255,0.06); color: #7dd3fc; margin-bottom: 10px; }
+.kpi-icon svg { width: 16px; height: 16px; }
+.kpi-label { font-size: 12px; color: #cbd5e1; letter-spacing: .02em; }
+.kpi-value { font-size: 26px; font-weight: 800; color: #e2e8f0; margin-top: 4px; }
+.kpi-value.muted { color: var(--muted); }
+.kpi-sub { font-size: 12.5px; color: #94a3b8; margin-top: 2px; }
+
+.pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.pill {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  color: #e2e8f0;
+  border: 1px solid rgba(255,255,255,0.08);
+  font-size: 12.5px;
+}
+
+.grid-panels { display: grid; gap: 16px; }
+.grid-panels.two-col { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--stroke);
+  border-radius: 16px;
+  padding: 18px 18px 16px;
+  box-shadow: 0 14px 38px rgba(0,0,0,0.4);
+}
+.panel-featured {
+  background: linear-gradient(160deg, rgba(14,165,233,0.14), rgba(12,18,36,0.9));
+  border-color: rgba(14,165,233,0.22);
+}
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.panel h2 { font-size: 16px; }
+.panel-empty { color: #94a3b8; font-size: 13px; padding: 6px 4px 2px; }
+
+.feat-list { display: flex; flex-direction: column; gap: 10px; }
 .feat-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 11px 14px;
-  background: rgba(245,158,11,0.05);
-  border-radius: 11px;
-  border: 1px solid rgba(245,158,11,0.15);
-  transition: background .15s, border-color .15s;
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.06);
+  transition: transform .15s var(--ease), border-color .15s, background .15s;
 }
-.feat-row:hover {
-  background: rgba(245,158,11,0.08);
-  border-color: rgba(245,158,11,0.25);
-}
+.feat-row:hover { transform: translateY(-1px); border-color: rgba(255,255,255,0.12); background: rgba(255,255,255,0.05); }
 .feat-body { flex: 1; min-width: 0; }
-.feat-title { font-weight: 700; font-size: 13px; color: var(--text); }
-.feat-desc { font-size: 12px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feat-title { font-weight: 700; font-size: 13.5px; color: #e2e8f0; }
+.feat-desc { font-size: 12.5px; color: #cbd5e1; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .feat-date {
-  font-size: 11.5px; font-weight: 600;
-  color: #fbbf24;
-  background: rgba(245,158,11,0.1);
-  border: 1px solid rgba(245,158,11,0.2);
-  padding: 3px 9px; border-radius: 20px;
+  font-size: 12px; font-weight: 700;
+  color: var(--accent-2);
+  background: rgba(245,158,11,0.12);
+  border: 1px solid rgba(245,158,11,0.28);
+  padding: 5px 10px; border-radius: 14px;
   white-space: nowrap; flex-shrink: 0;
 }
 
-.ibar { margin-bottom: 11px; }
+.chart-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.05);
+  color: #cbd5e1;
+  border: 1px solid rgba(255,255,255,0.08);
+  font-size: 12px;
+}
+
+.ibar { margin-bottom: 12px; }
 .ibar:last-child { margin-bottom: 0; }
-.ibar-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; font-weight: 600; color: var(--text); }
-.ibar-count { color: var(--muted); font-weight: 400; }
-.ibar-track { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 20px; height: 6px; overflow: hidden; }
-.ibar-fill  { height: 100%; border-radius: 20px; transition: width .5s cubic-bezier(.4,0,.2,1); opacity: 0.85; }
+.ibar-label { display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 6px; font-weight: 600; color: #e2e8f0; }
+.ibar-count { color: #94a3b8; font-weight: 500; }
+.ibar-track { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; height: 8px; overflow: hidden; }
+.ibar-fill  { height: 100%; border-radius: 16px; transition: width .45s cubic-bezier(.4,0,.2,1); opacity: 0.92; }
+
+@media (max-width: 900px) {
+  .hero-shell { padding: 22px; }
+  .hero-actions { width: 100%; }
+  .hero-top { flex-direction: column; }
+}
+@media (max-width: 640px) {
+  .dashboard { --radius: 12px; }
+  .hero-kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .panel { padding: 16px; }
+  .feat-row { align-items: flex-start; }
+}
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
@@ -247,8 +401,8 @@
 
   const ctx = document.getElementById('msgChart').getContext('2d');
   const gradient = ctx.createLinearGradient(0, 0, 0, 220);
-  gradient.addColorStop(0, 'rgba(59,130,246,0.75)');
-  gradient.addColorStop(1, 'rgba(59,130,246,0.04)');
+  gradient.addColorStop(0, 'rgba(14,165,233,0.9)');
+  gradient.addColorStop(1, 'rgba(14,165,233,0.05)');
 
   new Chart(ctx, {
     type: 'bar',
@@ -260,7 +414,7 @@
         backgroundColor: gradient,
         borderRadius: 8,
         borderSkipped: false,
-        hoverBackgroundColor: 'rgba(96,165,250,0.9)',
+        hoverBackgroundColor: 'rgba(14,165,233,0.85)',
       }]
     },
     options: {
