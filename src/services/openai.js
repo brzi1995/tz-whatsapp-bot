@@ -16,6 +16,9 @@ function getClient() {
 async function chat(systemPrompt, messages, model = 'gpt-4o-mini') {
   const response = await getClient().chat.completions.create({
     model,
+    temperature: 0.2,
+    presence_penalty: 0,
+    frequency_penalty: 0,
     messages: [
       { role: 'system', content: systemPrompt },
       ...messages,
@@ -130,6 +133,9 @@ async function parseMessage(message, systemPrompt, model = 'gpt-4o-mini', histor
   try {
     const result = await getClient().chat.completions.create({
       model,
+      temperature: 0.2,
+      presence_penalty: 0,
+      frequency_penalty: 0,
       response_format: { type: 'json_object' },
       messages: [
         {
@@ -156,7 +162,7 @@ KNOWLEDGE RULES:
 - NEVER invent place names, restaurants, beaches, addresses, events, or facts
 - ONLY use: (1) verified context data above, (2) well-known facts about Brela
 - If VERIFIED EVENTS DATA is provided but the user is not asking about events, ignore it
-- If information is missing from context and not a well-known Brela fact, say briefly in the user's language that you do not currently have that information
+- If information is missing from context and not a well-known Brela fact, respond briefly in the user's language with a short apology and that you don't have that information (no improvisation)
 - If the user asks for more details and you have a relevant answer, you may include: https://brela.hr/
 
 RESPONSE STYLE:
@@ -267,7 +273,7 @@ async function rageMessage({ message, baseAnswer, history = [], faqContext, even
     '  2. VERIFIED FAQ DATA (use verbatim facts only)',
     '  3. Well-known general facts about Brela (last resort)',
     'Ignore VERIFIED EVENTS DATA when the user is not asking about events.',
-    'MISSING INFO RULE: If the answer is not in the provided context and is not a well-known fact about Brela, say briefly in the user language that you do not currently have that information.',
+    'MISSING INFO RULE: If the answer is not in the provided context and is not a well-known fact about Brela, say briefly in the user language that you do not currently have that information. Never invent or improvise.',
     'MORE INFO RULE: If the user asks for more details and you have a relevant answer, you may include this link: https://brela.hr/',
     'NEVER invent event names, dates, links, addresses, or facts not present in the verified context.',
     'STYLE: Short and natural. WhatsApp-friendly. Bullet points for lists. 2–3 sentences max for most answers.',
