@@ -478,6 +478,8 @@ router.post('/webhook', async (req, res) => {
       }
 
       try {
+        let weatherText = null;
+
         if (weatherIntent === 'weather_multi') {
           const daysMatch     = trimmedMsg.match(/\d+/);
           const requestedDays = daysMatch ? Math.min(parseInt(daysMatch[0], 10), 5) : 3;
@@ -512,8 +514,7 @@ router.post('/webhook', async (req, res) => {
           if (!days.length) return res.send(twiml(FORECAST_UNAVAILABLE[wLang] || FORECAST_UNAVAILABLE.en));
 
           const label = { hr: 'Prognoza', en: 'Forecast', de: 'Vorhersage', it: 'Previsioni', fr: 'Prévisions' }[wLang] || 'Forecast';
-          console.log('[webhook] FINAL RESPONSE SENT — weather multi-day');
-          return res.send(twiml(`🌤️ ${city} — ${label}:\n${days.join('\n')}`));
+          weatherText = `🌤️ ${city} — ${label}:\n${days.join('\n')}`;
 
         } else if (weatherIntent === 'weather_tomorrow') {
           const url = `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric&lang=${owLang}`;
@@ -533,8 +534,7 @@ router.post('/webhook', async (req, res) => {
           const temp  = Math.round(entry.main.temp);
           const desc  = entry.weather[0]?.description || '';
           const label = { hr: 'Sutra', en: 'Tomorrow', de: 'Morgen', it: 'Domani', fr: 'Demain' }[wLang] || 'Tomorrow';
-          console.log('[webhook] FINAL RESPONSE SENT — weather tomorrow');
-          return res.send(twiml(`🌤️ ${city} — ${label}: ${temp}°C, ${desc}`));
+          weatherText = `🌤️ ${city} — ${label}: ${temp}°C, ${desc}`;
 
         } else {
           // weather_current (default)
@@ -547,9 +547,26 @@ router.post('/webhook', async (req, res) => {
           const temp  = Math.round(data.main.temp);
           const desc  = data.weather[0]?.description || '';
           const label = { hr: 'Trenutno', en: 'Now', de: 'Jetzt', it: 'Ora', fr: 'Maintenant' }[wLang] || 'Now';
-          console.log('[webhook] FINAL RESPONSE SENT — weather current');
-          return res.send(twiml(`🌤️ ${city} — ${label}: ${temp}°C, ${desc}`));
+          weatherText = `🌤️ ${city} — ${label}: ${temp}°C, ${desc}`;
         }
+
+        // AI formats the raw data — raw API text is always the guaranteed fallback
+        let aiReply = null;
+        try {
+          aiReply = await rageMessage({
+            message: weatherText,
+            lang: wLang,
+            systemPrompt: tenant.system_prompt,
+            model,
+          });
+        } catch (e) {
+          console.error('[webhook] AI failed (weather):', e.message);
+        }
+
+        const reply = aiReply || weatherText;
+        console.log(`[webhook] FINAL RESPONSE SENT — weather (${weatherIntent || 'current'})`);
+        return res.send(twiml(reply));
+
       } catch (weatherErr) {
         console.error('[webhook] weather fetch exception:', weatherErr.message);
         return res.send(twiml(WEATHER_UNAVAILABLE[wLang] || WEATHER_UNAVAILABLE.en));
@@ -573,45 +590,49 @@ router.post('/webhook', async (req, res) => {
         return res.send(twiml(noEventsReply));
       }
 
-      const eventContext = formatEventsForContext(events);
-      let eventsReply;
+      // DB data is the source of truth — always build raw text first
+      const rawEventsText = eventPeriod
+        ? formatEventsList(events, eventPeriod, activeLang)
+        : formatEventsForContext(events);
+
+      let aiReply = null;
       try {
-        eventsReply = await rageMessage({
+        aiReply = await rageMessage({
           message: 'Format these events nicely for WhatsApp. Keep it short and engaging.',
-          eventContext,
+          eventContext: formatEventsForContext(events),
           lang: activeLang,
           systemPrompt: tenant.system_prompt,
           model,
         });
-      } catch (evErr) {
-        console.error('[webhook] rageMessage (events) failed:', evErr.message);
+      } catch (e) {
+        console.error('[webhook] AI failed (events):', e.message);
       }
 
-      // Fallback to template formatting if AI fails
-      const finalEventsReply = eventsReply ||
-        (eventPeriod ? formatEventsList(events, eventPeriod, activeLang) : eventContext);
-
+      // AI only polishes — DB data is never lost
+      const reply = aiReply || rawEventsText;
       console.log(`[webhook] FINAL RESPONSE SENT — events (${eventPeriod || 'general'}, ${events.length} found)`);
-      return res.send(twiml(finalEventsReply));
+      return res.send(twiml(reply));
     }
 
     // ── STEP 2: FAQ — database first, AI polish only ─────────────────────────
     const faqMatch = await getFaqMatch(tenant.id, trimmedMsg).catch(() => null);
     if (faqMatch) {
-      let faqReply;
+      // FAQ is the source of truth — AI only polishes the wording
+      const rawAnswer = faqMatch.answer;
+      let aiReply = null;
       try {
-        faqReply = await rageMessage({
+        aiReply = await rageMessage({
           message:    trimmedMsg,
-          baseAnswer: faqMatch.answer,
+          baseAnswer: rawAnswer,
           history,
           lang: activeLang,
           systemPrompt: tenant.system_prompt,
           model,
         });
-      } catch (faqErr) {
-        console.error('[webhook] rageMessage (FAQ) failed:', faqErr.message);
-        faqReply = faqMatch.answer; // raw answer as safe fallback
+      } catch (e) {
+        console.error('[webhook] AI failed (FAQ):', e.message);
       }
+      const faqReply = aiReply || rawAnswer;
 
       await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
       await saveMessages(tenant.id, userPhone, [
@@ -674,9 +695,9 @@ router.post('/webhook', async (req, res) => {
     const upcomingEvents  = await getUpcomingEvents(tenant.id).catch(() => []);
     const eventContextAI  = upcomingEvents.length ? formatEventsForContext(upcomingEvents) : null;
 
-    let reply;
+    let aiReply = null;
     try {
-      reply = await rageMessage({
+      aiReply = await rageMessage({
         message: trimmedMsg,
         history,
         eventContext: eventContextAI,
@@ -684,12 +705,12 @@ router.post('/webhook', async (req, res) => {
         systemPrompt: tenant.system_prompt,
         model,
       });
-    } catch (aiErr) {
-      console.error('[webhook] rageMessage (AI fallback) failed:', aiErr.message);
+    } catch (e) {
+      console.error('[webhook] AI failed (general):', e.message);
     }
 
-    // STEP 8: Final fallback — only if everything else failed
-    if (!reply) reply = fallbackReply(activeLang);
+    // STEP 8: Final fallback — only if AI fails
+    const reply = aiReply || fallbackReply(activeLang);
 
     // Persist conversation history
     await saveMessages(tenant.id, userPhone, [
