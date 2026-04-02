@@ -744,7 +744,7 @@ function isEventFollowUp(message, conversationState) {
   ].some(term => normalized.includes(normalizeLookup(term)));
 }
 
-function detectWeatherIntent(message) {
+function detectWeatherIntent(message, conversationState = {}) {
   const normalized = normalizeLookup(message);
   const tokens = normalized.split(' ').filter(Boolean);
   const hasTerm = term => {
@@ -752,14 +752,23 @@ function detectWeatherIntent(message) {
     return lookup.includes(' ') ? normalized.includes(lookup) : tokens.includes(lookup);
   };
   const requestedDaysMatch = normalized.match(/\b(\d{1,2})\b/);
-  const requestedDays = requestedDaysMatch ? parseInt(requestedDaysMatch[1], 10) : null;
+  let requestedDays = requestedDaysMatch ? parseInt(requestedDaysMatch[1], 10) : null;
+
+  // phrases like "in 5 days" / "za 4 dana"
+  const inDaysMatch = normalized.match(/\b(in|za)\s*(\d{1,2})\s*(day|days|dan|dana)?\b/);
+  if (inDaysMatch && !requestedDays) {
+    requestedDays = parseInt(inDaysMatch[2], 10);
+  }
+
+  // If continuing a weather chat, any number up to 7 defaults to forecast
+  const continuingWeather = conversationState.lastTopic === 'weather' || conversationState.lastWeatherIntent;
 
   const asksTomorrow = ['tomorrow', 'sutra', 'morgen', 'domani', 'demain'].some(hasTerm);
   const asksCurrent = ['today', 'danas', 'heute', 'oggi', 'aujourdhui', 'current', 'now', 'trenutno', 'sada'].some(hasTerm);
   const asksMulti = ['forecast', 'next', 'coming', 'days', 'dana', 'week', 'tjedan', 'tage', 'giorni', 'jours', 'previsioni', 'prognoza'].some(hasTerm);
 
   if (requestedDays && requestedDays > 5) return { type: 'weather_long', days: requestedDays };
-  if ((requestedDays && requestedDays > 1) || asksMulti) {
+  if ((requestedDays && requestedDays > 1) || asksMulti || (continuingWeather && requestedDays)) {
     return { type: asksCurrent ? 'weather_current_and_multi' : 'weather_multi', days: Math.min(requestedDays || 3, 5) };
   }
   if (asksTomorrow) return { type: 'weather_tomorrow', days: 1 };
@@ -997,7 +1006,7 @@ router.post('/webhook', async (req, res) => {
 
     // ── WEATHER — keyword-detected, API-first, no AI formatting ─────────────
     if (isWeatherQuery(effectiveMsg) || isWeatherFollowUp(effectiveMsg, conversationState) || (historyLooksLikeWeather(history) && /\b\d{1,2}\b/.test(normalizeLookup(effectiveMsg)))) {
-      const weatherIntent = detectWeatherIntent(effectiveMsg);
+      const weatherIntent = detectWeatherIntent(effectiveMsg, conversationState);
       const wLang  = activeLang;
       const apiKey = process.env.OPENWEATHER_API_KEY;
       const city   = tenant.city || 'Brela';
