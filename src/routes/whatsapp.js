@@ -186,6 +186,60 @@ const EVENT_LABELS = {
   },
 };
 
+const UPCOMING_LABELS = {
+  hr: '📅 Nadolazeći događaji:',
+  en: '📅 Upcoming events:',
+  de: '📅 Kommende Veranstaltungen:',
+  it: '📅 Prossimi eventi:',
+  fr: '📅 Événements à venir:',
+  sv: '📅 Kommande evenemang:',
+  no: '📅 Kommende arrangementer:',
+  cs: '📅 Nadcházející akce:',
+};
+
+const PERIOD_EMPTY_WITH_UPCOMING = {
+  hr: {
+    today: 'Danas nema događaja.',
+    tomorrow: 'Sutra nema događaja.',
+    week: 'Ovaj tjedan nema događaja.',
+  },
+  en: {
+    today: 'There are no events today.',
+    tomorrow: 'There are no events tomorrow.',
+    week: 'There are no events this week.',
+  },
+  de: {
+    today: 'Heute gibt es keine Veranstaltungen.',
+    tomorrow: 'Morgen gibt es keine Veranstaltungen.',
+    week: 'Diese Woche gibt es keine Veranstaltungen.',
+  },
+  it: {
+    today: 'Oggi non ci sono eventi.',
+    tomorrow: 'Domani non ci sono eventi.',
+    week: 'Questa settimana non ci sono eventi.',
+  },
+  fr: {
+    today: "Il n'y a pas d'événements aujourd'hui.",
+    tomorrow: "Il n'y a pas d'événements demain.",
+    week: "Il n'y a pas d'événements cette semaine.",
+  },
+  sv: {
+    today: 'Det finns inga evenemang idag.',
+    tomorrow: 'Det finns inga evenemang imorgon.',
+    week: 'Det finns inga evenemang den här veckan.',
+  },
+  no: {
+    today: 'Det er ingen arrangementer i dag.',
+    tomorrow: 'Det er ingen arrangementer i morgen.',
+    week: 'Det er ingen arrangementer denne uken.',
+  },
+  cs: {
+    today: 'Dnes nejsou žádné akce.',
+    tomorrow: 'Zítra nejsou žádné akce.',
+    week: 'Tento týden nejsou žádné akce.',
+  },
+};
+
 function formatEventsList(events, period, lang) {
   const labels = EVENT_LABELS[lang] || EVENT_LABELS.en;
   if (!events.length) {
@@ -201,6 +255,25 @@ function formatEventsList(events, period, lang) {
     return line;
   });
   return header + lines.join('');
+}
+
+function formatUpcomingEventsList(events, lang) {
+  const header = UPCOMING_LABELS[lang] || UPCOMING_LABELS.en;
+  const lines = events.map((ev, i) => {
+    const d = ev.date instanceof Date ? ev.date : new Date(ev.date);
+    const dateStr = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.`;
+    let line = `\n\n${i + 1}. ${ev.title} (${dateStr})`;
+    if (ev.description) line += `\n   ${ev.description}`;
+    if (ev.location_link) line += `\n   📍 ${ev.location_link}`;
+    return line;
+  });
+  return header + lines.join('');
+}
+
+function formatPeriodFallbackWithUpcoming(events, period, lang) {
+  const introSet = PERIOD_EMPTY_WITH_UPCOMING[lang] || PERIOD_EMPTY_WITH_UPCOMING.en;
+  const intro = introSet[period] || introSet.today;
+  return `${intro}\n\n${formatUpcomingEventsList(events, lang)}`;
 }
 
 // Language-aware templates used instead of extra AI calls
@@ -578,14 +651,42 @@ router.post('/webhook', async (req, res) => {
       const eventPeriod = detectEventPeriod(trimmedMsg); // today/tomorrow/week/null
       await logMessage(tenant.id, userPhone, trimmedMsg, 'events', activeLang).catch(() => {});
 
-      const events = eventPeriod
-        ? await getEventsByPeriod(tenant.id, eventPeriod).catch(() => [])
-        : await getUpcomingEvents(tenant.id).catch(() => []);
+      let events = [];
+      let reply = null;
+
+      if (eventPeriod) {
+        events = await getEventsByPeriod(tenant.id, eventPeriod).catch(() => []);
+
+        if (!events.length) {
+          const upcomingEvents = await getUpcomingEvents(tenant.id).catch(() => []);
+          reply = upcomingEvents.length
+            ? formatPeriodFallbackWithUpcoming(upcomingEvents, eventPeriod, activeLang)
+            : (EVENT_LABELS[activeLang] || EVENT_LABELS.en).empty[eventPeriod];
+
+          await saveMessages(tenant.id, userPhone, [
+            ...history,
+            { role: 'user', content: trimmedMsg },
+            { role: 'assistant', content: reply },
+          ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
+
+          console.log(`[webhook] FINAL RESPONSE SENT — events (${eventPeriod}, fallback ${upcomingEvents.length ? 'upcoming' : 'none'})`);
+          return res.send(twiml(reply));
+        }
+      } else {
+        events = await getUpcomingEvents(tenant.id).catch(() => []);
+      }
 
       if (!events.length) {
         const noEventsReply = eventPeriod
           ? (EVENT_LABELS[activeLang] || EVENT_LABELS.en).empty[eventPeriod]
           : (NO_EVENTS[activeLang] || NO_EVENTS.hr);
+
+        await saveMessages(tenant.id, userPhone, [
+          ...history,
+          { role: 'user', content: trimmedMsg },
+          { role: 'assistant', content: noEventsReply },
+        ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
+
         console.log('[webhook] FINAL RESPONSE SENT — events (none found)');
         return res.send(twiml(noEventsReply));
       }
@@ -609,7 +710,14 @@ router.post('/webhook', async (req, res) => {
       }
 
       // AI only polishes — DB data is never lost
-      const reply = aiReply || rawEventsText;
+      reply = aiReply || rawEventsText;
+
+      await saveMessages(tenant.id, userPhone, [
+        ...history,
+        { role: 'user', content: trimmedMsg },
+        { role: 'assistant', content: reply },
+      ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
+
       console.log(`[webhook] FINAL RESPONSE SENT — events (${eventPeriod || 'general'}, ${events.length} found)`);
       return res.send(twiml(reply));
     }
