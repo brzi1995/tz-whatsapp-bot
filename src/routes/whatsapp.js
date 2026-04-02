@@ -892,7 +892,8 @@ router.post('/webhook', async (req, res) => {
         console.log('[webhook] FINAL RESPONSE SENT — consent: opted in');
         return res.send(twiml(OPT_IN_CONFIRM[lang] || OPT_IN_CONFIRM.hr));
       } else if (lowerMsg === 'ne') {
-        await setOptIn(tenant.id, userPhone, 0);
+        // Mark explicit opt-out so we don't ask again (opt_in = -1)
+        await setOptIn(tenant.id, userPhone, -1);
         await setAskedOptIn(tenant.id, userPhone, 0);
         await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', lang).catch(() => {});
         console.log('[webhook] FINAL RESPONSE SENT — consent: opted out');
@@ -1283,7 +1284,7 @@ router.post('/webhook', async (req, res) => {
       // Consent trigger
       const shouldAskConsent = (
         currentUser &&
-        currentUser.opt_in === null &&
+        currentUser.opt_in === 0 &&            // only if not opted in or explicitly opted out
         Number(currentUser.asked_opt_in) === 0 &&
         history.length >= 4
       );
