@@ -437,39 +437,38 @@
     /* ── Forms ──────────────────────────────────────────────── */
     input, textarea, select {
       width: 100%;
-      padding: 10px 13px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      border: 1px solid #dcdcdc;
+      border-radius: 10px;
       font-size: 14px;
       margin-bottom: 14px;
-      background: rgba(255,255,255,0.025);
-      color: var(--text);
-      transition: border-color .15s var(--ease), box-shadow .15s var(--ease), background .15s;
+      background: #ffffff;
+      color: #111111;
+      transition: border-color .15s var(--ease), box-shadow .15s var(--ease);
       min-height: 40px;
     }
     textarea { min-height: auto; }
     input:focus, textarea:focus, select:focus {
       outline: none;
-      border-color: rgba(59,130,246,0.5);
-      box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
-      background: rgba(59,130,246,0.04);
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
     }
-    input::placeholder, textarea::placeholder { color: #3f3f46; }
-    select option { background: var(--surface); color: var(--text); }
+    input::placeholder, textarea::placeholder { color: #888888; }
+    select option { background: #ffffff; color: #111111; }
     label {
       display: block;
-      font-size: 11.5px; font-weight: 700; color: var(--muted);
-      text-transform: uppercase; letter-spacing: .06em; margin-bottom: 5px;
+      font-size: 13px; font-weight: 600; color: #555555;
+      margin-bottom: 5px;
     }
     .add-form {
-      background: var(--surface);
+      background: #ffffff;
       border-radius: var(--radius);
-      padding: 22px 24px;
-      box-shadow: var(--shadow-sm);
-      border: 1px solid var(--border);
+      padding: 24px 26px;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+      border: 1px solid #e4e4e7;
       margin-bottom: 20px;
     }
-    .add-form h2 { font-size: 13.5px; margin-bottom: 16px; color: var(--text); }
+    .add-form h2 { font-size: 14px; margin-bottom: 18px; color: #111111; font-weight: 700; }
     .form-row { display: flex; gap: 14px; flex-wrap: wrap; }
     .form-row > * { flex: 1; min-width: 160px; }
 

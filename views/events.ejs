@@ -70,7 +70,7 @@
         <div class="item-card-actions">
           <form method="POST" action="/admin/events/<%= ev.id %>/toggle-featured">
             <button type="submit" class="btn btn-sm" title="<%= ev.featured ? 'Ukloni isticanje' : 'Istakni' %>"
-              style="background:<%= ev.featured ? 'var(--amber-light)' : '#f1f5f9' %>;color:<%= ev.featured ? 'var(--amber)' : '#94a3b8' %>;border:1px solid <%= ev.featured ? '#fde68a' : 'var(--border)' %>">
+              style="background:<%= ev.featured ? 'var(--amber-light)' : 'var(--surface-2)' %>;color:<%= ev.featured ? 'var(--amber)' : '#71717a' %>;border:1px solid <%= ev.featured ? '#fde68a' : 'var(--border)' %>">
               <%= ev.featured ? '⭐' : '☆' %>
             </button>
           </form>
