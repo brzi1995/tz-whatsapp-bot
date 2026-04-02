@@ -433,6 +433,15 @@ function formatPeriodFallbackWithUpcoming(events, period, lang) {
 }
 
 // Language-aware templates used instead of extra AI calls
+// Links defined before use in unavailable messages
+const FORECAST_LONG_RANGE_URL = 'https://weather.com/hr-HR/vrijeme/10dana/l/Brela+Splitsko+dalmatinska+%C5%BEupanija';
+const FORECAST_LONG_RANGE = {
+  hr: `Za detaljnu 10-dnevnu prognozu:\n${FORECAST_LONG_RANGE_URL}`,
+  en: `For a detailed 10-day forecast:\n${FORECAST_LONG_RANGE_URL}`,
+  de: `Für die 10-Tage-Vorhersage:\n${FORECAST_LONG_RANGE_URL}`,
+  it: `Per le previsioni a 10 giorni:\n${FORECAST_LONG_RANGE_URL}`,
+  fr: `Pour les prévisions à 10 jours:\n${FORECAST_LONG_RANGE_URL}`,
+};
 const WEATHER_UNAVAILABLE = {
   hr: `🌤️ Trenutne podatke nemam pri ruci. Pogledaj ovdje: ${FORECAST_LONG_RANGE_URL}`,
   en: `🌤️ I don't have live data right now. Check here: ${FORECAST_LONG_RANGE_URL}`,
@@ -446,14 +455,6 @@ const FORECAST_UNAVAILABLE = {
   de: `🌤️ Keine Vorhersage verfügbar. Details: ${FORECAST_LONG_RANGE_URL}`,
   it: `🌤️ Non ho quella previsione adesso. Dettagli: ${FORECAST_LONG_RANGE_URL}`,
   fr: `🌤️ Prévision indisponible. Détails : ${FORECAST_LONG_RANGE_URL}`,
-};
-const FORECAST_LONG_RANGE_URL = 'https://weather.com/hr-HR/vrijeme/10dana/l/Brela+Splitsko+dalmatinska+%C5%BEupanija';
-const FORECAST_LONG_RANGE = {
-  hr: `Za detaljnu 10-dnevnu prognozu:\n${FORECAST_LONG_RANGE_URL}`,
-  en: `For a detailed 10-day forecast:\n${FORECAST_LONG_RANGE_URL}`,
-  de: `Für die 10-Tage-Vorhersage:\n${FORECAST_LONG_RANGE_URL}`,
-  it: `Per le previsioni a 10 giorni:\n${FORECAST_LONG_RANGE_URL}`,
-  fr: `Pour les prévisions à 10 jours:\n${FORECAST_LONG_RANGE_URL}`,
 };
 const WEATHER_LABELS = {
   hr: {
