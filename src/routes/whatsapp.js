@@ -19,7 +19,7 @@ function isSpam(message) {
 // Pure acknowledgements — no reply needed
 const TRIVIAL = new Set([
   'ok', 'okay', 'k', 'yes', 'no', 'yep', 'nope', 'thanks', 'thx', 'ty', 'np',
-  'hvala', 'nein', 'danke', 'si', 'grazie', 'non', 'merci',
+  'hvala', 'da', 'ne', 'nein', 'danke', 'si', 'grazie', 'non', 'merci',
 ]);
 
 // Greetings — short messages only (≤3 words), handled without AI
@@ -52,14 +52,14 @@ function detectGreetingLanguage(msg) {
   return GREETING_LANGUAGE[lower] || null;
 }
 const GREETING_MSG = {
-  hr: 'Pozdrav! Ja sam vaš turistički asistent za Brela 😊\nMogu pomoći s plažama, parkingom, restoranima i događajima.',
-  en: "Hello! I'm your tourist assistant for Brela 😊\nI can help with beaches, parking, restaurants, and events.",
-  de: 'Hallo! Ich bin Ihr Touristenassistent für Brela 😊\nIch helfe gerne bei Stränden, Parken, Restaurants und Veranstaltungen.',
-  it: 'Ciao! Sono il vostro assistente turistico per Brela 😊\nPosso aiutare con spiagge, parcheggi, ristoranti ed eventi.',
-  fr: 'Bonjour! Je suis votre assistant touristique pour Brela 😊\nJe peux vous aider avec les plages, le parking, les restaurants et les événements.',
-  sv: 'Hej! Jag är din turistassistent för Brela 😊\nJag kan hjälpa dig med stränder, parkering, restauranger och evenemang.',
-  no: 'Hei! Jeg er din turistassistent for Brela 😊\nJeg kan hjelpe med strender, parkering, restauranter og arrangementer.',
-  cs: 'Ahoj! Jsem váš turistický asistent pro Brela 😊\nMohu pomoci s plážemi, parkováním, restauracemi a akcemi.',
+  hr: 'Pozdrav! Ja sam Belly, vaš lokalni vodič za Brela 😊\nMogu pomoći s plažama, parkingom, restoranima i događajima.',
+  en: "Hello! I'm Belly, your local guide for Brela 😊\nI can help with beaches, parking, restaurants, and events.",
+  de: 'Hallo! Ich bin Belly, Ihr lokaler Guide für Brela 😊\nIch helfe gerne bei Stränden, Parken, Restaurants und Veranstaltungen.',
+  it: 'Ciao! Sono Belly, la vostra guida locale per Brela 😊\nPosso aiutare con spiagge, parcheggi, ristoranti ed eventi.',
+  fr: 'Bonjour! Je suis Belly, votre guide locale pour Brela 😊\nJe peux vous aider avec les plages, le parking, les restaurants et les événements.',
+  sv: 'Hej! Jag är Belly, din lokala guide för Brela 😊\nJag kan hjälpa dig med stränder, parkering, restauranger och evenemang.',
+  no: 'Hei! Jeg er Belly, din lokale guide for Brela 😊\nJeg kan hjelpe med strender, parkering, restauranter og arrangementer.',
+  cs: 'Ahoj! Jsem Belly, váš místní průvodce pro Brela 😊\nMohu pomoci s plážemi, parkováním, restauracemi a akcemi.',
 };
 function greetingReply(lang) { return GREETING_MSG[lang] || GREETING_MSG.hr; }
 
@@ -79,7 +79,7 @@ function fallbackReply(lang) { return FALLBACK_MSG[lang] || FALLBACK_MSG.hr; }
 const BRELA_INFO_URL = 'https://brela.hr/';
 
 const OFF_TOPIC_MSG = {
-  hr: `Nažalost, trenutno nemam točnu informaciju za to.\nZa više informacija: ${BRELA_INFO_URL}`,
+  hr: `Trenutno nemam tu informaciju.\nZa više informacija: ${BRELA_INFO_URL}`,
   en: `I don't currently have that exact information.\nFor more information: ${BRELA_INFO_URL}`,
   de: `Dazu habe ich im Moment leider keine genaue Information.\nMehr Infos: ${BRELA_INFO_URL}`,
   it: `Al momento non ho questa informazione precisa.\nPer maggiori informazioni: ${BRELA_INFO_URL}`,
@@ -117,6 +117,28 @@ function clarificationReply(message, lang) {
   const isParking = ['parking', 'parkiranje', 'parkinga', 'parcheggio', 'parken', 'parkov', 'stationnement'].some(term => normalized.includes(term));
   if (isParking) return PARKING_CLARIFY_MSG[lang] || PARKING_CLARIFY_MSG.en;
   return CLARIFY_MSG[lang] || CLARIFY_MSG.en;
+}
+
+function needsParkingClarification(message) {
+  const normalized = normalizeLookup(message);
+  const hasParking = ['parking', 'parkiranje', 'parkinga', 'parcheggio', 'parken', 'parkov', 'stationnement'].some(term => normalized.includes(term));
+  if (!hasParking) return false;
+
+  const detailHints = [
+    'centar', 'center', 'beach', 'plaza', 'plaža', 'smjestaj', 'smještaj',
+    'accommodation', 'hotel', 'apartman', 'apartment', 'punta rata',
+    'berulia', 'soline', 'podrace', 'podrače', 'ulica', 'street', 'harbor', 'luka',
+    'price', 'prices', 'cijena', 'cijene', 'tarifa', 'zone', 'zones', 'lokacija', 'lokacije', 'location', 'locations',
+  ];
+  const hasDetail = detailHints.some(term => normalized.includes(normalizeLookup(term)));
+  if (hasDetail) return false;
+
+  const genericHints = [
+    'parking', 'parkiranje', 'parkinga',
+    'i need help with parking', 'need help with parking',
+    'pomoc oko parkinga', 'pomoc s parkingom', 'help with parking',
+  ];
+  return genericHints.some(term => normalized === normalizeLookup(term) || normalized.includes(normalizeLookup(term)));
 }
 
 // Consent prompt — sent after a few exchanges if user hasn't opted in/out yet
@@ -509,7 +531,7 @@ const BRELA_TOPICS = [
   // English
   'beach', 'sea', 'ocean', 'restaur', 'coffee', 'cafe', 'activit', 'excursion',
   'accommodat', 'apartment', 'hotel', 'transport', 'ferry', 'boat', 'swim',
-  'dive', 'snorkel', 'kayak', 'bike', 'rent', 'parking',
+  'dive', 'snorkel', 'kayak', 'bike', 'rent', 'parking', 'spa', 'wellness',
   // German
   'strand', 'meer', 'ausflug', 'unterkunft', 'veranstaltung',
   // Italian
@@ -877,6 +899,21 @@ router.post('/webhook', async (req, res) => {
 
       console.log(`[webhook] FINAL RESPONSE SENT — events (${eventPeriod || 'general'}, ${events.length} found)`);
       return res.send(twiml(reply));
+    }
+
+    // Generic parking questions should clarify before FAQ matching so the bot
+    // doesn't dump a broad answer or the wrong parking link.
+    if (needsParkingClarification(trimmedMsg)) {
+      const clarifyReply = clarificationReply(trimmedMsg, activeLang);
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
+      await saveMessages(tenant.id, userPhone, [
+        ...history,
+        { role: 'user', content: trimmedMsg },
+        { role: 'assistant', content: clarifyReply },
+      ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
+
+      console.log('[webhook] FINAL RESPONSE SENT — parking clarification');
+      return res.send(twiml(clarifyReply));
     }
 
     // ── STEP 2: FAQ — database first, AI polish only ─────────────────────────
