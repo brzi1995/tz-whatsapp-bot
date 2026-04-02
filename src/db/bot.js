@@ -47,6 +47,7 @@ const FAQ_STOPWORDS = new Set([
   'jel', 'gibt', 'es', 'der', 'die', 'das', 'und', 'ein', 'eine', 'ist', 'sind', 'ich',
   'ci', 'sono', 'il', 'lo', 'la', 'gli', 'le', 'un', 'una', 'per', 'con', 'del', 'della',
   'di', 'che', 'ou', 'et', 'de', 'des', 'est', 'sont', 'y', 'a', 'dans', 'sur', 'au',
+  'brela', 'brelima', 'hrvatska', 'croatia', 'dalmacija', 'dalmatia', 'makarska',
 ]);
 
 function normalizeFaqText(text) {
@@ -76,11 +77,13 @@ function matchFaqToken(userToken, faqToken) {
 
 /**
  * Try to match a user message against FAQ entries for the tenant.
- * Returns { answer, score } for the best match (score = 0–1, matched keywords / total),
- * or null when nothing matches at all.
+ * Returns either:
+ *   - { matchType: 'strong', ...faqData }
+ *   - { matchType: 'clarify', score, options }
+ *   - null when nothing matches at all
  * @param {number} tenantId
  * @param {string} userMessage
- * @returns {Promise<{answer:string, score:number}|null>}
+ * @returns {Promise<Object|null>}
  */
 async function getFaqMatch(tenantId, userMessage) {
   try {
@@ -93,6 +96,7 @@ async function getFaqMatch(tenantId, userMessage) {
     const normalised = normalizeFaqText(userMessage);
     const userTokens = tokenizeFaqText(userMessage);
     let best = null;
+    const candidates = [];
 
     for (const row of rows) {
       const questionNorm = normalizeFaqText(row.question);
@@ -115,10 +119,33 @@ async function getFaqMatch(tenantId, userMessage) {
       const coverage = matchedWeight / keywords.length;
       const phraseBonus = (questionNorm && (normalised.includes(questionNorm) || questionNorm.includes(normalised))) ? 0.35 : 0;
       const score = coverage + phraseBonus + (exactLongMatch ? 0.15 : 0);
-      const isStrongMatch = score >= 0.45 || (exactLongMatch && keywords.length <= 4 && matchedKeywords >= 1);
 
-      if (isStrongMatch && (!best || score > best.score)) {
+      // Bidirectional topic check: every significant user token (len >= 3) must have
+      // at least one partial match in the FAQ keywords. If the user's key topic word
+      // (e.g. "spa") doesn't appear anywhere in the FAQ question, the match is likely
+      // coincidental (e.g. "centar" matching a parking FAQ). In that case require a
+      // much higher score before accepting it as relevant.
+      const userTopicMatched = userTokens.length === 0 ||
+        userTokens.every(ut => ut.length < 3 || keywords.some(kw => matchFaqToken(ut, kw) > 0));
+      const strongThreshold = userTopicMatched ? 0.45 : 0.7;
+      const clarifyThreshold = userTopicMatched ? 0.25 : 0.55;
+
+      if (score >= clarifyThreshold) {
+        candidates.push({
+          question: row.question,
+          answer: row.answer,
+          score,
+          link_title: row.link_title || null,
+          link_url: row.link_url || null,
+          link_image: row.link_image || null,
+          userTopicMatched,
+        });
+      }
+
+      if (score >= strongThreshold && (!best || score > best.score)) {
         best = {
+          matchType:   'strong',
+          question:    row.question,
           answer:      row.answer,
           score,
           link_title:  row.link_title  || null,
@@ -128,7 +155,23 @@ async function getFaqMatch(tenantId, userMessage) {
         console.log(`[bot] FAQ scored match on "${row.question}" — score: ${score.toFixed(2)}`);
       }
     }
-    return best;
+
+    if (best) return best;
+
+    const clarificationOptions = candidates
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3)
+      .map(({ question, score }) => ({ question, score }));
+
+    if (clarificationOptions.length) {
+      return {
+        matchType: 'clarify',
+        score: clarificationOptions[0].score,
+        options: clarificationOptions,
+      };
+    }
+
+    return null;
   } catch (err) {
     console.error('[bot] getFaqMatch error:', err.message);
     return null;

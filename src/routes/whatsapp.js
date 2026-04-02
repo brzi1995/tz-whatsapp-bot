@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getTenant, getMessages, saveMessages } = require('../db/sessions');
-const { detectLanguage, rageMessage } = require('../services/openai');
+const { detectLanguage, detectLanguageWithConfidence, rageMessage } = require('../services/openai');
 const { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, detectEventPeriod, upsertWhatsappUser, getWhatsappUser, setOptIn, setAskedOptIn, setUserLang } = require('../db/bot');
 
 /**
@@ -27,10 +27,29 @@ const GREETING_WORDS = [
   'hello', 'hi', 'hey', 'bok', 'hej', 'zdravo', 'hallo', 'ciao',
   'bonjour', 'salut', 'buenas', 'buongiorno', 'dobar dan', 'guten tag',
 ];
+const GREETING_LANGUAGE = {
+  pozdrav: 'hr',
+  bok: 'hr',
+  zdravo: 'hr',
+  'dobar dan': 'hr',
+  hello: 'en',
+  hi: 'en',
+  hey: 'en',
+  hallo: 'de',
+  'guten tag': 'de',
+  ciao: 'it',
+  buongiorno: 'it',
+  bonjour: 'fr',
+  salut: 'fr',
+};
 function isGreeting(msg) {
   const lower = msg.toLowerCase().trim().replace(/[!?.,]*$/, '');
   if (lower.split(/\s+/).length > 3) return false; // "hello where is parking" → not greeting
   return GREETING_WORDS.some(w => lower === w || lower.startsWith(w));
+}
+function detectGreetingLanguage(msg) {
+  const lower = msg.toLowerCase().trim().replace(/[!?.,]*$/, '');
+  return GREETING_LANGUAGE[lower] || null;
 }
 const GREETING_MSG = {
   hr: 'Pozdrav! Ja sam vaš turistički asistent za Brela 😊\nMogu pomoći s plažama, parkingom, restoranima i događajima.',
@@ -70,6 +89,35 @@ const OFF_TOPIC_MSG = {
   cs: `Tuto přesnou informaci teď bohužel nemám.\nVíce informací: ${BRELA_INFO_URL}`,
 };
 function offTopicReply(lang) { return OFF_TOPIC_MSG[lang] || OFF_TOPIC_MSG.en; }
+
+const CLARIFY_MSG = {
+  hr: 'Mogu pomoći, ali trebam malo preciznije pitanje.\nNapišite lokaciju ili što vas točno zanima.\nZa više informacija: https://brela.hr/',
+  en: 'I can help, but I need a bit more detail.\nPlease send the location or what exactly you need.\nFor more information: https://brela.hr/',
+  de: 'Ich kann helfen, brauche aber etwas mehr Details.\nBitte senden Sie den Ort oder was Sie genau brauchen.\nMehr Infos: https://brela.hr/',
+  it: 'Posso aiutarti, ma ho bisogno di qualche dettaglio in più.\nScrivi la località o di cosa hai bisogno esattamente.\nPer maggiori informazioni: https://brela.hr/',
+  fr: "Je peux aider, mais j'ai besoin d'un peu plus de détails.\nIndiquez le lieu ou ce dont vous avez exactement besoin.\nPour plus d'informations : https://brela.hr/",
+  sv: 'Jag kan hjälpa till, men jag behöver lite mer information.\nSkriv platsen eller vad du exakt behöver.\nMer information: https://brela.hr/',
+  no: 'Jeg kan hjelpe, men jeg trenger litt mer informasjon.\nSkriv stedet eller hva du trenger helt konkret.\nMer informasjon: https://brela.hr/',
+  cs: 'Mohu pomoci, ale potřebuji trochu více podrobností.\nNapište místo nebo co přesně potřebujete.\nVíce informací: https://brela.hr/',
+};
+
+const PARKING_CLARIFY_MSG = {
+  hr: 'Mogu pomoći oko parkinga, ali trebam malo preciznije pitanje.\nZanima vas:\n1. parking u centru\n2. parking blizu plaže\n3. parking kod smještaja\nZa više informacija: https://brela.hr/',
+  en: 'I can help with parking, but I need a bit more detail.\nDo you mean:\n1. parking in the center\n2. parking near the beach\n3. parking near your accommodation\nFor more information: https://brela.hr/',
+  de: 'Ich kann beim Parken helfen, brauche aber etwas mehr Details.\nMeinen Sie:\n1. Parken im Zentrum\n2. Parken nahe dem Strand\n3. Parken bei Ihrer Unterkunft\nMehr Infos: https://brela.hr/',
+  it: 'Posso aiutarti con il parcheggio, ma ho bisogno di qualche dettaglio in più.\nIntendi:\n1. parcheggio in centro\n2. parcheggio vicino alla spiaggia\n3. parcheggio vicino all’alloggio\nPer maggiori informazioni: https://brela.hr/',
+  fr: "Je peux aider pour le parking, mais j'ai besoin d'un peu plus de détails.\nVous parlez de :\n1. parking dans le centre\n2. parking près de la plage\n3. parking près de votre hébergement\nPour plus d'informations : https://brela.hr/",
+  sv: 'Jag kan hjälpa till med parkering, men jag behöver lite mer information.\nMenar du:\n1. parkering i centrum\n2. parkering nära stranden\n3. parkering nära ditt boende\nMer information: https://brela.hr/',
+  no: 'Jeg kan hjelpe med parkering, men jeg trenger litt mer informasjon.\nMener du:\n1. parkering i sentrum\n2. parkering nær stranden\n3. parkering ved overnattingen din\nMer informasjon: https://brela.hr/',
+  cs: 'Mohu pomoci s parkováním, ale potřebuji trochu více podrobností.\nMyslíte:\n1. parkování v centru\n2. parkování blízko pláže\n3. parkování u vašeho ubytování\nVíce informací: https://brela.hr/',
+};
+
+function clarificationReply(message, lang) {
+  const normalized = normalizeLookup(message);
+  const isParking = ['parking', 'parkiranje', 'parkinga', 'parcheggio', 'parken', 'parkov', 'stationnement'].some(term => normalized.includes(term));
+  if (isParking) return PARKING_CLARIFY_MSG[lang] || PARKING_CLARIFY_MSG.en;
+  return CLARIFY_MSG[lang] || CLARIFY_MSG.en;
+}
 
 // Consent prompt — sent after a few exchanges if user hasn't opted in/out yet
 const CONSENT_ASK = {
@@ -428,14 +476,28 @@ const EVENT_STEMS = [
   'akce', 'události',
 ];
 const EVENT_PHRASES = [
+  'što ima', 'sta ima', 'sto ima',
   'što se događa', 'sta se dogadja', 'šta se dešava',
   'ima li događ', 'ima li dogadj',
   "what's happening", "what's on", 'whats happening', 'what is happening',
+  'what happening', 'what is on', 'whats on',
+  'what is going on', 'whats going on', 'going on',
+  'happening this week', 'events this week', 'events today', 'events tomorrow',
+  // Natural English phrasings that don't use the word "event"
+  'anything happening', 'anything going on', 'anything on this',
+  'anything on today', 'anything on tonight', 'anything on tomorrow',
+  'what to do tonight', 'what to do this',
 ];
 function isEventQuery(msg) {
   const lower = msg.toLowerCase();
-  return EVENT_STEMS.some(s => lower.includes(s)) ||
-         EVENT_PHRASES.some(p => lower.includes(p));
+  const normalized = normalizeLookup(msg);
+  const hasEventStem = EVENT_STEMS.some(s => lower.includes(s) || normalized.includes(normalizeLookup(s)));
+  const hasEventPhrase = EVENT_PHRASES.some(p => normalized.includes(normalizeLookup(p)));
+  const hasEnglishEventShape =
+    ['happening', 'going on', 'what is on', 'whats on', 'what s on'].some(p => normalized.includes(p)) &&
+    ['today', 'tonight', 'tomorrow', 'week', 'weekend', 'this evening'].some(w => normalized.includes(w));
+
+  return hasEventStem || hasEventPhrase || hasEnglishEventShape;
 }
 
 /** Check if message is relevant to Brela tourism. */
@@ -581,8 +643,17 @@ router.post('/webhook', async (req, res) => {
       console.error('[webhook] getWhatsappUser failed:', userErr.message);
     }
 
-    // Use stored language as base, override with current message detection
-    const lang = currentUser?.language || detectLanguage(trimmedMsg);
+    const greetingNorm = lowerMsg
+      .replace(/[!?.,;:]*$/, '')
+      .replace(/[^a-zčćšžđ\s]/g, '') // strip emojis and non-letter characters
+      .replace(/\s+/g, ' ')
+      .trim();
+    const greetingLang = detectGreetingLanguage(greetingNorm);
+    const langSignal = greetingLang
+      ? { lang: greetingLang, ambiguous: false }
+      : detectLanguageWithConfidence(trimmedMsg);
+    // Current message language should win. Short/ambiguous messages should inherit the chat language.
+    const lang = langSignal.lang || currentUser?.language || 'en';
 
     // ── CONSENT GATE — highest priority ──────────────────────────────────────
     if (currentUser && Number(currentUser.asked_opt_in) === 1) {
@@ -623,14 +694,11 @@ router.post('/webhook', async (req, res) => {
     const history = await getMessages(tenant.id, userPhone).catch(() => []);
     console.log(`[webhook] history length: ${history.length}`);
 
-    // Detect language from current message now that we have history context
-    const msgLang = detectLanguage(trimmedMsg);
-    await setUserLang(tenant.id, userPhone, msgLang).catch(() => {});
-    const activeLang = msgLang || lang;
+    await setUserLang(tenant.id, userPhone, lang).catch(() => {});
+    const activeLang = lang;
 
     // ── STEP 1: GREETING — one-time only, exact match, empty history ─────────
-    const EXACT_GREETINGS = new Set(['pozdrav', 'bok', 'hej', 'hello', 'hi']);
-    const greetingNorm = lowerMsg.replace(/[!?.,;:]*$/, '');
+    const EXACT_GREETINGS = new Set(['pozdrav', 'bok', 'hej', 'zdravo', 'dobar dan', 'hello', 'hi', 'hey', 'hallo', 'guten tag', 'ciao', 'buongiorno', 'bonjour', 'salut']);
     if (EXACT_GREETINGS.has(greetingNorm) && history.length === 0) {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', activeLang).catch(() => {});
       console.log('[webhook] FINAL RESPONSE SENT — greeting (first message only)');
@@ -813,7 +881,21 @@ router.post('/webhook', async (req, res) => {
 
     // ── STEP 2: FAQ — database first, AI polish only ─────────────────────────
     const faqMatch = await getFaqMatch(tenant.id, trimmedMsg).catch(() => null);
-    if (faqMatch) {
+    if (faqMatch?.matchType === 'clarify') {
+      const clarifyReply = clarificationReply(trimmedMsg, activeLang);
+
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
+      await saveMessages(tenant.id, userPhone, [
+        ...history,
+        { role: 'user', content: trimmedMsg },
+        { role: 'assistant', content: clarifyReply },
+      ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
+
+      console.log('[webhook] FINAL RESPONSE SENT — FAQ clarification');
+      return res.send(twiml(clarifyReply));
+    }
+
+    if (faqMatch?.matchType === 'strong') {
       // FAQ is the source of truth — AI only polishes the wording
       const rawAnswer = faqMatch.answer;
       const answerLang = detectLanguage(rawAnswer);

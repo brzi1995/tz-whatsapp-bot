@@ -31,16 +31,7 @@ const VALID_INTENTS = [
   'faq', 'other',
 ];
 
-/**
- * Heuristic language detection from the current message only.
- * Checked before every AI call — never persisted, never reused across messages.
- * Priority: unique character sets first, then keyword scoring.
- * Defaults to 'en' (not 'hr') so ambiguous Latin text isn't misread as Croatian.
- *
- * @param {string} message
- * @returns {string} ISO 639-1 code
- */
-function detectLanguage(message) {
+function detectLanguageWithConfidence(message) {
   const normalized = String(message || '')
     .toLowerCase()
     .normalize('NFD')
@@ -51,24 +42,24 @@ function detectLanguage(message) {
     .trim();
 
   // Croatian-specific characters — highest confidence signal
-  if (/[đšžćčĐŠŽĆČ]/.test(message)) return 'hr';
+  if (/[đšžćčĐŠŽĆČ]/.test(message)) return { lang: 'hr', score: 10, ambiguous: false };
   // German-specific
-  if (/[äöüÄÖÜß]/.test(message)) return 'de';
+  if (/[äöüÄÖÜß]/.test(message)) return { lang: 'de', score: 10, ambiguous: false };
   // French-specific (ç, circumflex, œ, ë) — check before Italian
-  if (/[çâêîôûœæëÇÂÊÎÔÛŒÆ]/.test(message)) return 'fr';
+  if (/[çâêîôûœæëÇÂÊÎÔÛŒÆ]/.test(message)) return { lang: 'fr', score: 10, ambiguous: false };
   // Swedish/Norwegian-specific
   if (/[åÅ]/.test(message)) {
     // å appears in both — differentiate by keywords
-    if (/\b(hei|takk|ikke|hvor)\b/i.test(message)) return 'no';
-    return 'sv';
+    if (/\b(hei|takk|ikke|hvor)\b/i.test(message)) return { lang: 'no', score: 10, ambiguous: false };
+    return { lang: 'sv', score: 10, ambiguous: false };
   }
   // Czech-specific
-  if (/[řůŘŮ]/.test(message)) return 'cs';
+  if (/[řůŘŮ]/.test(message)) return { lang: 'cs', score: 10, ambiguous: false };
 
   // Keyword scoring for plain Latin script — default wins at score 0
   const tokens = normalized.split(' ').filter(Boolean);
   const KEYWORDS = {
-    hr: ['danas', 'sutra', 'tjedan', 'hvala', 'bok', 'gdje', 'sto', 'sta', 'ima', 'nema', 'dobar', 'kako', 'dogadaj', 'dogadaja', 'vrijeme', 'plaza', 'parking', 'restoran', 'smjestaj', 'izlet', 'uvala', 'brela'],
+    hr: ['danas', 'sutra', 'tjedan', 'hvala', 'bok', 'pozdrav', 'zdravo', 'trebam', 'pomoc', 'gdje', 'sto', 'sta', 'ima', 'nema', 'dobar', 'kako', 'dogadaj', 'dogadaja', 'vrijeme', 'plaza', 'parking', 'restoran', 'smjestaj', 'izlet', 'uvala', 'brela'],
     en: ['what', 'where', 'how', 'can', 'please', 'hello', 'thanks', 'today', 'tomorrow', 'week', 'happening', 'events', 'beach', 'restaurant', 'weather', 'parking', 'rent', 'kayak', 'prices', 'locations'],
     de: ['heute', 'morgen', 'bitte', 'danke', 'hallo', 'wie', 'was', 'wo', 'ich', 'gibt', 'veranstaltungen', 'wetter', 'strand', 'parken', 'restaurant'],
     it: ['oggi', 'domani', 'grazie', 'ciao', 'dove', 'cosa', 'sono', 'come', 'eventi', 'parcheggio', 'spiaggia', 'tempo', 'ristorante'],
@@ -78,15 +69,37 @@ function detectLanguage(message) {
     cs: ['dnes', 'zitra', 'diky', 'ahoj', 'kde', 'jak', 'prosim', 'akce'],
   };
 
-  let best = { lang: 'en', score: 0 }; // default English, not Croatian
+  let best = { lang: null, score: 0 };
+  let runnerUp = 0;
   for (const [lang, kws] of Object.entries(KEYWORDS)) {
     const score = kws.reduce((total, kw) => {
       if (kw.includes(' ')) return total + (normalized.includes(kw) ? 2 : 0);
       return total + (tokens.includes(kw) ? 2 : normalized.includes(kw) ? 1 : 0);
     }, 0);
-    if (score > best.score) best = { lang, score };
+    if (score > best.score) {
+      runnerUp = best.score;
+      best = { lang, score };
+    } else if (score > runnerUp) {
+      runnerUp = score;
+    }
   }
-  return best.lang;
+
+  if (best.score === 0) return { lang: null, score: 0, ambiguous: true };
+  if (best.score === runnerUp) return { lang: null, score: best.score, ambiguous: true };
+  return { lang: best.lang, score: best.score, ambiguous: false };
+}
+
+/**
+ * Heuristic language detection from the current message only.
+ * Checked before every AI call — never persisted, never reused across messages.
+ * Priority: unique character sets first, then keyword scoring.
+ * Defaults to 'en' (not 'hr') so ambiguous Latin text isn't misread as Croatian.
+ *
+ * @param {string} message
+ * @returns {string} ISO 639-1 code
+ */
+function detectLanguage(message) {
+  return detectLanguageWithConfidence(message).lang || 'en';
 }
 
 /**
@@ -243,6 +256,8 @@ async function rageMessage({ message, baseAnswer, history = [], faqContext, even
   }
 
   const sysContent = [
+    // Language rule comes FIRST so it overrides any language bias in the tenant system prompt
+    `LANGUAGE RULE (NON-NEGOTIABLE): You MUST respond entirely in language code "${lang}". Do not use any other language, even if previous messages or system instructions are in a different language.`,
     systemPrompt,
     'You are Belly, a local tourism assistant for Brela, Croatia.',
     `CRITICAL: Respond ONLY in ${lang}. Never mix languages. Never switch to another language.`,
@@ -269,4 +284,4 @@ async function rageMessage({ message, baseAnswer, history = [], faqContext, even
   return chat(sysContent, messages, model);
 }
 
-module.exports = { chat, parseMessage, generateOptInMessage, detectLanguage, rageMessage };
+module.exports = { chat, parseMessage, generateOptInMessage, detectLanguage, detectLanguageWithConfidence, rageMessage };
