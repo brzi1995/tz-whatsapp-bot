@@ -160,6 +160,21 @@ function parkingFallbackReply(lang) {
   return PARKING_FALLBACK[lang] || PARKING_FALLBACK.en;
 }
 
+// Accommodation note (with parking info)
+const ACCOM_MSG = {
+  hr: 'Većina privatnih smještaja u Brelima ima osiguran parking. Ako trebate javni: centar (Trg A. Stepinca) ili uz plaže Punta Rata, Soline, Podrače. Javite lokaciju pa pošaljem najbliže mjesto.',
+  en: 'Most private stays in Brela include parking. If you need public parking: the center (Trg A. Stepinca) or by beaches Punta Rata, Soline, Podrače. Tell me your location and I’ll send the nearest spot.',
+  de: 'Die meisten Privatunterkünfte in Brela haben Parkplatz. Öffentliche Parkplätze: Zentrum (Trg A. Stepinca) oder bei Punta Rata, Soline, Podrače. Nennen Sie den Ort, dann schicke ich den nächsten Parkplatz.',
+  it: 'La maggior parte degli alloggi privati a Brela ha parcheggio. Se serve pubblico: centro (Trg A. Stepinca) o vicino a Punta Rata, Soline, Podrače. Dimmi la tua zona e mando il parcheggio più vicino.',
+  fr: 'La plupart des hébergements privés à Brela ont un parking. Parking public : centre (Trg A. Stepinca) ou près de Punta Rata, Soline, Podrače. Indiquez votre zone et j’envoie le parking le plus proche.',
+  sv: 'De flesta privata boenden i Brela har parkering. Offentlig parkering: centrum (Trg A. Stepinca) eller vid Punta Rata, Soline, Podrače. Säg platsen så skickar jag närmaste ställe.',
+  no: 'De fleste private overnattinger i Brela har parkering. Offentlig parkering: sentrum (Trg A. Stepinca) eller ved Punta Rata, Soline, Podrače. Si hvor du er, så sender jeg nærmeste plass.',
+  cs: 'Většina soukromých ubytování v Brele má parkování. Veřejné parkoviště: centrum (Trg A. Stepinca) nebo u pláží Punta Rata, Soline, Podrače. Napište lokaci a pošlu nejbližší místo.',
+};
+function accommodationReply(lang) {
+  return ACCOM_MSG[lang] || ACCOM_MSG.en;
+}
+
 const FAQ_CHOICE_INTRO = {
   hr: 'Nisam siguran na koje pitanje točno mislite. Možda vas zanima:',
   en: "I'm not sure which question you mean. Maybe you mean:",
@@ -648,6 +663,16 @@ function isWeatherQuery(msg) {
   const tokens = normalized.split(' ').filter(Boolean);
   return WEATHER_QUERY_WORDS.some(word => {
     const lookup = normalizeLookup(word);
+    return lookup.includes(' ') ? normalized.includes(lookup) : tokens.includes(lookup);
+  });
+}
+
+function isAccommodationQuery(msg) {
+  const normalized = normalizeLookup(msg);
+  const tokens = normalized.split(' ').filter(Boolean);
+  const keywords = ['smjestaj', 'smještaj', 'apartman', 'apartment', 'room', 'soba', 'hotel', 'accommodation', 'lodging', 'stay'];
+  return keywords.some(kw => {
+    const lookup = normalizeLookup(kw);
     return lookup.includes(' ') ? normalized.includes(lookup) : tokens.includes(lookup);
   });
 }
@@ -1362,8 +1387,22 @@ router.post('/webhook', async (req, res) => {
       return res.send(twiml(parkingReply));
     }
 
+    // Accommodation quick reply
+    if (isAccommodationQuery(effectiveMsg)) {
+      const accReply = accommodationReply(activeLang);
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
+      await persistTurn(accReply, {
+        awaiting: null,
+        lastTopic: 'accommodation',
+        lastWeatherIntent: null,
+        lastEventPeriod: null,
+      });
+      console.log('[webhook] FINAL RESPONSE SENT — accommodation quick reply');
+      return res.send(twiml(accReply));
+    }
+
     // ── STEPS 4+5: RELEVANCE FILTER (follow-ups bypass it) ───────────────────
-  const followUp = isFollowUp(trimmedMsg) || Boolean(parkingSelection);
+    const followUp = isFollowUp(trimmedMsg) || Boolean(parkingSelection);
   if (!followUp && !isRelevant(effectiveMsg)) {
     await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', activeLang).catch(() => {});
     await persistTurn(offTopicReply(activeLang), {
