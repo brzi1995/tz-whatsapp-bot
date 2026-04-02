@@ -15,6 +15,11 @@
   const _langTotal = languages.reduce((s,r) => s + Number(r.count), 0) || 1;
   const _topLang   = languages.length ? (_langNames[languages[0].lang] || languages[0].lang) : null;
   const _topLangPct = languages.length ? Math.round(Number(languages[0].count) / _langTotal * 100) : 0;
+  const _topLangs = languages.slice(0, 3).map((r) => {
+    const name = _langNames[r.lang] || r.lang;
+    const pct  = Math.round(Number(r.count) / _langTotal * 100);
+    return { name, pct };
+  });
 
   // Peak activity
   const _tod = timeOfDay || {};
@@ -86,6 +91,15 @@
     <div class="pill-row">
       <% insights.forEach(function(ins) { %>
         <span class="pill"><%= ins.icon %> <%= ins.text %></span>
+      <% }); %>
+    </div>
+    <% } %>
+
+    <% if (_topLangs && _topLangs.length) { %>
+    <div class="pill-row" style="margin-top:10px">
+      <span class="pill" style="font-weight:700; color:#0A7EA4; border-color:rgba(10,126,164,0.25); background:rgba(10,126,164,0.08)">Top jezici</span>
+      <% _topLangs.forEach(function(l) { %>
+        <span class="pill"><%= l.name %> · <%= l.pct %>%</span>
       <% }); %>
     </div>
     <% } %>
