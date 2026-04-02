@@ -19,8 +19,9 @@ function isSpam(message) {
 // Pure acknowledgements — no reply needed
 const TRIVIAL = new Set([
   'ok', 'okay', 'k', 'yes', 'no', 'yep', 'nope', 'thanks', 'thx', 'ty', 'np',
-  'hvala', 'da', 'ne', 'nein', 'danke', 'si', 'grazie', 'non', 'merci',
+  'hvala', 'nein', 'danke', 'grazie', 'merci',
 ]);
+const SHORT_UNCLEAR = new Set(['da', 'ne', 'yes', 'no', 'yep', 'nope']);
 
 // Greetings — short messages only (≤3 words), handled without AI
 const GREETING_WORDS = [
@@ -90,6 +91,18 @@ const OFF_TOPIC_MSG = {
 };
 function offTopicReply(lang) { return OFF_TOPIC_MSG[lang] || OFF_TOPIC_MSG.en; }
 
+const UNCLEAR_MSG = {
+  hr: `Nisam siguran što točno trebate.\nMožete napisati malo preciznije pitanje.\nZa više informacija: ${BRELA_INFO_URL}`,
+  en: `I'm not sure what exactly you're asking.\nCould you be a bit more specific?\nFor more information: ${BRELA_INFO_URL}`,
+  de: `Ich bin nicht sicher, was Sie genau meinen.\nKönnen Sie Ihre Frage bitte etwas genauer formulieren?\nMehr Infos: ${BRELA_INFO_URL}`,
+  it: `Non sono sicuro di aver razumio esattamente cosa intendi.\nPuoi scrivere la domanda in modo un po’ più preciso?\nPer maggiori informazioni: ${BRELA_INFO_URL}`,
+  fr: `Je ne suis pas sûr de comprendre exactement votre demande.\nPouvez-vous être un peu plus précis ?\nPour plus d'informations : ${BRELA_INFO_URL}`,
+  sv: `Jag är inte säker på vad du menar.\nKan du skriva lite mer exakt?\nMer information: ${BRELA_INFO_URL}`,
+  no: `Jeg er ikke helt sikker på hva du mener.\nKan du være litt mer konkret?\nMer informasjon: ${BRELA_INFO_URL}`,
+  cs: `Nejsem si jistý, co přesně potřebujete.\nMůžete otázku napsat trochu přesněji?\nVíce informací: ${BRELA_INFO_URL}`,
+};
+function unclearReply(lang) { return UNCLEAR_MSG[lang] || UNCLEAR_MSG.en; }
+
 const CLARIFY_MSG = {
   hr: 'Mogu pomoći, ali trebam malo preciznije pitanje.\nNapišite lokaciju ili što vas točno zanima.\nZa više informacija: https://brela.hr/',
   en: 'I can help, but I need a bit more detail.\nPlease send the location or what exactly you need.\nFor more information: https://brela.hr/',
@@ -125,7 +138,7 @@ function needsParkingClarification(message) {
   if (!hasParking) return false;
 
   const detailHints = [
-    'centar', 'center', 'beach', 'plaza', 'plaža', 'smjestaj', 'smještaj',
+    'centar', 'center', 'beach', 'plaza', 'plazi', 'plaža', 'plaži', 'smjestaj', 'smještaj',
     'accommodation', 'hotel', 'apartman', 'apartment', 'punta rata',
     'berulia', 'soline', 'podrace', 'podrače', 'ulica', 'street', 'harbor', 'luka',
     'price', 'prices', 'cijena', 'cijene', 'tarifa', 'zone', 'zones', 'lokacija', 'lokacije', 'location', 'locations',
@@ -193,9 +206,9 @@ const EVENT_LABELS = {
     tomorrow: 'Da, sutra imamo događaje u Brelima:',
     week:     'Evo događaja u Brelima ovaj tjedan:',
     empty: {
-      today:    'Danas nema organiziranih događaja, ali evo par ideja:\n• Prošetajte starim gradom\n• Posjetite jednu od plaža\n• Isprobajte lokalne restorane 😊',
-      tomorrow: 'Sutra nema organiziranih događaja, ali evo par ideja:\n• Prošetajte starim gradom\n• Posjetite jednu od plaža\n• Isprobajte lokalne restorane 😊',
-      week:     'Ovaj tjedan nema organiziranih događaja, ali evo par ideja:\n• Prošetajte starim gradom\n• Posjetite jednu od plaža\n• Isprobajte lokalne restorane 😊',
+      today:    `Danas nema najavljenih događaja u Brelima.\nZa više informacija: ${BRELA_INFO_URL}`,
+      tomorrow: `Sutra nema najavljenih događaja u Brelima.\nZa više informacija: ${BRELA_INFO_URL}`,
+      week:     `Ovaj tjedan nema najavljenih događaja u Brelima.\nZa više informacija: ${BRELA_INFO_URL}`,
     },
   },
   en: {
@@ -203,9 +216,9 @@ const EVENT_LABELS = {
     tomorrow: 'Yes, there are events in Brela tomorrow:',
     week:     'Here are the events in Brela this week:',
     empty: {
-      today:    'No official events today, but here are some ideas:\n• Explore the old town and historic sites\n• Relax at one of the beautiful beaches\n• Discover local restaurants and cuisine 😊',
-      tomorrow: 'No official events tomorrow, but here are some ideas:\n• Explore the old town and historic sites\n• Relax at one of the beautiful beaches\n• Discover local restaurants and cuisine 😊',
-      week:     'No official events this week, but here are some ideas:\n• Explore the old town and historic sites\n• Relax at one of the beautiful beaches\n• Discover local restaurants and cuisine 😊',
+      today:    `There are no announced events in Brela today.\nFor more information: ${BRELA_INFO_URL}`,
+      tomorrow: `There are no announced events in Brela tomorrow.\nFor more information: ${BRELA_INFO_URL}`,
+      week:     `There are no announced events in Brela this week.\nFor more information: ${BRELA_INFO_URL}`,
     },
   },
   de: {
@@ -489,7 +502,7 @@ function formatEventsForContext(events) {
 
 /** Detect if a message is asking about events (not time-specific period). */
 const EVENT_STEMS = [
-  'događaj', 'dogadjaj',
+  'događaj', 'dogadjaj', 'dogadaj', 'dogadanja', 'dogadanj',
   'event', 'events',
   'veranstaltung', 'veranstaltungen',
   'evento', 'eventi',
@@ -499,7 +512,7 @@ const EVENT_STEMS = [
 ];
 const EVENT_PHRASES = [
   'što ima', 'sta ima', 'sto ima',
-  'što se događa', 'sta se dogadja', 'šta se dešava',
+  'što se događa', 'sta se dogadja', 'sta se dogada', 'sto se dogada', 'šta se dešava',
   'ima li događ', 'ima li dogadj',
   "what's happening", "what's on", 'whats happening', 'what is happening',
   'what happening', 'what is on', 'whats on',
@@ -566,8 +579,12 @@ const WEATHER_QUERY_WORDS = [
   'météo', 'pluie', 'soleil', 'pogoda',
 ];
 function isWeatherQuery(msg) {
-  const lower = msg.toLowerCase();
-  return WEATHER_QUERY_WORDS.some(w => lower.includes(w));
+  const normalized = normalizeLookup(msg);
+  const tokens = normalized.split(' ').filter(Boolean);
+  return WEATHER_QUERY_WORDS.some(word => {
+    const lookup = normalizeLookup(word);
+    return lookup.includes(' ') ? normalized.includes(lookup) : tokens.includes(lookup);
+  });
 }
 
 function normalizeLookup(text) {
@@ -587,14 +604,83 @@ function getLanguageScopedHistory(history, lang) {
     .slice(-6);
 }
 
+function historyLooksLikeWeather(history) {
+  const recent = history.slice(-4);
+  return recent.some(msg => {
+    const content = String(msg.content || '');
+    return content.includes('°C')
+      || /weather in brela|forecast for|vrijeme u brelima|prognoza|wetter in brela|meteo a brela|météo à brela/i.test(content);
+  });
+}
+
+function detectShortReplyLanguage(message, fallbackLang) {
+  const normalized = normalizeLookup(message);
+  if (normalized === 'da' || normalized === 'ne') return 'hr';
+  if (normalized === 'yes' || normalized === 'no' || normalized === 'yep' || normalized === 'nope') return 'en';
+  return fallbackLang;
+}
+
+function resolveParkingSelection(message, history, lang) {
+  const normalized = normalizeLookup(message);
+  if (!['1', '2', '3'].includes(normalized)) return null;
+
+  const lastAssistant = [...history].reverse().find(msg => msg.role === 'assistant' && typeof msg.content === 'string');
+  if (!lastAssistant) return null;
+
+  const assistantNorm = normalizeLookup(lastAssistant.content);
+  if (!assistantNorm.includes('parking') || !assistantNorm.includes('1') || !assistantNorm.includes('2') || !assistantNorm.includes('3')) {
+    return null;
+  }
+
+  const map = {
+    hr: { '1': 'parking u centru', '2': 'parking blizu plaže', '3': 'parking kod smještaja' },
+    en: { '1': 'parking in the center', '2': 'parking near the beach', '3': 'parking near accommodation' },
+    de: { '1': 'parken im zentrum', '2': 'parken nahe dem strand', '3': 'parken bei der unterkunft' },
+    it: { '1': 'parcheggio in centro', '2': 'parcheggio vicino alla spiaggia', '3': 'parcheggio vicino all alloggio' },
+    fr: { '1': 'parking dans le centre', '2': 'parking près de la plage', '3': 'parking près de l hébergement' },
+  };
+  const selectedMap = map[lang] || map.en;
+  return selectedMap[normalized] || null;
+}
+
+function cleanMixedLanguageReply(reply, lang) {
+  let text = String(reply || '').trim();
+  if (!text) return text;
+
+  if (lang === 'en') {
+    const replacements = [
+      [/\bpla[zž]e?\s+u\s+brelima\b/gi, 'beaches in Brela'],
+      [/\bpla[zž]i\s+u\s+brelima\b/gi, 'beaches in Brela'],
+      [/\bu\s+brelima\b/gi, 'in Brela'],
+      [/\bpla[zž]e\b/gi, 'beaches'],
+      [/\bpla[zž]i\b/gi, 'beaches'],
+      [/\bpla[zž]a\b/gi, 'beach'],
+    ];
+    for (const [pattern, replacement] of replacements) {
+      text = text.replace(pattern, replacement);
+    }
+  }
+
+  return text
+    .replace(/\s{2,}/g, ' ')
+    .replace(/ \./g, '.')
+    .replace(/ ,/g, ',')
+    .trim();
+}
+
 function detectWeatherIntent(message) {
   const normalized = normalizeLookup(message);
+  const tokens = normalized.split(' ').filter(Boolean);
+  const hasTerm = term => {
+    const lookup = normalizeLookup(term);
+    return lookup.includes(' ') ? normalized.includes(lookup) : tokens.includes(lookup);
+  };
   const requestedDaysMatch = normalized.match(/\b(\d{1,2})\b/);
   const requestedDays = requestedDaysMatch ? parseInt(requestedDaysMatch[1], 10) : null;
 
-  const asksTomorrow = ['tomorrow', 'sutra', 'morgen', 'domani', 'demain'].some(word => normalized.includes(word));
-  const asksCurrent = ['today', 'danas', 'heute', 'oggi', 'aujourdhui', 'current', 'now', 'trenutno', 'sada'].some(word => normalized.includes(word));
-  const asksMulti = ['forecast', 'next', 'coming', 'days', 'day', 'dana', 'dan', 'week', 'tjedan', 'tage', 'giorni', 'jours', 'previsioni', 'prognoza'].some(word => normalized.includes(word));
+  const asksTomorrow = ['tomorrow', 'sutra', 'morgen', 'domani', 'demain'].some(hasTerm);
+  const asksCurrent = ['today', 'danas', 'heute', 'oggi', 'aujourdhui', 'current', 'now', 'trenutno', 'sada'].some(hasTerm);
+  const asksMulti = ['forecast', 'next', 'coming', 'days', 'dana', 'week', 'tjedan', 'tage', 'giorni', 'jours', 'previsioni', 'prognoza'].some(hasTerm);
 
   if (requestedDays && requestedDays > 5) return { type: 'weather_long', days: requestedDays };
   if ((requestedDays && requestedDays > 1) || asksMulti) {
@@ -697,24 +783,39 @@ router.post('/webhook', async (req, res) => {
       }
     }
 
-    // ── Trivial acknowledgements — no reply needed ───────────────────────────
-    if (trimmedMsg.length < 2 || TRIVIAL.has(lowerMsg)) {
+    // Load conversation history (needed for greeting check and AI context)
+    const history = await getMessages(tenant.id, userPhone).catch(() => []);
+    console.log(`[webhook] history length: ${history.length}`);
+
+    const parkingSelection = resolveParkingSelection(trimmedMsg, history, lang);
+    const effectiveMsg = parkingSelection || trimmedMsg;
+
+    if (!parkingSelection && (trimmedMsg.length < 2 || TRIVIAL.has(lowerMsg))) {
       console.log('[webhook] FINAL RESPONSE SENT — trivial (empty)');
       return res.send(emptyTwiml());
     }
 
+    if (!parkingSelection && (SHORT_UNCLEAR.has(lowerMsg) || /^[1-3]$/.test(lowerMsg))) {
+      const replyLang = detectShortReplyLanguage(trimmedMsg, lang);
+      const reply = unclearReply(replyLang);
+      await saveMessages(tenant.id, userPhone, [
+        ...history,
+        { role: 'user', content: trimmedMsg },
+        { role: 'assistant', content: reply },
+      ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', replyLang).catch(() => {});
+      console.log('[webhook] FINAL RESPONSE SENT — unclear short reply');
+      return res.send(twiml(reply));
+    }
+
     // ── Spam filter ──────────────────────────────────────────────────────────
-    if (isSpam(trimmedMsg)) {
+    if (isSpam(effectiveMsg)) {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', lang).catch(() => {});
       console.log(`[webhook] BLOCKED — spam: "${trimmedMsg.slice(0, 40)}"`);
       return res.send(twiml(fallbackReply(lang)));
     }
 
     const model = tenant.openai_model;
-
-    // Load conversation history (needed for greeting check and AI context)
-    const history = await getMessages(tenant.id, userPhone).catch(() => []);
-    console.log(`[webhook] history length: ${history.length}`);
 
     await setUserLang(tenant.id, userPhone, lang).catch(() => {});
     const activeLang = lang;
@@ -723,13 +824,19 @@ router.post('/webhook', async (req, res) => {
     const EXACT_GREETINGS = new Set(['pozdrav', 'bok', 'hej', 'zdravo', 'dobar dan', 'hello', 'hi', 'hey', 'hallo', 'guten tag', 'ciao', 'buongiorno', 'bonjour', 'salut']);
     if (EXACT_GREETINGS.has(greetingNorm) && history.length === 0) {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', activeLang).catch(() => {});
+      const reply = greetingReply(activeLang);
+      await saveMessages(tenant.id, userPhone, [
+        ...history,
+        { role: 'user', content: trimmedMsg },
+        { role: 'assistant', content: reply },
+      ]).catch(err => console.error('[webhook] saveMessages failed:', err.message));
       console.log('[webhook] FINAL RESPONSE SENT — greeting (first message only)');
-      return res.send(twiml(greetingReply(activeLang)));
+      return res.send(twiml(reply));
     }
 
     // ── WEATHER — keyword-detected, API-first, no AI formatting ─────────────
-    if (isWeatherQuery(trimmedMsg)) {
-      const weatherIntent = detectWeatherIntent(trimmedMsg);
+    if (isWeatherQuery(effectiveMsg) || (historyLooksLikeWeather(history) && /\b\d{1,2}\b/.test(normalizeLookup(effectiveMsg)))) {
+      const weatherIntent = detectWeatherIntent(effectiveMsg);
       const wLang  = activeLang;
       const apiKey = process.env.OPENWEATHER_API_KEY;
       const city   = tenant.city || 'Brela';
@@ -843,8 +950,8 @@ router.post('/webhook', async (req, res) => {
     }
 
     // ── STEP 3: EVENTS — keyword-detected, DB-first, AI format only ──────────
-    if (isEventQuery(trimmedMsg)) {
-      const eventPeriod = detectEventPeriod(trimmedMsg); // today/tomorrow/week/null
+    if (isEventQuery(effectiveMsg)) {
+      const eventPeriod = detectEventPeriod(effectiveMsg); // today/tomorrow/week/null
       await logMessage(tenant.id, userPhone, trimmedMsg, 'events', activeLang).catch(() => {});
 
       let events = [];
@@ -903,8 +1010,8 @@ router.post('/webhook', async (req, res) => {
 
     // Generic parking questions should clarify before FAQ matching so the bot
     // doesn't dump a broad answer or the wrong parking link.
-    if (needsParkingClarification(trimmedMsg)) {
-      const clarifyReply = clarificationReply(trimmedMsg, activeLang);
+    if (needsParkingClarification(effectiveMsg)) {
+      const clarifyReply = clarificationReply(effectiveMsg, activeLang);
       await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
       await saveMessages(tenant.id, userPhone, [
         ...history,
@@ -917,7 +1024,7 @@ router.post('/webhook', async (req, res) => {
     }
 
     // ── STEP 2: FAQ — database first, AI polish only ─────────────────────────
-    const faqMatch = await getFaqMatch(tenant.id, trimmedMsg).catch(() => null);
+    const faqMatch = await getFaqMatch(tenant.id, effectiveMsg).catch(() => null);
     if (faqMatch?.matchType === 'clarify') {
       const clarifyReply = clarificationReply(trimmedMsg, activeLang);
 
@@ -941,7 +1048,7 @@ router.post('/webhook', async (req, res) => {
       if (answerLang !== activeLang) {
         try {
           let aiReply = await rageMessage({
-            message: trimmedMsg,
+            message: effectiveMsg,
             baseAnswer: rawAnswer,
             history: getLanguageScopedHistory(history, activeLang),
             lang: activeLang,
@@ -950,7 +1057,7 @@ router.post('/webhook', async (req, res) => {
           });
           if (aiReply && detectLanguage(aiReply) !== activeLang) {
             aiReply = await rageMessage({
-              message: trimmedMsg,
+              message: effectiveMsg,
               baseAnswer: rawAnswer,
               history: [],
               lang: activeLang,
@@ -958,11 +1065,12 @@ router.post('/webhook', async (req, res) => {
               model,
             });
           }
-          faqReply = aiReply || rawAnswer;
+          faqReply = cleanMixedLanguageReply(aiReply || rawAnswer, activeLang);
         } catch (e) {
           console.error('[webhook] AI failed (FAQ):', e.message);
         }
       }
+      faqReply = cleanMixedLanguageReply(faqReply, activeLang);
 
       await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
       await saveMessages(tenant.id, userPhone, [
@@ -1004,8 +1112,8 @@ router.post('/webhook', async (req, res) => {
     }
 
     // ── STEPS 4+5: RELEVANCE FILTER (follow-ups bypass it) ───────────────────
-    const followUp = isFollowUp(trimmedMsg);
-    if (!followUp && !isRelevant(trimmedMsg)) {
+    const followUp = isFollowUp(trimmedMsg) || Boolean(parkingSelection);
+    if (!followUp && !isRelevant(effectiveMsg)) {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', activeLang).catch(() => {});
       console.log(`[webhook] FINAL RESPONSE SENT — off-topic: "${trimmedMsg.slice(0, 40)}"`);
       return res.send(twiml(offTopicReply(activeLang)));
@@ -1024,7 +1132,7 @@ router.post('/webhook', async (req, res) => {
     let aiReply = null;
     try {
       aiReply = await rageMessage({
-        message: trimmedMsg,
+        message: effectiveMsg,
         history: scopedHistory,
         lang: activeLang,
         systemPrompt: tenant.system_prompt,
@@ -1033,13 +1141,14 @@ router.post('/webhook', async (req, res) => {
 
       if (aiReply && detectLanguage(aiReply) !== activeLang) {
         aiReply = await rageMessage({
-          message: trimmedMsg,
+          message: effectiveMsg,
           history: [],
           lang: activeLang,
           systemPrompt: tenant.system_prompt,
           model,
         });
       }
+      aiReply = cleanMixedLanguageReply(aiReply, activeLang);
     } catch (e) {
       console.error('[webhook] AI failed (general):', e.message);
     }
