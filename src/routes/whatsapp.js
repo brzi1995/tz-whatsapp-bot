@@ -16,6 +16,15 @@ function isSpam(message) {
   return false;
 }
 
+// Basic normalization for intent checks
+function normalizeMessage(msg) {
+  return String(msg || '')
+    .toLowerCase()
+    .replace(/[!?.,;:()"'`]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // Pure acknowledgements — no reply needed
 const TRIVIAL = new Set([
   'ok', 'okay', 'k', 'yes', 'no', 'yep', 'nope', 'thanks', 'thx', 'ty', 'np',
@@ -89,14 +98,14 @@ function noReply(lang) { return NO_MSG[lang] || NO_MSG.hr; }
 
 // Final fallback — used when AI returns nothing useful and for spam
 const FALLBACK_MSG = {
-  hr: 'Nisam razumio pitanje. Možete pojasniti koju informaciju trebate da odgovor bude točan?',
-  en: "I didn't understand the question. Please clarify what information you need so I can be precise.",
-  de: 'Ich habe die Frage nicht verstanden. Bitte sagen Sie, welche Information Sie brauchen, damit ich genau antworte.',
-  it: "Non ho capito la domanda. Puoi chiarire quale informazione ti serve così rispondo preciso?",
-  fr: "Je n'ai pas compris la question. Pouvez-vous préciser quelle info vous voulez pour que je réponde précisément ?",
-  sv: 'Jag förstod inte frågan. Förtydliga vilken information du behöver så svarar jag exakt.',
-  no: 'Jeg forsto ikke spørsmålet. Presiser hvilken informasjon du trenger, så svarer jeg presist.',
-  cs: 'Nerozuměl jsem otázce. Uveďte prosím, jakou informaci potřebujete, a odpovím přesně.',
+  hr: 'Mogu pomoći s:\n• plaže\n• parking\n• restorani\n• događaji\nŠto vas zanima?',
+  en: 'I can help with:\n• beaches\n• parking\n• restaurants\n• events\nWhat would you like to know?',
+  de: 'Ich helfe bei:\n• Strände\n• Parken\n• Restaurants\n• Events\nWobei benötigen Sie Infos?',
+  it: 'Posso aiutare con:\n• spiagge\n• parcheggio\n• ristoranti\n• eventi\nCosa ti interessa?',
+  fr: 'Je peux aider pour :\n• plages\n• parking\n• restaurants\n• événements\nQue souhaitez-vous savoir ?',
+  sv: 'Jag kan hjälpa med:\n• stränder\n• parkering\n• restauranger\n• evenemang\nVad vill du veta?',
+  no: 'Jeg kan hjelpe med:\n• strender\n• parkering\n• restauranter\n• arrangementer\nHva vil du vite?',
+  cs: 'Mohu pomoci s:\n• pláže\n• parkování\n• restaurace\n• akce\nCo potřebujete vědět?',
 };
 function fallbackReply(lang) { return FALLBACK_MSG[lang] || FALLBACK_MSG.hr; }
 
@@ -116,26 +125,26 @@ const OFF_TOPIC_MSG = {
 function offTopicReply(lang) { return OFF_TOPIC_MSG[lang] || OFF_TOPIC_MSG.en; }
 
 const UNCLEAR_MSG = {
-  hr: `Nisam siguran što točno trebate.\nMožete napisati malo preciznije pitanje.\nZa više informacija: ${BRELA_INFO_URL}`,
-  en: `I'm not sure what exactly you're asking.\nCould you be a bit more specific?\nFor more information: ${BRELA_INFO_URL}`,
-  de: `Ich bin nicht sicher, was Sie genau meinen.\nKönnen Sie Ihre Frage bitte etwas genauer formulieren?\nMehr Infos: ${BRELA_INFO_URL}`,
-  it: `Non sono sicuro di aver razumio esattamente cosa intendi.\nPuoi scrivere la domanda in modo un po’ più preciso?\nPer maggiori informazioni: ${BRELA_INFO_URL}`,
-  fr: `Je ne suis pas sûr de comprendre exactement votre demande.\nPouvez-vous être un peu plus précis ?\nPour plus d'informations : ${BRELA_INFO_URL}`,
-  sv: `Jag är inte säker på vad du menar.\nKan du skriva lite mer exakt?\nMer information: ${BRELA_INFO_URL}`,
-  no: `Jeg er ikke helt sikker på hva du mener.\nKan du være litt mer konkret?\nMer informasjon: ${BRELA_INFO_URL}`,
-  cs: `Nejsem si jistý, co přesně potřebujete.\nMůžete otázku napsat trochu přesněji?\nVíce informací: ${BRELA_INFO_URL}`,
+  hr: 'Nisam siguran što točno trebate.\nMožete napisati malo preciznije pitanje.',
+  en: "I'm not sure what exactly you're asking.\nCould you be a bit more specific?",
+  de: 'Ich bin nicht sicher, was Sie genau meinen.\nKönnen Sie Ihre Frage etwas genauer formulieren?',
+  it: 'Non sono sicuro di aver razumio esattamente cosa intendi.\nPuoi scrivere la domanda in modo un po’ più preciso?',
+  fr: "Je ne suis pas sûr de comprendre exactement votre demande.\nPouvez-vous être un peu plus précis ?",
+  sv: 'Jag är inte säker på vad du menar.\nKan du skriva lite mer exakt?',
+  no: 'Jeg er ikke helt sikker på hva du mener.\nKan du være litt mer konkret?',
+  cs: 'Nejsem si jistý, co přesně potřebujete.\nMůžete otázku napsat trochu přesněji?',
 };
 function unclearReply(lang) { return UNCLEAR_MSG[lang] || UNCLEAR_MSG.en; }
 
 const CLARIFY_MSG = {
-  hr: 'Mogu pomoći, ali trebam malo preciznije pitanje.\nNapišite lokaciju ili što vas točno zanima.\nZa više informacija: https://brela.hr/',
-  en: 'I can help, but I need a bit more detail.\nPlease send the location or what exactly you need.\nFor more information: https://brela.hr/',
-  de: 'Ich kann helfen, brauche aber etwas mehr Details.\nBitte senden Sie den Ort oder was Sie genau brauchen.\nMehr Infos: https://brela.hr/',
-  it: 'Posso aiutarti, ma ho bisogno di qualche dettaglio in più.\nScrivi la località o di cosa hai bisogno esattamente.\nPer maggiori informazioni: https://brela.hr/',
-  fr: "Je peux aider, mais j'ai besoin d'un peu plus de détails.\nIndiquez le lieu ou ce dont vous avez exactement besoin.\nPour plus d'informations : https://brela.hr/",
-  sv: 'Jag kan hjälpa till, men jag behöver lite mer information.\nSkriv platsen eller vad du exakt behöver.\nMer information: https://brela.hr/',
-  no: 'Jeg kan hjelpe, men jeg trenger litt mer informasjon.\nSkriv stedet eller hva du trenger helt konkret.\nMer informasjon: https://brela.hr/',
-  cs: 'Mohu pomoci, ale potřebuji trochu více podrobností.\nNapište místo nebo co přesně potřebujete.\nVíce informací: https://brela.hr/',
+  hr: 'Mogu pomoći, ali trebam malo preciznije pitanje.\nNapišite lokaciju ili što vas točno zanima.',
+  en: 'I can help, but I need a bit more detail.\nSend the location or what exactly you need.',
+  de: 'Ich kann helfen, brauche aber etwas mehr Details.\nBitte senden Sie den Ort oder was Sie genau brauchen.',
+  it: 'Posso aiutarti, ma ho bisogno di qualche dettaglio in più.\nScrivi la località o di cosa hai bisogno esattamente.',
+  fr: "Je peux aider, mais j'ai besoin d'un peu plus de détails.\nIndiquez le lieu ou ce dont vous avez exactement besoin.",
+  sv: 'Jag kan hjälpa till, men jag behöver lite mer information.\nSkriv platsen eller vad du exakt behöver.',
+  no: 'Jeg kan hjelpe, men jeg trenger litt mer informasjon.\nSkriv stedet eller hva du trenger helt konkret.',
+  cs: 'Mohu pomoci, ale potřebuji trochu více podrobností.\nNapište místo nebo co přesně potřebujete.',
 };
 
 const PARKING_CLARIFY_MSG = {
@@ -150,11 +159,11 @@ const PARKING_CLARIFY_MSG = {
 };
 
 const PARKING_FALLBACK = {
-  hr: `Javni parking je u centru (Trg A. Stepinca) i uz glavne plaže (Punta Rata, Soline, Podrače). Karta i točne lokacije: ${BRELA_INFO_URL}\nNapišite uz koju plažu trebate pa šaljem najbliže mjesto.`,
-  en: `Public parking is in the center (Trg A. Stepinca) and by main beaches (Punta Rata, Soline, Podrače). Map: ${BRELA_INFO_URL}\nTell me which beach and I'll send the nearest spot.`,
-  de: `Öffentliches Parken gibt es im Zentrum (Trg A. Stepinca) und bei den Hauptstränden (Punta Rata, Soline, Podrače). Karte: ${BRELA_INFO_URL}\nSag mir, bei welchem Strand du parkst, dann nenne ich den nächsten Platz.`,
-  it: `Parcheggi pubblici sono in centro (Trg A. Stepinca) e presso le spiagge principali (Punta Rata, Soline, Podrače). Mappa: ${BRELA_INFO_URL}\nDimmi quale spiaggia e invio il parcheggio più vicino.`,
-  fr: `Parking public au centre (Trg A. Stepinca) et près des plages principales (Punta Rata, Soline, Podrače). Carte : ${BRELA_INFO_URL}\nDis-moi quelle plage et j’indiquerai le parking le plus proche.`,
+  hr: 'Javni parking je u centru (Trg A. Stepinca) i uz glavne plaže (Punta Rata, Soline, Podrače). Reci uz koju plažu trebaš pa šaljem najbliže mjesto.',
+  en: 'Public parking is in the center (Trg A. Stepinca) and by main beaches (Punta Rata, Soline, Podrače). Tell me which beach and I’ll send the nearest spot.',
+  de: 'Öffentliches Parken gibt es im Zentrum (Trg A. Stepinca) und bei den Hauptstränden (Punta Rata, Soline, Podrače). Sag mir, bei welchem Strand du parkst, dann nenne ich den nächsten Platz.',
+  it: 'Parcheggi pubblici sono in centro (Trg A. Stepinca) e presso le spiagge principali (Punta Rata, Soline, Podrače). Dimmi quale spiaggia e invio il parcheggio più vicino.',
+  fr: 'Parking public au centre (Trg A. Stepinca) et près des plages principales (Punta Rata, Soline, Podrače). Dis-moi quelle plage et j’indiquerai le parking le plus proche.',
 };
 function parkingFallbackReply(lang) {
   return PARKING_FALLBACK[lang] || PARKING_FALLBACK.en;
@@ -203,10 +212,12 @@ function normalizeConversationState(state) {
     : null;
   return {
     lastLanguage: safe.lastLanguage || null,
+    lastIntent: safe.lastIntent || null,
     lastTopic: safe.lastTopic || null,
     lastWeatherIntent: safe.lastWeatherIntent || null,
     lastEventPeriod: safe.lastEventPeriod || null,
     lastFaq: safe.lastFaq || null,
+    lastBotQuestion: safe.lastBotQuestion || null,
     awaiting,
   };
 }
@@ -667,6 +678,18 @@ function isWeatherQuery(msg) {
   });
 }
 
+// Keyword fallback intents (used when no other routing kicks in)
+function keywordIntent(msg) {
+  const n = normalizeMessage(msg);
+  if (!n) return null;
+  if (n.includes('parking')) return 'parking';
+  if (n.includes('beach') || n.includes('plaž')) return 'beaches';
+  if (n.includes('restoran') || n.includes('restaurant') || n.includes('dinner') || n.includes('food')) return 'restaurants';
+  if (n.includes('event') || n.includes('dogadj') || n.includes('događ')) return 'events';
+  if (isWeatherQuery(msg)) return 'weather';
+  return null;
+}
+
 function isAccommodationQuery(msg) {
   const normalized = normalizeLookup(msg);
   const tokens = normalized.split(' ').filter(Boolean);
@@ -771,7 +794,8 @@ function cleanMixedLanguageReply(reply, lang) {
 }
 
 function isWeatherFollowUp(message, conversationState) {
-  if (conversationState?.lastTopic !== 'weather' && !conversationState?.lastWeatherIntent) return false;
+  const topic = conversationState?.lastTopic || conversationState?.lastIntent;
+  if (topic !== 'weather' && !conversationState?.lastWeatherIntent) return false;
   const normalized = normalizeLookup(message);
   if (!normalized) return false;
   if (isWeatherQuery(message)) return true;
@@ -784,7 +808,8 @@ function isWeatherFollowUp(message, conversationState) {
 }
 
 function isEventFollowUp(message, conversationState) {
-  if (conversationState?.lastTopic !== 'events') return false;
+  const topic = conversationState?.lastTopic || conversationState?.lastIntent;
+  if (topic !== 'events') return false;
   const normalized = normalizeLookup(message);
   if (!normalized) return false;
   if (isEventQuery(message)) return true;
@@ -893,30 +918,60 @@ router.post('/webhook', async (req, res) => {
     let conversationState = normalizeConversationState(conversation.state);
     console.log(`[webhook] history length: ${history.length}`);
 
-    const greetingNorm = lowerMsg
-      .replace(/[!?.,;:]*$/, '')
-      .replace(/[^a-zčćšžđ\s]/g, '') // strip emojis and non-letter characters
-      .replace(/\s+/g, ' ')
-      .trim();
-    const greetingLang = detectGreetingLanguage(greetingNorm);
-    const langSignal = greetingLang
-      ? { lang: greetingLang, ambiguous: false }
-      : detectLanguageWithConfidence(trimmedMsg);
-    // Force language of current message; if ambiguous, prefer last known, else EN.
-    const lang = langSignal.ambiguous
-      ? (conversationState.lastLanguage || currentUser?.language || 'en')
-      : (langSignal.lang || detectLanguage(trimmedMsg) || conversationState.lastLanguage || currentUser?.language || 'en');
-    const activeLang = lang;
+  const greetingNorm = lowerMsg
+    .replace(/[!?.,;:]*$/, '')
+    .replace(/[^a-zčćšžđ\s]/g, '') // strip emojis and non-letter characters
+    .replace(/\s+/g, ' ')
+    .trim();
+  const greetingLang = detectGreetingLanguage(greetingNorm);
+  const langSignal = greetingLang
+    ? { lang: greetingLang, ambiguous: false }
+    : detectLanguageWithConfidence(trimmedMsg);
+  // Force language of current message; if ambiguous, prefer last known, else EN.
+  const lang = langSignal.ambiguous
+    ? (conversationState.lastLanguage || currentUser?.language || 'en')
+    : (langSignal.lang || detectLanguage(trimmedMsg) || conversationState.lastLanguage || currentUser?.language || 'en');
+  const activeLang = lang;
 
-    const YES_TOKENS = new Set(['da', 'yes', 'y', 'yep', 'oui', 'si']);
-    const NO_TOKENS  = new Set(['ne', 'no', 'nope', 'nah', 'non']);
+  const YES_TOKENS = new Set(['da', 'yes', 'y', 'yep', 'oui', 'si', 'ok', 'okej']);
+  const NO_TOKENS  = new Set(['ne', 'no', 'nope', 'nah', 'non']);
 
-    const persistTurn = async (assistantReply, statePatch = {}) => {
-      const nextState = {
-        ...conversationState,
-        lastLanguage: statePatch.lastLanguage || activeLang,
-        ...statePatch,
-      };
+  const keywordForcedIntent = keywordIntent(trimmedMsg);
+  const lastTopicIntent = conversationState.lastIntent || conversationState.lastTopic || null;
+  const hasPendingQuestion = Boolean(conversationState.lastBotQuestion);
+
+  // Short follow-ups reuse last intent/topic
+  let forcedIntent = keywordForcedIntent;
+  if (!forcedIntent && YES_TOKENS.has(normalizedMsg) && (lastTopicIntent || hasPendingQuestion)) {
+    forcedIntent = lastTopicIntent || 'faq';
+  }
+  if (!forcedIntent && NO_TOKENS.has(normalizedMsg) && (lastTopicIntent || hasPendingQuestion)) {
+    forcedIntent = lastTopicIntent || 'faq';
+  }
+  if (!forcedIntent && conversationState.lastTopic === 'weather') {
+    const followWeather = ['and tomorrow', 'and in', 'tomorrow', 'sutra', 'iducih', 'sljedecih', 'za', 'in 5 days', 'in 3 days']
+      .some(term => normalizedMsg.includes(term));
+    if (followWeather) forcedIntent = 'weather';
+  }
+  if (!forcedIntent && conversationState.lastTopic === 'events') {
+    const followEvents = ['tonight', 'this week', 'ovih dana', 'ovaj tjedan', 'veceras', 'večeras', 'sutra', 'danas']
+      .some(term => normalizedMsg.includes(term));
+    if (followEvents) forcedIntent = 'events';
+  }
+  if (!forcedIntent && normalizedMsg === 'parking') forcedIntent = 'parking';
+
+  const persistTurn = async (assistantReply, statePatch = {}) => {
+    const nextState = {
+      ...conversationState,
+      lastLanguage: statePatch.lastLanguage || activeLang,
+      lastIntent: statePatch.lastIntent !== undefined
+        ? statePatch.lastIntent
+        : (conversationState.lastIntent || conversationState.lastTopic || null),
+      lastBotQuestion: statePatch.lastBotQuestion !== undefined
+        ? statePatch.lastBotQuestion
+        : null,
+      ...statePatch,
+    };
       await saveConversation(tenant.id, userPhone, {
         messages: [
           ...history,
@@ -950,53 +1005,97 @@ router.post('/webhook', async (req, res) => {
       }
     }
 
-    // ── QUICK YES/NO (outside opt-in flow) ───────────────────────────────────
-    if (YES_TOKENS.has(lowerMsg)) {
-      const reply = yesReply(activeLang);
-      await logMessage(tenant.id, userPhone, trimmedMsg, 'other', activeLang).catch(() => {});
-      await persistTurn(reply, { awaiting: null, lastTopic: 'other', lastLanguage: activeLang });
-      console.log('[webhook] FINAL RESPONSE SENT — simple YES');
-      return res.send(twiml(reply));
-    }
-    if (NO_TOKENS.has(lowerMsg)) {
-      const reply = noReply(activeLang);
-      await logMessage(tenant.id, userPhone, trimmedMsg, 'other', activeLang).catch(() => {});
-      await persistTurn(reply, { awaiting: null, lastTopic: 'other', lastLanguage: activeLang });
-      console.log('[webhook] FINAL RESPONSE SENT — simple NO');
-      return res.send(twiml(reply));
-    }
+  // ── QUICK YES/NO (outside opt-in flow) ───────────────────────────────────
+  if (!forcedIntent && YES_TOKENS.has(lowerMsg)) {
+    const reply = yesReply(activeLang);
+    await logMessage(tenant.id, userPhone, trimmedMsg, 'other', activeLang).catch(() => {});
+    await persistTurn(reply, { awaiting: null, lastTopic: 'other', lastIntent: 'other', lastLanguage: activeLang, lastBotQuestion: null });
+    console.log('[webhook] FINAL RESPONSE SENT — simple YES');
+    return res.send(twiml(reply));
+  }
+  if (!forcedIntent && NO_TOKENS.has(lowerMsg)) {
+    const reply = noReply(activeLang);
+    await logMessage(tenant.id, userPhone, trimmedMsg, 'other', activeLang).catch(() => {});
+    await persistTurn(reply, { awaiting: null, lastTopic: 'other', lastIntent: 'other', lastLanguage: activeLang, lastBotQuestion: null });
+    console.log('[webhook] FINAL RESPONSE SENT — simple NO');
+    return res.send(twiml(reply));
+  }
 
-    const faqSelection = resolveFaqSelection(trimmedMsg, conversationState);
-    const parkingSelection = resolveParkingSelection(trimmedMsg, activeLang, conversationState, history);
-    const effectiveMsg = parkingSelection || trimmedMsg;
+  const faqSelection = resolveFaqSelection(trimmedMsg, conversationState);
+  const parkingSelection = resolveParkingSelection(trimmedMsg, activeLang, conversationState, history);
+  const effectiveMsg = parkingSelection || trimmedMsg;
 
-    if (!parkingSelection && !faqSelection && TRIVIAL.has(lowerMsg)) {
-      console.log('[webhook] FINAL RESPONSE SENT — trivial (empty)');
-      return res.send(emptyTwiml());
+  // One-word smart handling before other routing
+  const singleWord = normalizedMsg.split(' ').filter(Boolean).length === 1;
+  if (!forcedIntent && !faqSelection && !parkingSelection && singleWord) {
+    // Weather keyword → ask scope
+    if (['weather', 'vrijeme', 'wetter', 'meteo', 'tempo'].includes(normalizedMsg)) {
+      const ask = activeLang === 'hr'
+        ? 'Trebate vrijeme za danas ili sljedeće dane?'
+        : 'Do you need weather for today or the next few days?';
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'weather', activeLang).catch(() => {});
+      await persistTurn(ask, { awaiting: null, lastTopic: 'weather', lastIntent: 'weather', lastBotQuestion: 'weather_scope' });
+      console.log('[webhook] FINAL RESPONSE SENT — weather scope clarify');
+      return res.send(twiml(ask));
     }
+    // Restaurants → quick suggestions (category-based, no links)
+    if (['restaurant', 'restoran', 'food', 'dinner', 'eat'].includes(normalizedMsg)) {
+      const msg = activeLang === 'hr'
+        ? 'Za hranu u Brelima: \n• svježa riba na rivi\n• pizzeria/fast u centru\n• beach bar snack uz Punta Ratu\nJavi ako želiš nešto konkretno.'
+        : 'For food in Brela:\n• fresh fish on the waterfront\n• pizza/quick bites in the center\n• beach-bar snacks by Punta Rata\nTell me if you want something specific.';
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'restaurants', activeLang).catch(() => {});
+      await persistTurn(msg, { awaiting: null, lastTopic: 'restaurants', lastIntent: 'restaurants', lastBotQuestion: null });
+      console.log('[webhook] FINAL RESPONSE SENT — restaurants quick list');
+      return res.send(twiml(msg));
+    }
+    // Events keyword → ask timeframe
+    if (['events', 'event', 'dogadjaji', 'događaji'].includes(normalizedMsg)) {
+      const ask = activeLang === 'hr'
+        ? 'Tražiš događaje za danas, sutra ili ovaj tjedan?'
+        : 'Do you want events for today, tomorrow, or this week?';
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'events', activeLang).catch(() => {});
+      await persistTurn(ask, { awaiting: null, lastTopic: 'events', lastIntent: 'events', lastBotQuestion: 'events_scope' });
+      console.log('[webhook] FINAL RESPONSE SENT — events scope clarify');
+      return res.send(twiml(ask));
+    }
+  }
 
-    if (conversationState.awaiting && !faqSelection && !parkingSelection && !/^[1-3]$/.test(normalizeLookup(trimmedMsg))) {
+  if (!forcedIntent && !parkingSelection && !faqSelection && TRIVIAL.has(lowerMsg)) {
+    console.log('[webhook] FINAL RESPONSE SENT — trivial (empty)');
+    return res.send(emptyTwiml());
+  }
+
+  if (conversationState.awaiting && !faqSelection && !parkingSelection && !/^[1-3]$/.test(normalizeLookup(trimmedMsg))) {
       conversationState = { ...conversationState, awaiting: null };
     }
 
-    if (!parkingSelection && !faqSelection && (SHORT_UNCLEAR.has(lowerMsg) || /^[1-3]$/.test(lowerMsg))) {
+  if (!parkingSelection && !faqSelection && (SHORT_UNCLEAR.has(lowerMsg) || /^[1-3]$/.test(lowerMsg))) {
+    // If we have context, reuse last intent instead of generic unclear
+    if (forcedIntent || conversationState.lastIntent) {
+      const reuseIntent = forcedIntent || conversationState.lastIntent;
+      console.log(`[webhook] SHORT FOLLOW-UP routed to intent: ${reuseIntent}`);
+      // fall through; forcedIntent will be picked up below
+    } else {
       const replyLang = detectShortReplyLanguage(trimmedMsg, lang);
       const reply = unclearReply(replyLang);
-      await persistTurn(reply, { awaiting: null, lastTopic: 'fallback', lastLanguage: replyLang });
+      await persistTurn(reply, { awaiting: null, lastTopic: 'fallback', lastIntent: 'fallback', lastLanguage: replyLang, lastBotQuestion: null });
       await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', replyLang).catch(() => {});
       console.log('[webhook] FINAL RESPONSE SENT — unclear short reply');
       return res.send(twiml(reply));
     }
+  }
 
     // ── Spam filter ──────────────────────────────────────────────────────────
-    if (isSpam(effectiveMsg)) {
-      await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', lang).catch(() => {});
-      await persistTurn(fallbackReply(lang), {
-        awaiting: null,
-        lastTopic: 'fallback',
-        lastWeatherIntent: null,
-        lastEventPeriod: null,
-      });
+  if (isSpam(effectiveMsg)) {
+    await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', lang).catch(() => {});
+    await persistTurn(fallbackReply(lang), {
+      awaiting: null,
+      lastTopic: 'fallback',
+      lastIntent: 'fallback',
+      lastBotQuestion: null,
+      lastWeatherIntent: null,
+      lastEventPeriod: null,
+    });
       console.log(`[webhook] BLOCKED — spam: "${trimmedMsg.slice(0, 40)}"`);
       return res.send(twiml(fallbackReply(lang)));
     }
@@ -1041,6 +1140,8 @@ router.post('/webhook', async (req, res) => {
       await persistTurn(faqReply, {
         awaiting: null,
         lastTopic: 'faq',
+        lastIntent: 'faq',
+        lastBotQuestion: null,
         lastWeatherIntent: null,
         lastEventPeriod: null,
         lastFaq: {
@@ -1061,21 +1162,23 @@ router.post('/webhook', async (req, res) => {
 
     // ── STEP 1: GREETING — one-time only, exact match, empty history ─────────
     const EXACT_GREETINGS = new Set(['pozdrav', 'bok', 'hej', 'zdravo', 'dobar dan', 'hello', 'hi', 'hey', 'hallo', 'guten tag', 'ciao', 'buongiorno', 'bonjour', 'salut']);
-    if (EXACT_GREETINGS.has(greetingNorm) && history.length === 0) {
-      await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', activeLang).catch(() => {});
-      const reply = greetingReply(activeLang);
-      await persistTurn(reply, {
-        awaiting: null,
-        lastTopic: 'greeting',
-        lastWeatherIntent: null,
-        lastEventPeriod: null,
-      });
+  if (EXACT_GREETINGS.has(greetingNorm) && history.length === 0) {
+    await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', activeLang).catch(() => {});
+    const reply = greetingReply(activeLang);
+    await persistTurn(reply, {
+      awaiting: null,
+      lastTopic: 'greeting',
+      lastIntent: 'greeting',
+      lastBotQuestion: null,
+      lastWeatherIntent: null,
+      lastEventPeriod: null,
+    });
       console.log('[webhook] FINAL RESPONSE SENT — greeting (first message only)');
       return res.send(twiml(reply));
     }
 
-    // ── WEATHER — keyword-detected, API-first, no AI formatting ─────────────
-    if (isWeatherQuery(effectiveMsg) || isWeatherFollowUp(effectiveMsg, conversationState) || (historyLooksLikeWeather(history) && /\b\d{1,2}\b/.test(normalizeLookup(effectiveMsg)))) {
+  // ── WEATHER — keyword-detected, API-first, no AI formatting ─────────────
+  if (forcedIntent === 'weather' || isWeatherQuery(effectiveMsg) || isWeatherFollowUp(effectiveMsg, conversationState) || (historyLooksLikeWeather(history) && /\b\d{1,2}\b/.test(normalizeLookup(effectiveMsg)))) {
       const weatherIntent = detectWeatherIntent(effectiveMsg, conversationState);
       const wLang  = activeLang;
       const apiKey = process.env.OPENWEATHER_API_KEY;
@@ -1112,15 +1215,17 @@ router.post('/webhook', async (req, res) => {
             wLang
           );
 
-          if (weatherIntent.type === 'weather_current') {
-            await persistTurn(currentLine, {
-              awaiting: null,
-              lastTopic: 'weather',
-              lastWeatherIntent: weatherIntent,
-              lastEventPeriod: null,
-            });
-            console.log('[webhook] FINAL RESPONSE SENT — weather (current)');
-            return res.send(twiml(currentLine));
+        if (weatherIntent.type === 'weather_current') {
+          await persistTurn(currentLine, {
+            awaiting: null,
+            lastTopic: 'weather',
+            lastIntent: 'weather',
+            lastBotQuestion: null,
+            lastWeatherIntent: weatherIntent,
+            lastEventPeriod: null,
+          });
+          console.log('[webhook] FINAL RESPONSE SENT — weather (current)');
+          return res.send(twiml(currentLine));
           }
         }
 
@@ -1175,6 +1280,8 @@ router.post('/webhook', async (req, res) => {
         await persistTurn(forecastReply, {
           awaiting: null,
           lastTopic: 'weather',
+          lastIntent: 'weather',
+          lastBotQuestion: null,
           lastWeatherIntent: weatherIntent,
           lastEventPeriod: null,
         });
@@ -1190,7 +1297,7 @@ router.post('/webhook', async (req, res) => {
     }
 
     // ── STEP 3: EVENTS — keyword-detected, DB-first, AI format only ──────────
-    if (isEventQuery(effectiveMsg) || isEventFollowUp(effectiveMsg, conversationState)) {
+  if (forcedIntent === 'events' || isEventQuery(effectiveMsg) || isEventFollowUp(effectiveMsg, conversationState)) {
       const eventPeriod = detectEventPeriod(effectiveMsg); // today/tomorrow/week/null
       await logMessage(tenant.id, userPhone, trimmedMsg, 'events', activeLang).catch(() => {});
 
@@ -1209,6 +1316,8 @@ router.post('/webhook', async (req, res) => {
           await persistTurn(reply, {
             awaiting: null,
             lastTopic: 'events',
+            lastIntent: 'events',
+            lastBotQuestion: null,
             lastEventPeriod: eventPeriod,
             lastWeatherIntent: null,
           });
@@ -1228,6 +1337,8 @@ router.post('/webhook', async (req, res) => {
         await persistTurn(noEventsReply, {
           awaiting: null,
           lastTopic: 'events',
+          lastIntent: 'events',
+          lastBotQuestion: null,
           lastEventPeriod: eventPeriod || 'general',
           lastWeatherIntent: null,
         });
@@ -1243,6 +1354,8 @@ router.post('/webhook', async (req, res) => {
       await persistTurn(reply, {
         awaiting: null,
         lastTopic: 'events',
+        lastIntent: 'events',
+        lastBotQuestion: null,
         lastEventPeriod: eventPeriod || 'general',
         lastWeatherIntent: null,
       });
@@ -1285,6 +1398,8 @@ router.post('/webhook', async (req, res) => {
           })),
         },
         lastTopic: 'faq',
+        lastIntent: 'faq',
+        lastBotQuestion: 'faq_choice',
         lastWeatherIntent: null,
         lastEventPeriod: null,
       });
@@ -1330,6 +1445,8 @@ router.post('/webhook', async (req, res) => {
       await persistTurn(faqReply, {
         awaiting: null,
         lastTopic: 'faq',
+        lastIntent: 'faq',
+        lastBotQuestion: null,
         lastWeatherIntent: null,
         lastEventPeriod: null,
         lastFaq: {
@@ -1373,12 +1490,14 @@ router.post('/webhook', async (req, res) => {
       return res.send(twiml(faqReply));
     }
 
-    if (isSpecificParkingQuestion(effectiveMsg)) {
+  if (forcedIntent === 'parking' || isSpecificParkingQuestion(effectiveMsg)) {
       const parkingReply = parkingFallbackReply(activeLang);
       await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
       await persistTurn(parkingReply, {
         awaiting: null,
         lastTopic: 'parking',
+        lastIntent: 'parking',
+        lastBotQuestion: null,
         lastWeatherIntent: null,
         lastEventPeriod: null,
       });
@@ -1394,6 +1513,8 @@ router.post('/webhook', async (req, res) => {
       await persistTurn(accReply, {
         awaiting: null,
         lastTopic: 'accommodation',
+        lastIntent: 'accommodation',
+        lastBotQuestion: null,
         lastWeatherIntent: null,
         lastEventPeriod: null,
       });
@@ -1401,13 +1522,15 @@ router.post('/webhook', async (req, res) => {
       return res.send(twiml(accReply));
     }
 
-    // ── STEPS 4+5: RELEVANCE FILTER (follow-ups bypass it) ───────────────────
-    const followUp = isFollowUp(trimmedMsg) || Boolean(parkingSelection);
+  // ── STEPS 4+5: RELEVANCE FILTER (follow-ups bypass it) ───────────────────
+  const followUp = isFollowUp(trimmedMsg) || Boolean(parkingSelection);
   if (!followUp && !isRelevant(effectiveMsg)) {
     await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', activeLang).catch(() => {});
     await persistTurn(offTopicReply(activeLang), {
       awaiting: null,
       lastTopic: 'fallback',
+      lastIntent: 'fallback',
+      lastBotQuestion: null,
       lastWeatherIntent: null,
       lastEventPeriod: null,
     });
@@ -1422,6 +1545,8 @@ router.post('/webhook', async (req, res) => {
       await persistTurn(fallbackReply(activeLang), {
         awaiting: null,
         lastTopic: 'fallback',
+        lastIntent: 'fallback',
+        lastBotQuestion: null,
         lastWeatherIntent: null,
         lastEventPeriod: null,
       });
@@ -1462,6 +1587,8 @@ router.post('/webhook', async (req, res) => {
     await persistTurn(reply, {
       awaiting: null,
       lastTopic: aiReply ? 'ai' : 'fallback',
+      lastIntent: aiReply ? (keywordForcedIntent || 'ai') : 'fallback',
+      lastBotQuestion: null,
       lastWeatherIntent: null,
       lastEventPeriod: null,
     });
