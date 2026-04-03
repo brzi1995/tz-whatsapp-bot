@@ -892,6 +892,7 @@ router.post('/webhook', async (req, res) => {
 
     const trimmedMsg = userMsg.trim();
     const lowerMsg   = trimmedMsg.toLowerCase().trim();
+    const normalizedMsg = normalizeMessage(trimmedMsg);
 
     // ── Resolve tenant ───────────────────────────────────────────────────────
     const tenant = await getTenant(tenantPhone);
