@@ -111,6 +111,7 @@ function fallbackReply(lang) { return FALLBACK_MSG[lang] || FALLBACK_MSG.hr; }
 
 const BRELA_INFO_URL = 'https://brela.hr/';
 const BRELA_CONTACT_URL = 'https://brela.hr/kontakt/';
+const RESTAURANT_DIR_URL = 'https://brela.hr/gastronomija/';
 
 const OFF_TOPIC_MSG = {
   hr: 'Mogu pomoći oko Brela (plaže, parking, vrijeme, događaji, restorani). Napišite točno što trebate.',
@@ -173,6 +174,12 @@ const PARKING_CENTER_REPLY = {
   hr: 'Parking u centru je na Trgu A. Stepinca i uz rivu. Javi odakle dolaziš pa pošaljem najbliže mjesto.',
   en: 'Center parking is at Trg A. Stepinca and along the waterfront. Tell me where you’re coming from and I’ll share the nearest spot.',
 };
+
+const RESTAURANT_DIR_REPLY = {
+  hr: `Za restorane i večeru u Brelima, službeni popis je ovdje:\n${RESTAURANT_DIR_URL}\nAko želiš, mogu pomoći s:\n• riba / seafood\n• pizza\n• domaća kuhinja\n• restorani uz more`,
+  en: `For restaurants and dinner in Brela, the official directory is here:\n${RESTAURANT_DIR_URL}\nIf you want, I can help with:\n• seafood\n• pizza\n• local cuisine\n• restaurants by the sea`,
+};
+function restaurantDirectoryReply(lang) { return RESTAURANT_DIR_REPLY[lang] || RESTAURANT_DIR_REPLY.en; }
 
 // Accommodation note (with parking info)
 const ACCOM_MSG = {
@@ -1058,12 +1065,10 @@ router.post('/webhook', async (req, res) => {
     }
     // Restaurants → quick suggestions (category-based, no links)
     if (['restaurant', 'restoran', 'food', 'dinner', 'eat'].includes(normalizedMsg)) {
-      const msg = activeLang === 'hr'
-        ? 'Za hranu u Brelima: \n• svježa riba na rivi\n• pizzeria/fast u centru\n• beach bar snack uz Punta Ratu\nJavi ako želiš nešto konkretno.'
-        : 'For food in Brela:\n• fresh fish on the waterfront\n• pizza/quick bites in the center\n• beach-bar snacks by Punta Rata\nTell me if you want something specific.';
+      const msg = restaurantDirectoryReply(activeLang);
       await logMessage(tenant.id, userPhone, trimmedMsg, 'restaurants', activeLang).catch(() => {});
       await persistTurn(msg, { awaiting: null, lastTopic: 'restaurants', lastIntent: 'restaurants', lastBotQuestion: null });
-      console.log('[webhook] FINAL RESPONSE SENT — restaurants quick list');
+      console.log('[webhook] FINAL RESPONSE SENT — restaurants directory');
       return res.send(twiml(msg));
     }
     // Events keyword → ask timeframe
@@ -1405,8 +1410,17 @@ router.post('/webhook', async (req, res) => {
     });
 
     console.log('[webhook] FINAL RESPONSE SENT — parking clarification');
-      return res.send(twiml(clarifyReply));
-    }
+    return res.send(twiml(clarifyReply));
+  }
+
+  // Restaurants — always point to official directory for general intent
+  if (forcedIntent === 'restaurants') {
+    const msg = restaurantDirectoryReply(activeLang);
+    await logMessage(tenant.id, userPhone, trimmedMsg, 'restaurants', activeLang).catch(() => {});
+    await persistTurn(msg, { awaiting: null, lastTopic: 'restaurants', lastIntent: 'restaurants', lastBotQuestion: null });
+    console.log('[webhook] FINAL RESPONSE SENT — restaurants directory (forced intent)');
+    return res.send(twiml(msg));
+  }
 
     // ── STEP 2: FAQ — database first, AI polish only ─────────────────────────
     const faqMatch = await getFaqMatch(tenant.id, effectiveMsg).catch(() => null);
