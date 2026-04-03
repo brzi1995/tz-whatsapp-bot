@@ -169,6 +169,11 @@ function parkingFallbackReply(lang) {
   return PARKING_FALLBACK[lang] || PARKING_FALLBACK.en;
 }
 
+const PARKING_CENTER_REPLY = {
+  hr: 'Parking u centru je na Trgu A. Stepinca i uz rivu. Javi odakle dolaziš pa pošaljem najbliže mjesto.',
+  en: 'Center parking is at Trg A. Stepinca and along the waterfront. Tell me where you’re coming from and I’ll share the nearest spot.',
+};
+
 // Accommodation note (with parking info)
 const ACCOM_MSG = {
   hr: 'Većina privatnih smještaja u Brelima ima osiguran parking. Ako trebate javni: centar (Trg A. Stepinca) ili uz plaže Punta Rata, Soline, Podrače. Javite lokaciju pa pošaljem najbliže mjesto.',
@@ -229,15 +234,27 @@ function clarificationReply(message, lang) {
   return CLARIFY_MSG[lang] || CLARIFY_MSG.en;
 }
 
+function getParkingContext(message) {
+  const normalized = normalizeLookup(message);
+  const hasBeach = ['beach', 'plaz', 'plaž', 'punta rata', 'soline', 'podrace', 'podrače', 'near the beach', 'uz plazu', 'uz plažu']
+    .some(term => normalized.includes(normalizeLookup(term)));
+  const hasCenter = ['center', 'centar', 'trg', 'town center'].some(term => normalized.includes(normalizeLookup(term)));
+  const hasStay = ['hotel', 'apartment', 'apartman', 'smjestaj', 'smještaj', 'accommodation', 'room', 'soba']
+    .some(term => normalized.includes(normalizeLookup(term)));
+  if (hasBeach) return 'beach';
+  if (hasCenter) return 'center';
+  if (hasStay) return 'accommodation';
+  return 'general';
+}
+
 function needsParkingClarification(message) {
-  // Disable multi-step parking clarification; answer directly with fallback.
-  return false;
+  return getParkingContext(message) === 'general';
 }
 
 function isSpecificParkingQuestion(message) {
   const normalized = normalizeLookup(message);
   const hasParking = ['parking', 'parkiranje', 'parkinga', 'parcheggio', 'parken', 'parkov', 'stationnement'].some(term => normalized.includes(term));
-  return hasParking && !needsParkingClarification(message);
+  return hasParking && getParkingContext(message) !== 'general';
 }
 
 // Consent prompt — sent after a few exchanges if user hasn't opted in/out yet
@@ -1059,6 +1076,14 @@ router.post('/webhook', async (req, res) => {
       console.log('[webhook] FINAL RESPONSE SENT — events scope clarify');
       return res.send(twiml(ask));
     }
+    // Parking keyword → neutral clarification (no beach assumption)
+    if (['parking', 'parkiranje', 'parkiranj', 'where to park', 'gdje parkirati'].includes(normalizedMsg)) {
+      const clarify = PARKING_CLARIFY_MSG[activeLang] || PARKING_CLARIFY_MSG.en;
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'parking', activeLang).catch(() => {});
+      await persistTurn(clarify, { awaiting: { type: 'parking_choice' }, lastTopic: 'parking', lastIntent: 'parking', lastBotQuestion: 'parking_choice' });
+      console.log('[webhook] FINAL RESPONSE SENT — parking neutral clarify');
+      return res.send(twiml(clarify));
+    }
   }
 
   if (!forcedIntent && !parkingSelection && !faqSelection && TRIVIAL.has(lowerMsg)) {
@@ -1365,19 +1390,21 @@ router.post('/webhook', async (req, res) => {
       return res.send(twiml(reply));
     }
 
-    // Generic parking questions should clarify before FAQ matching so the bot
-    // doesn't dump a broad answer or the wrong parking link.
-    if (needsParkingClarification(effectiveMsg)) {
-      const clarifyReply = clarificationReply(effectiveMsg, activeLang);
-      await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
-      await persistTurn(clarifyReply, {
-        awaiting: { type: 'parking_choice' },
-        lastTopic: 'parking',
-        lastWeatherIntent: null,
-        lastEventPeriod: null,
-      });
+  // Generic parking questions should clarify before FAQ matching so the bot
+  // doesn't dump a broad answer or the wrong parking link.
+  if (needsParkingClarification(effectiveMsg)) {
+    const clarifyReply = PARKING_CLARIFY_MSG[activeLang] || PARKING_CLARIFY_MSG.en;
+    await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
+    await persistTurn(clarifyReply, {
+      awaiting: { type: 'parking_choice' },
+      lastTopic: 'parking',
+      lastIntent: 'parking',
+      lastBotQuestion: 'parking_choice',
+      lastWeatherIntent: null,
+      lastEventPeriod: null,
+    });
 
-      console.log('[webhook] FINAL RESPONSE SENT — parking clarification');
+    console.log('[webhook] FINAL RESPONSE SENT — parking clarification');
       return res.send(twiml(clarifyReply));
     }
 
@@ -1492,7 +1519,17 @@ router.post('/webhook', async (req, res) => {
     }
 
   if (forcedIntent === 'parking' || isSpecificParkingQuestion(effectiveMsg)) {
-      const parkingReply = parkingFallbackReply(activeLang);
+      const parkingContext = getParkingContext(effectiveMsg);
+      let parkingReply;
+      if (parkingContext === 'center') {
+        parkingReply = PARKING_CENTER_REPLY[activeLang] || PARKING_CENTER_REPLY.en;
+      } else if (parkingContext === 'accommodation') {
+        parkingReply = accommodationReply(activeLang);
+      } else if (parkingContext === 'beach') {
+        parkingReply = parkingFallbackReply(activeLang);
+      } else {
+        parkingReply = PARKING_CLARIFY_MSG[activeLang] || PARKING_CLARIFY_MSG.en;
+      }
       await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
       await persistTurn(parkingReply, {
         awaiting: null,
