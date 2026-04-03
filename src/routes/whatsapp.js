@@ -104,14 +104,14 @@ const BRELA_INFO_URL = 'https://brela.hr/';
 const BRELA_CONTACT_URL = 'https://brela.hr/kontakt/';
 
 const OFF_TOPIC_MSG = {
-  hr: `Dajem informacije o Brelima (plaže, parking, vrijeme, događaji). Javite što vas točno zanima, a dodatne kontakte imate ovdje: ${BRELA_CONTACT_URL}`,
-  en: `I share info about Brela (beaches, parking, weather, events). Tell me what you need for Brela; contacts are here: ${BRELA_CONTACT_URL}`,
-  de: `Ich gebe Infos zu Brela (Strände, Parken, Wetter, Events). Sagen Sie mir, was Sie für Brela brauchen; Kontakte hier: ${BRELA_CONTACT_URL}`,
-  it: `Posso dati info su Brela (spiagge, parcheggio, meteo, eventi). Dimmi cosa ti serve per Brela; contatti qui: ${BRELA_CONTACT_URL}`,
-  fr: `Je fournis des infos sur Brela (plages, parking, météo, événements). Dites-moi ce qu'il vous faut pour Brela; contacts ici : ${BRELA_CONTACT_URL}`,
-  sv: `Jag ger info om Brela (stränder, parkering, väder, evenemang). Säg vad du behöver för Brela; kontakter här: ${BRELA_CONTACT_URL}`,
-  no: `Jeg gir info om Brela (strender, parkering, vær, arrangementer). Si hva du trenger for Brela; kontakter her: ${BRELA_CONTACT_URL}`,
-  cs: `Poskytuji info o Brele (pláže, parkování, počasí, akce). Napište, co přesně potřebujete; kontakty jsou zde: ${BRELA_CONTACT_URL}`,
+  hr: 'Mogu pomoći oko Brela (plaže, parking, vrijeme, događaji, restorani). Napišite točno što trebate.',
+  en: 'I can help with Brela (beaches, parking, weather, events, restaurants). Tell me exactly what you need.',
+  de: 'Ich helfe mit Infos zu Brela (Strände, Parken, Wetter, Events, Restaurants). Sagen Sie mir genau, was Sie brauchen.',
+  it: 'Posso aiutare con Brela (spiagge, parcheggio, meteo, eventi, ristoranti). Dimmi cosa ti serve esattamente.',
+  fr: "Je peux aider pour Brela (plages, parking, météo, événements, restaurants). Dites-moi ce qu'il vous faut.",
+  sv: 'Jag kan hjälpa med Brela (stränder, parkering, väder, evenemang, restauranger). Säg exakt vad du behöver.',
+  no: 'Jeg kan hjelpe med Brela (strender, parkering, vær, arrangementer, restauranter). Si akkurat hva du trenger.',
+  cs: 'Pomohu s informacemi o Brele (pláže, parkování, počasí, akce, restaurace). Napište přesně, co potřebujete.',
 };
 function offTopicReply(lang) { return OFF_TOPIC_MSG[lang] || OFF_TOPIC_MSG.en; }
 
