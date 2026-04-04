@@ -581,14 +581,12 @@ async function handleMessage(userMsg, session, deps) {
   // ── Priority 1: pendingSlot ───────────────────────────────────────────────
   // pendingSlot always wins. No intent detection, no fallback.
   if (session.pendingSlot) {
-    const pendingTopic = session.pendingSlot.topic;
-    const handler = pendingTopic && TOPIC_HANDLERS[pendingTopic];
-    if (!handler) {
+    const handler = TOPIC_HANDLERS[session.pendingSlot.topic];
+    if (!handler || typeof handler.handle !== 'function') {
       session.pendingSlot = null;
-      session.lastQuestion = null;
-      return null;
+    } else {
+      return handler.handle(msg, session, deps);
     }
-    return handler.handle(msg, session, deps);
   }
 
   // ── Priority 2: trivial acknowledgements ─────────────────────────────────
