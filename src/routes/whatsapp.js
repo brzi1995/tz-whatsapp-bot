@@ -190,6 +190,18 @@ function parkingNoInfoReply(value, lang) {
   return base[lang] || base.en;
 }
 
+function handleExpectedAnswer(message, lang, currentTopic) {
+  if (currentTopic === 'parking') {
+    return parkingNoInfoReply(message, lang);
+  }
+  const safeTopic = currentTopic || 'Brela';
+  const base = {
+    hr: `Zabilježio sam: "${message}". Reci što još trebaš u vezi ${safeTopic}.`,
+    en: `Noted: "${message}". Tell me what else you need about ${safeTopic}.`,
+  };
+  return base[lang] || base.en;
+}
+
 // Accommodation note (with parking info)
 const ACCOM_MSG = {
   hr: 'Većina privatnih smještaja u Brelima ima osiguran parking. Ako trebate javni: centar (Trg A. Stepinca) ili uz plaže Punta Rata, Soline, Podrače. Javite lokaciju pa pošaljem najbliže mjesto.',
@@ -1021,8 +1033,7 @@ router.post('/webhook', async (req, res) => {
   // If awaiting an expected answer, accept any non-empty reply, clear awaiting,
   // and continue with the current topic (no extra intent detection).
   if (expectedAnswerKey && trimmedMsg) {
-    forcedIntent = forcedIntent || currentTopic || keywordForcedIntent || null;
-    conversationState = { ...conversationState, awaiting: null };
+    forcedIntent = currentTopic || forcedIntent || keywordForcedIntent || null;
   }
 
   const persistTurn = async (assistantReply, statePatch = {}) => {
@@ -1047,11 +1058,25 @@ router.post('/webhook', async (req, res) => {
       }).catch(err => console.error('[webhook] saveConversation failed:', err.message));
       conversationState = nextState;
       return nextState;
-    };
+  };
 
-    // ── CONSENT GATE — highest priority ──────────────────────────────────────
-    if (currentUser && Number(currentUser.asked_opt_in) === 1) {
-      if (lowerMsg === 'da') {
+  // ── STEP 1: expectedAnswer handling ───────────────────────────────────────
+  if (expectedAnswerKey && trimmedMsg) {
+    const reply = handleExpectedAnswer(trimmedMsg, activeLang, currentTopic);
+    await logMessage(tenant.id, userPhone, trimmedMsg, 'other', activeLang).catch(() => {});
+    await persistTurn(reply, {
+      awaiting: null,
+      lastTopic: currentTopic || conversationState.lastTopic || null,
+      lastIntent: currentTopic || conversationState.lastIntent || null,
+      lastBotQuestion: null,
+    });
+    console.log('[webhook] FINAL RESPONSE SENT — expectedAnswer handled');
+    return res.send(twiml(reply));
+  }
+
+  // ── CONSENT GATE — highest priority ──────────────────────────────────────
+  if (currentUser && Number(currentUser.asked_opt_in) === 1) {
+    if (lowerMsg === 'da') {
         await setOptIn(tenant.id, userPhone, 1);
         await setAskedOptIn(tenant.id, userPhone, 0);
         await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', lang).catch(() => {});
