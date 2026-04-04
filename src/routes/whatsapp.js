@@ -995,6 +995,12 @@ router.post('/webhook', async (req, res) => {
 
   // ── persistTurn — saves messages + state after each response ───────────────
   const persistTurn = async (assistantReply, statePatch = {}) => {
+    if (!conversationState || typeof conversationState !== 'object') {
+      conversationState = {};
+    }
+    if (!assistantReply || typeof assistantReply !== 'string') {
+      assistantReply = 'Došlo je do greške. Molimo pokušajte ponovno.';
+    }
     const nextState = {
       ...conversationState,
       lastLanguage:    activeLang,
@@ -1008,14 +1014,18 @@ router.post('/webhook', async (req, res) => {
       // Explicit overrides from caller (e.g. awaiting for FAQ choice)
       ...statePatch,
     };
-    await saveConversation(tenant.id, userPhone, {
-      messages: [
-        ...history,
-        { role: 'user',      content: trimmedMsg },
-        { role: 'assistant', content: assistantReply },
-      ],
-      state: nextState,
-    }).catch(err => console.error('[webhook] saveConversation failed:', err.message));
+    try {
+      await saveConversation(tenant.id, userPhone, {
+        messages: [
+          ...history,
+          { role: 'user',      content: trimmedMsg },
+          { role: 'assistant', content: assistantReply },
+        ],
+        state: nextState,
+      });
+    } catch (err) {
+      console.error('[webhook] saveConversation failed:', err.message);
+    }
     conversationState = nextState;
   };
 
@@ -1116,10 +1126,18 @@ router.post('/webhook', async (req, res) => {
   const engineReply = await engineHandleMessage(trimmedMsg, engineSession, engineDeps);
 
   if (engineReply !== null) {
+    let safeReply = engineReply;
+    if (!safeReply || typeof safeReply !== 'string') {
+      safeReply = 'Došlo je do greške. Molimo pokušajte ponovno.';
+    }
     await logMessage(tenant.id, userPhone, trimmedMsg, engineSession.lastTopic || 'other', activeLang).catch(() => {});
-    await persistTurn(engineReply, { awaiting: null });
+    try {
+      await persistTurn(safeReply, { awaiting: null });
+    } catch (err) {
+      console.error('persistTurn failed:', err);
+    }
     console.log(`[webhook] FINAL RESPONSE SENT — engine (${engineSession.lastTopic})`);
-    return res.send(twiml(engineReply));
+    return res.send(twiml(safeReply));
   }
 
   // ── ENGINE returned null → fall through to FAQ / AI ────────────────────────
