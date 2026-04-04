@@ -79,6 +79,28 @@ function norm(text) {
     .trim();
 }
 
+// Suggestions helper
+function getSuggestions(topic) {
+  switch (topic) {
+    case 'parking':
+      return ['parking near beaches', 'nearby restaurants', 'weather today'];
+    case 'weather':
+      return ["tomorrow's forecast", '5-day forecast', 'is it a good day for the beach'];
+    case 'events':
+      return ["what's happening tonight", 'events this weekend', 'restaurants nearby'];
+    case 'restaurants':
+      return ['seafood', 'pizza / Italian', 'local Dalmatian cuisine', 'restaurants by the sea'];
+    default:
+      return [];
+  }
+}
+
+function formatSuggestions(topic) {
+  const items = getSuggestions(topic);
+  if (!items.length) return '';
+  return '\n\nIf you want, I can also help with:\n• ' + items.join('\n• ');
+}
+
 const FORECAST_URL = 'https://weather.com/hr-HR/vrijeme/10dana/l/Brela+Splitsko+dalmatinska+%C5%BEupanija';
 
 // ─── PARKING HANDLER ──────────────────────────────────────────────────────────
@@ -165,7 +187,8 @@ async function handleParking(userMsg, session, deps) {
     session.pendingSlot = null;
     session.lastQuestion = null;
     session.lastTopic = 'parking';
-    return faqHit.answer;
+    const reply = faqHit.answer;
+    return reply + formatSuggestions('parking');
   }
 
   // 2. Extract location from message
@@ -204,7 +227,10 @@ async function handleParking(userMsg, session, deps) {
 
   // Known location category → structured answer
   const knownAnswers = PARKING_ANSWERS[location];
-  if (knownAnswers) return knownAnswers[lang] || knownAnswers.en;
+  if (knownAnswers) {
+    const base = knownAnswers[lang] || knownAnswers.en;
+    return base + formatSuggestions('parking');
+  }
 
   // Unknown specific location (e.g. "Vruja", "restaurant Feral") — honest, no loop
   const NO_EXACT_DATA = {
@@ -217,7 +243,8 @@ async function handleParking(userMsg, session, deps) {
     no: `Ingen spesifikk info om "${location}".\nParkering i Brela:\n• sentrum (Trg A. Stepinca)\n• Punta Rata, Soline, Podrače\n\nMer: ${brelaUrl}`,
     cs: `Nemám přesné informace pro "${location}".\nVerejná parkoviště v Brele:\n• centrum (Trg A. Stepinca)\n• Punta Rata, Soline, Podrače\n\nVíce: ${brelaUrl}`,
   };
-  return NO_EXACT_DATA[lang] || NO_EXACT_DATA.en;
+  const reply = NO_EXACT_DATA[lang] || NO_EXACT_DATA.en;
+  return reply + formatSuggestions('parking');
 }
 
 // ─── WEATHER HANDLER ──────────────────────────────────────────────────────────
@@ -297,7 +324,8 @@ async function handleWeather(userMsg, session, deps) {
       if (!res.ok) return UNAVAIL[lang] || UNAVAIL.en;
       const data = await res.json();
       const lbl  = LABELS.current[lang] || LABELS.current.en;
-      return `🌤️ ${lbl}: ${Math.round(data.main.temp)}°C, ${data.weather[0]?.description || ''}`;
+      const ans = `🌤️ ${lbl}: ${Math.round(data.main.temp)}°C, ${data.weather[0]?.description || ''}`;
+      return ans + formatSuggestions('weather');
     }
 
     // Forecast endpoint covers tomorrow + multi-day
@@ -311,7 +339,8 @@ async function handleWeather(userMsg, session, deps) {
                  || data.list.find(e => e.dt_txt.startsWith(tStr));
       if (!entry) return UNAVAIL[lang] || UNAVAIL.en;
       const lbl = LABELS.tomorrow[lang] || LABELS.tomorrow.en;
-      return `🌤️ ${lbl}: ${Math.round(entry.main.temp)}°C, ${entry.weather[0]?.description || ''}`;
+      const ans = `🌤️ ${lbl}: ${Math.round(entry.main.temp)}°C, ${entry.weather[0]?.description || ''}`;
+      return ans + formatSuggestions('weather');
     }
 
     // Multi-day forecast
@@ -336,7 +365,8 @@ async function handleWeather(userMsg, session, deps) {
       cs: (n) => `${n}denní prognóza Brela`,
     };
     const hdrFn = FORECAST_HDR[lang] || FORECAST_HDR.en;
-    return `🌤️ ${hdrFn(days)}:\n${lines.join('\n')}`;
+    const ans = `🌤️ ${hdrFn(days)}:\n${lines.join('\n')}`;
+    return ans + formatSuggestions('weather');
 
   } catch (err) {
     console.error('[engine/weather]', err.message);
@@ -418,13 +448,13 @@ async function handleEvents(userMsg, session, deps) {
 
     if (period) {
       const events = await getEventsByPeriod(tenantId, period);
-      if (events.length) return formatEvents(events, period, lang);
+      if (events.length) return formatEvents(events, period, lang) + formatSuggestions('events');
 
       // Period empty → show upcoming as fallback
       const upcoming = await getUpcomingEvents(tenantId);
       if (upcoming.length) {
         const intros = PERIOD_EMPTY_UPCOMING[lang] || PERIOD_EMPTY_UPCOMING.en;
-        return (intros[period] || intros.today) + '\n' + formatEvents(upcoming, null, lang);
+        return (intros[period] || intros.today) + '\n' + formatEvents(upcoming, null, lang) + formatSuggestions('events');
       }
       return NO_EVENTS[lang] || NO_EVENTS.en;
     }
@@ -432,7 +462,7 @@ async function handleEvents(userMsg, session, deps) {
     // General "what events?" query
     const events = await getUpcomingEvents(tenantId);
     if (!events.length) return NO_EVENTS[lang] || NO_EVENTS.en;
-    return formatEvents(events, null, lang);
+    return formatEvents(events, null, lang) + formatSuggestions('events');
 
   } catch (err) {
     console.error('[engine/events]', err.message);
@@ -459,7 +489,8 @@ async function handleRestaurants(userMsg, session, deps) {
     no: `Restauranter i Brela:\n${restaurantUrl}\n\nJeg kan hjelpe med:\n• sjømat\n• pizza / italiensk\n• lokal mat\n• ved havet`,
     cs: `Restaurace v Brele:\n${restaurantUrl}\n\nMohu pomoci s:\n• mořské plody\n• pizza / italská kuchyně\n• místní kuchyně\n• u moře`,
   };
-  return MSG[lang] || MSG.en;
+  const ans = MSG[lang] || MSG.en;
+  return ans + formatSuggestions('restaurants');
 }
 
 // ─── TOPIC HANDLERS MAP ───────────────────────────────────────────────────────
