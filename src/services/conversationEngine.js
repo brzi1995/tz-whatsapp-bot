@@ -120,9 +120,9 @@ function extractParkingLocation(message) {
   if (n === '3' || tokens[0] === '3') return 'accommodation';
 
   // Category keywords
-  if (/\b(cent(er|ar|re)|trg|downtown|city\s+cent)\b/.test(n)) return 'center';
-  if (/\b(beach|plaz|strand|spiaggia|punta\s*rata|soline|podrac)\b/.test(n)) return 'beach';
-  if (/\b(hotel|apart(ment|man)|smjestaj|accommodation|unterkunft|alloggio|room|soba|stay)\b/.test(n)) return 'accommodation';
+  if (/\b(cent(ar|er|re)|trg|downtown|city\s+cent)\b/.test(n)) return 'center';
+  if (/\b(beach|plaz|plaža|strand|spiaggia|punta\s*rata|soline|podrac)\b/.test(n)) return 'beach';
+  if (/\b(hotel|apart(ment|man)|smjestaj|smještaj|accommodation|unterkunft|alloggio|room|soba|stay)\b/.test(n)) return 'accommodation';
 
   // Filter out noise words to find a raw location name
   const NOISE = new Set(['parking', 'park', 'where', 'need', 'want', 'find', 'near',
@@ -573,20 +573,9 @@ async function handleMessage(userMsg, session, deps) {
   let activeTopic;
 
   // ── Priority 1: pendingSlot ───────────────────────────────────────────────
-  // pendingSlot always wins. detectIntent() is NOT called here at all.
-  // The only exception is an unambiguous multi-word topic request.
+  // pendingSlot always wins. No intent detection, no fallback.
   if (session.pendingSlot) {
-    if (isClearTopicSwitch(msg)) {
-      // Long explicit request → switch topic, drop pending slot.
-      // Read topic directly from TOPIC_PATTERNS — no detectIntent() call.
-      const switched = Object.keys(TOPIC_PATTERNS).find(t => TOPIC_PATTERNS[t].test(msg)) || null;
-      session.pendingSlot = null;
-      session.lastQuestion = null;
-      activeTopic = switched;
-    } else {
-      // Short / ambiguous message → ALWAYS go to slot handler, no detection.
-      return TOPIC_HANDLERS[session.pendingSlot.topic].handle(msg, session, deps);
-    }
+    return TOPIC_HANDLERS[session.pendingSlot.topic].handle(msg, session, deps);
 
   // ── Priority 2: trivial acknowledgements ─────────────────────────────────
   // "ok", "thanks", "hvala", 👍 — send a friendly closer, preserve session.
