@@ -246,6 +246,8 @@ function normalizeConversationState(state) {
     : null;
   return {
     lastLanguage: safe.lastLanguage || null,
+    pendingSlot: safe.pendingSlot || null,
+    lastQuestion: safe.lastQuestion || null,
     lastIntent: safe.lastIntent || null,
     lastTopic: safe.lastTopic || null,
     lastWeatherIntent: safe.lastWeatherIntent || null,
