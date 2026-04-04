@@ -576,8 +576,6 @@ async function handleMessage(userMsg, session, deps) {
   const msg = String(userMsg || '').trim();
   if (!msg) return null;
 
-  let activeTopic;
-
   // ── Priority 1: pendingSlot ───────────────────────────────────────────────
   // pendingSlot always wins. No intent detection, no fallback.
   if (session.pendingSlot) {
@@ -608,6 +606,8 @@ async function handleMessage(userMsg, session, deps) {
     const { topic, confidence } = detectIntent(msg, session);
     activeTopic = confidence === 'high' ? topic : null;
   }
+
+  let activeTopic;
 
   const handler = TOPIC_HANDLERS[activeTopic];
   if (!handler) return null; // Unknown topic → fall through
