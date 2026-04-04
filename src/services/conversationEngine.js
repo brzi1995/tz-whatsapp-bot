@@ -608,7 +608,16 @@ async function handleMessage(userMsg, session, deps) {
   const msg = String(userMsg || '').trim();
   if (!msg) return null;
 
-  let activeTopic;
+  // ── Priority 1: pendingSlot ───────────────────────────────────────────────
+  // pendingSlot always wins. No intent detection, no fallback.
+  if (session.pendingSlot) {
+    const handler = TOPIC_HANDLERS[session.pendingSlot.topic];
+    if (!handler || typeof handler.handle !== 'function') {
+      session.pendingSlot = null;
+      return null;
+    }
+    return handler.handle(msg, session, deps);
+  }
 
   // ── Priority 1: pendingSlot ───────────────────────────────────────────────
   // pendingSlot always wins. No intent detection, no fallback.
@@ -620,6 +629,8 @@ async function handleMessage(userMsg, session, deps) {
       return handler.handle(msg, session, deps);
     }
   }
+
+  let activeTopic;
 
   // ── Priority 2: trivial acknowledgements ─────────────────────────────────
   // "ok", "thanks", "hvala", 👍 — send a friendly closer, preserve session.
