@@ -1014,6 +1014,7 @@ router.post('/webhook', async (req, res) => {
       // Explicit overrides from caller (e.g. awaiting for FAQ choice)
       ...statePatch,
     };
+    console.log('before persistTurn', { userId: userPhone, session: nextState, reply: assistantReply });
     try {
       await saveConversation(tenant.id, userPhone, {
         messages: [
@@ -1130,6 +1131,7 @@ router.post('/webhook', async (req, res) => {
     if (!safeReply || typeof safeReply !== 'string') {
       safeReply = 'Došlo je do greške. Molimo pokušajte ponovno.';
     }
+    console.log('after handleMessage', { reply: safeReply, session: engineSession });
     await logMessage(tenant.id, userPhone, trimmedMsg, engineSession.lastTopic || 'other', activeLang).catch(() => {});
     try {
       await persistTurn(safeReply, { awaiting: null });
@@ -1360,8 +1362,13 @@ router.post('/webhook', async (req, res) => {
     return res.send(twiml(reply));
 
   } catch (err) {
-    console.error('[webhook] error:', err.message);
-    console.error(err.stack);
+    console.error('WHATSAPP ROUTE ERROR', {
+      message: err?.message,
+      stack: err?.stack,
+      userId: req?.body?.From,
+      incomingMessage: req?.body?.Body,
+      session: req?.body, // best effort; actual session logged above around persistTurn
+    });
     const isQuota = err.status === 429 || err.code === 'insufficient_quota';
     console.log('[webhook] FINAL RESPONSE SENT — error fallback');
     res.send(twiml(isQuota
