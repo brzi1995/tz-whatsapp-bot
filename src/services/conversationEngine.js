@@ -200,24 +200,65 @@ async function handleParking(userMsg, session, deps) {
     return reply + formatSuggestions('parking');
   }
 
-  // 2. Extract location from message
+  // Pending slot flow: location_type or beach_name
+  const slotField = session.pendingSlot?.field;
+  const n = norm(userMsg);
   const location = extractParkingLocation(userMsg);
 
+  // If we're waiting for a beach name
+  if (slotField === 'beach_name') {
+    session.pendingSlot = null;
+    session.lastQuestion = null;
+    session.lastTopic = 'parking';
+    if (location === 'beach') {
+      const known = PARKING_ANSWERS.beach;
+      return (known[lang] || known.en) + formatSuggestions('parking');
+    }
+    // specific beach name provided (use raw)
+    const NO_EXACT = {
+      hr: `Nemam točan parking za "${userMsg}".\nJavni parking u Brelima:\n• centar (Trg A. Stepinca)\n• Punta Rata, Soline, Podrače\n\nViše: ${brelaUrl}`,
+      en: `I don't have specific parking info for "${userMsg}".\nPublic parking in Brela:\n• center (Trg A. Stepinca)\n• Punta Rata, Soline, Podrače\n\nMore: ${brelaUrl}`,
+    };
+    return (NO_EXACT[lang] || NO_EXACT.en) + formatSuggestions('parking');
+  }
+
+  // Resolve primary location type (center/beach/accommodation)
+  if (location === 'beach') {
+    // Ask for specific beach only once
+    const BEACH_QUESTION = {
+      hr: 'Koja plaža? (Punta Rata, Soline, Podrače, Vruja...)',
+      en: 'Which beach? (Punta Rata, Soline, Podrače, Vruja...)',
+    };
+    const question = BEACH_QUESTION[lang] || BEACH_QUESTION.en;
+    if (session.lastQuestion === question) {
+      session.pendingSlot = null;
+      session.lastQuestion = null;
+      session.lastTopic = 'parking';
+      const NO_EXACT = {
+        hr: 'Nemam točan parking za tu plažu. Javni parking:\n• centar (Trg A. Stepinca)\n• Punta Rata, Soline, Podrače',
+        en: 'I don’t have exact parking for that beach. Public parking:\n• center (Trg A. Stepinca)\n• Punta Rata, Soline, Podrače',
+      };
+      return (NO_EXACT[lang] || NO_EXACT.en) + formatSuggestions('parking');
+    }
+    session.lastTopic = 'parking';
+    return askSlot(session, { topic: 'parking', field: 'beach_name', question });
+  }
+
+  if (location === 'center' || location === 'accommodation') {
+    session.pendingSlot = null;
+    session.lastQuestion = null;
+    session.lastTopic = 'parking';
+    const known = PARKING_ANSWERS[location];
+    return (known[lang] || known.en) + formatSuggestions('parking');
+  }
+
+  // Unknown or no location_type given → ask once
   if (!location) {
-    // Missing slot — ask for location once
     const PARKING_QUESTION = {
       hr: 'Gdje trebate parkirati?\n• centar\n• uz plažu\n• kod smještaja',
       en: 'Where do you need to park?\n• city center\n• near the beach\n• near accommodation',
-      de: 'Wo möchten Sie parken?\n• Zentrum\n• Strand\n• Unterkunft',
-      it: 'Dove vuole parcheggiare?\n• centro\n• spiaggia\n• alloggio',
-      fr: 'Où souhaitez-vous garer ?\n• centre\n• plage\n• hébergement',
-      sv: 'Var vill du parkera?\n• centrum\n• stranden\n• boende',
-      no: 'Hvor vil du parkere?\n• sentrum\n• stranden\n• overnattingen',
-      cs: 'Kde chcete parkovat?\n• centrum\n• pláž\n• ubytování',
     };
     const question = PARKING_QUESTION[lang] || PARKING_QUESTION.en;
-
-    // Anti-loop: if we already asked this exact question, break and give general info
     if (session.lastQuestion === question) {
       session.pendingSlot = null;
       session.lastQuestion = null;
@@ -228,33 +269,17 @@ async function handleParking(userMsg, session, deps) {
       };
       return fallback[lang] || fallback.en;
     }
-
     session.lastTopic = 'parking';
-    return askSlot(session, { topic: 'parking', field: 'location', question });
+    return askSlot(session, { topic: 'parking', field: 'location_type', question });
   }
 
-  // 3. We have a location — clear slot and answer
+  // Specific but unknown location string (e.g., "Vruja" without beach slot)
   session.pendingSlot = null;
   session.lastQuestion = null;
   session.lastTopic = 'parking';
-
-  // Known location category → structured answer
-  const knownAnswers = PARKING_ANSWERS[location];
-  if (knownAnswers) {
-    const base = knownAnswers[lang] || knownAnswers.en;
-    return base + formatSuggestions('parking');
-  }
-
-  // Unknown specific location (e.g. "Vruja", "restaurant Feral") — honest, no loop
   const NO_EXACT_DATA = {
     hr: `Nemam točan parking za "${location}".\nJavni parking u Brelima:\n• centar (Trg A. Stepinca)\n• Punta Rata, Soline, Podrače\n\nViše: ${brelaUrl}`,
     en: `I don't have specific parking info for "${location}".\nPublic parking in Brela:\n• center (Trg A. Stepinca)\n• Punta Rata, Soline, Podrače\n\nMore: ${brelaUrl}`,
-    de: `Keine genauen Daten für "${location}".\nÖffentliche Parkplätze in Brela:\n• Zentrum (Trg A. Stepinca)\n• Punta Rata, Soline, Podrače\n\nMehr: ${brelaUrl}`,
-    it: `Non ho dati specifici per "${location}".\nParcheggi pubblici a Brela:\n• centro (Trg A. Stepinca)\n• Punta Rata, Soline, Podrače\n\nAltro: ${brelaUrl}`,
-    fr: `Pas d'info précise pour « ${location} ».\nParkings à Brela :\n• centre (Trg A. Stepinca)\n• Punta Rata, Soline, Podrače\n\nPlus : ${brelaUrl}`,
-    sv: `Ingen specifik info om "${location}".\nParkering i Brela:\n• centrum (Trg A. Stepinca)\n• Punta Rata, Soline, Podrače\n\nMer: ${brelaUrl}`,
-    no: `Ingen spesifikk info om "${location}".\nParkering i Brela:\n• sentrum (Trg A. Stepinca)\n• Punta Rata, Soline, Podrače\n\nMer: ${brelaUrl}`,
-    cs: `Nemám přesné informace pro "${location}".\nVerejná parkoviště v Brele:\n• centrum (Trg A. Stepinca)\n• Punta Rata, Soline, Podrače\n\nVíce: ${brelaUrl}`,
   };
   const reply = NO_EXACT_DATA[lang] || NO_EXACT_DATA.en;
   return reply + formatSuggestions('parking');
