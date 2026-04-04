@@ -962,17 +962,31 @@ router.post('/webhook', async (req, res) => {
   const NO_TOKENS  = new Set(['ne', 'no', 'nope', 'nah', 'non']);
 
   const keywordForcedIntent = keywordIntent(trimmedMsg);
-  const lastTopicIntent = conversationState.lastIntent || conversationState.lastTopic || null;
+  const currentTopic = conversationState.lastIntent || conversationState.lastTopic || null;
   const hasPendingQuestion = Boolean(conversationState.lastBotQuestion);
+  const wordCount = normalizedMsg.split(' ').filter(Boolean).length;
+
+  const isClearTopicChange = keywordForcedIntent
+    && keywordForcedIntent !== currentTopic
+    && wordCount > 1; // multi-word, more likely explicit new topic
 
   // Short follow-ups reuse last intent/topic
-  let forcedIntent = keywordForcedIntent;
-  if (!forcedIntent && YES_TOKENS.has(normalizedMsg) && (lastTopicIntent || hasPendingQuestion)) {
-    forcedIntent = lastTopicIntent || 'faq';
+  let forcedIntent = null;
+
+  // Continue current topic on short/ambiguous replies
+  if (YES_TOKENS.has(normalizedMsg) && (currentTopic || hasPendingQuestion)) {
+    forcedIntent = currentTopic || 'faq';
   }
-  if (!forcedIntent && NO_TOKENS.has(normalizedMsg) && (lastTopicIntent || hasPendingQuestion)) {
-    forcedIntent = lastTopicIntent || 'faq';
+  if (!forcedIntent && NO_TOKENS.has(normalizedMsg) && (currentTopic || hasPendingQuestion)) {
+    forcedIntent = currentTopic || 'faq';
   }
+
+  // If the user clearly changes topic, allow keyword override
+  if (!forcedIntent && isClearTopicChange) {
+    forcedIntent = keywordForcedIntent;
+  }
+
+  // Follow-ups keep existing topic
   if (!forcedIntent && conversationState.lastTopic === 'weather') {
     const followWeather = ['and tomorrow', 'and in', 'tomorrow', 'sutra', 'iducih', 'sljedecih', 'za', 'in 5 days', 'in 3 days']
       .some(term => normalizedMsg.includes(term));
@@ -983,7 +997,16 @@ router.post('/webhook', async (req, res) => {
       .some(term => normalizedMsg.includes(term));
     if (followEvents) forcedIntent = 'events';
   }
-  if (!forcedIntent && normalizedMsg === 'parking') forcedIntent = 'parking';
+
+  // If no clear change and we have a current topic, prefer to stay
+  if (!forcedIntent && currentTopic && wordCount <= 3) {
+    forcedIntent = currentTopic;
+  }
+
+  // As a last resort, apply keyword intent when no current topic exists
+  if (!forcedIntent && !currentTopic && keywordForcedIntent) {
+    forcedIntent = keywordForcedIntent;
+  }
 
   const persistTurn = async (assistantReply, statePatch = {}) => {
     const nextState = {
