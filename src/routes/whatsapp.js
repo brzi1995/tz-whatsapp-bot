@@ -974,6 +974,7 @@ router.post('/webhook', async (req, res) => {
   const currentTopic = conversationState.lastIntent || conversationState.lastTopic || null;
   const hasPendingQuestion = Boolean(conversationState.lastBotQuestion);
   const wordCount = normalizedMsg.split(' ').filter(Boolean).length;
+  const expectedAnswerKey = conversationState.awaiting?.expectedAnswer || null;
 
   const isClearTopicChange = keywordForcedIntent
     && keywordForcedIntent !== currentTopic
@@ -1015,6 +1016,13 @@ router.post('/webhook', async (req, res) => {
   // As a last resort, apply keyword intent when no current topic exists
   if (!forcedIntent && !currentTopic && keywordForcedIntent) {
     forcedIntent = keywordForcedIntent;
+  }
+
+  // If awaiting an expected answer, accept any non-empty reply, clear awaiting,
+  // and continue with the current topic (no extra intent detection).
+  if (expectedAnswerKey && trimmedMsg) {
+    forcedIntent = forcedIntent || currentTopic || keywordForcedIntent || null;
+    conversationState = { ...conversationState, awaiting: null };
   }
 
   const persistTurn = async (assistantReply, statePatch = {}) => {
