@@ -212,7 +212,8 @@ async function handleParking(userMsg, session, deps) {
     session.lastTopic = 'parking';
     if (location === 'beach') {
       const known = PARKING_ANSWERS.beach;
-      return (known[lang] || known.en) + formatSuggestions('parking');
+      const ans = known[lang] || known.en;
+      return ans + formatSuggestions('parking');
     }
     // specific beach name provided (use raw)
     const NO_EXACT = {
@@ -249,7 +250,8 @@ async function handleParking(userMsg, session, deps) {
     session.lastQuestion = null;
     session.lastTopic = 'parking';
     const known = PARKING_ANSWERS[location];
-    return (known[lang] || known.en) + formatSuggestions('parking');
+    const ans = known[lang] || known.en;
+    return ans + formatSuggestions('parking');
   }
 
   // Unknown or no location_type given → ask once
@@ -282,7 +284,7 @@ async function handleParking(userMsg, session, deps) {
     en: `I don't have specific parking info for "${location}".\nPublic parking in Brela:\n• center (Trg A. Stepinca)\n• Punta Rata, Soline, Podrače\n\nMore: ${brelaUrl}`,
   };
   const reply = NO_EXACT_DATA[lang] || NO_EXACT_DATA.en;
-  return reply + formatSuggestions('parking');
+  return reply + formatSuggestions('parking') || 'Could you уточнити gdje želite parkirati? (centar, plaža ili smještaj)';
 }
 
 // ─── WEATHER HANDLER ──────────────────────────────────────────────────────────
@@ -611,12 +613,25 @@ async function handleMessage(userMsg, session, deps) {
   // ── Priority 1: pendingSlot ───────────────────────────────────────────────
   // pendingSlot always wins. No intent detection, no fallback.
   if (session.pendingSlot) {
-    const handler = TOPIC_HANDLERS[session.pendingSlot.topic];
+    const handler = TOPIC_HANDLERS?.[session.pendingSlot.topic];
+
     if (!handler || typeof handler.handle !== 'function') {
       session.pendingSlot = null;
-      return null;
+      return 'Došlo je do greške. Molimo pokušajte ponovno.';
     }
-    return handler.handle(msg, session, deps);
+
+    try {
+      const reply = await handler.handle(msg, session, deps);
+      if (!reply) {
+        session.pendingSlot = null;
+        return 'Došlo je do greške. Molimo pokušajte ponovno.';
+      }
+      return reply;
+    } catch (err) {
+      console.error('pendingSlot handler error:', err);
+      session.pendingSlot = null;
+      return 'Došlo je do greške. Molimo pokušajte ponovno.';
+    }
   }
 
   // ── Priority 1: pendingSlot ───────────────────────────────────────────────
