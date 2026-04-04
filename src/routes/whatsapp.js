@@ -1444,6 +1444,15 @@ router.post('/webhook', async (req, res) => {
 
   // Generic parking questions should clarify before FAQ matching so the bot
   // doesn't dump a broad answer or the wrong parking link.
+  const parkingContext = getParkingContext(effectiveMsg);
+  if (forcedIntent === 'parking' && !conversationState.awaiting && parkingContext === 'general') {
+    const noInfo = parkingNoInfoReply(trimmedMsg, activeLang);
+    await logMessage(tenant.id, userPhone, trimmedMsg, 'parking', activeLang).catch(() => {});
+    await persistTurn(noInfo, { awaiting: null, lastTopic: 'parking', lastIntent: 'parking', lastBotQuestion: null });
+    console.log('[webhook] FINAL RESPONSE SENT — parking general no-exact-match');
+    return res.send(twiml(noInfo));
+  }
+
   if (needsParkingClarification(effectiveMsg)) {
     const clarifyReply = PARKING_CLARIFY_MSG[activeLang] || PARKING_CLARIFY_MSG.en;
     await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
