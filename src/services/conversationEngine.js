@@ -471,10 +471,50 @@ const TOPIC_HANDLERS = {
   restaurants: { handle: handleRestaurants },
 };
 
+// ─── ROUTING HELPERS ──────────────────────────────────────────────────────────
+
+/**
+ * A topic switch is only "clear" when the message is long enough to be an
+ * explicit new request — not a slot answer that happens to contain a keyword.
+ *
+ * Examples that must NOT switch topic when pendingSlot exists:
+ *   "center"            (1 word  — slot answer for parking)
+ *   "Vruja"             (1 word  — slot answer for parking)
+ *   "local"             (1 word  — slot answer for restaurant follow-up)
+ *   "ok"                (1 word  — ack)
+ *   "and tomorrow"      (2 words — weather follow-up)
+ *   "near the restaurant" (3 words but no strong intent verb)
+ *
+ * Examples that SHOULD switch topic even with a pending slot:
+ *   "what is the weather today"   (5 words + weather keyword)
+ *   "show me parking options"     (4 words + parking keyword)
+ *   "any events this week"        (4 words + events keyword)
+ */
+function isClearTopicSwitch(message) {
+  const words = message.trim().split(/\s+/).filter(Boolean);
+  if (words.length < 3) return false; // short messages are always slot answers
+  return /\b(weather|forecast|parking|park\b|events?|restaurant|restoran|pogoda|vrijeme|prognoza|događaj|dogadjaj)\b/i.test(message);
+}
+
+/**
+ * Weather follow-ups: short time-reference messages after a weather answer
+ * should continue the weather conversation, not fall through to FAQ/AI.
+ */
+function isWeatherFollowUp(message, session) {
+  if (session.lastTopic !== 'weather') return false;
+  return /\b(tomorrow|today|sutra|danas|morgen|demain|domani|in\s+\d+\s+days?|za\s+\d+\s+dana|next\s+\d+\s+days?)\b/i.test(message);
+}
+
 // ─── MAIN ROUTER ──────────────────────────────────────────────────────────────
 
 /**
  * Main entry point. Call once per incoming message.
+ *
+ * Routing priority (highest → lowest):
+ *   1. pendingSlot exists + NOT a clear topic switch → slot answer
+ *   2. weather follow-up (time reference after weather reply) → weather
+ *   3. high-confidence new topic (or clear topic switch) → switch
+ *   4. no context → return null (fall through to FAQ/AI)
  *
  * @param  {string} userMsg   Raw user message
  * @param  {object} session   Mutable session: { pendingSlot, lastTopic, lastQuestion }
@@ -499,28 +539,29 @@ async function handleMessage(userMsg, session, deps) {
   const msg = String(userMsg || '').trim();
   if (!msg) return null;
 
-  const { topic, confidence } = detectIntent(msg, session);
-
   let activeTopic;
 
-  if (confidence === 'high') {
-    // High confidence → switch to (or stay on) this topic, clear any pending slot
-    // Exception: if pendingSlot is already for THIS topic, don't clear it —
-    // the handler might still need slot data from the message.
-    if (session.pendingSlot && session.pendingSlot.topic !== topic) {
+  // ── Priority 1: pendingSlot wins unless the user clearly changed topic ──────
+  if (session.pendingSlot) {
+    if (isClearTopicSwitch(msg)) {
+      // Unambiguous new request → switch topic, drop the pending slot
+      const { topic } = detectIntent(msg, session);
       session.pendingSlot = null;
       session.lastQuestion = null;
+      activeTopic = topic === 'unknown' ? null : topic;
+    } else {
+      // Short / ambiguous message → always treat as slot answer
+      activeTopic = session.pendingSlot.topic;
     }
-    activeTopic = topic;
 
-  } else if (session.pendingSlot) {
-    // Ambiguous message + pending slot → treat as answer to the pending question
-    activeTopic = session.pendingSlot.topic;
-    // Don't clear pendingSlot here — the handler will clear it when it gets a valid answer
+  // ── Priority 2: weather follow-up (time word after weather reply) ───────────
+  } else if (isWeatherFollowUp(msg, session)) {
+    activeTopic = 'weather';
 
+  // ── Priority 3: normal intent detection ────────────────────────────────────
   } else {
-    // Ambiguous and no context → can't handle, fall through to FAQ/AI
-    return null;
+    const { topic, confidence } = detectIntent(msg, session);
+    activeTopic = confidence === 'high' ? topic : null;
   }
 
   const handler = TOPIC_HANDLERS[activeTopic];
