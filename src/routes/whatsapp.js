@@ -181,6 +181,15 @@ const RESTAURANT_DIR_REPLY = {
 };
 function restaurantDirectoryReply(lang) { return RESTAURANT_DIR_REPLY[lang] || RESTAURANT_DIR_REPLY.en; }
 
+function parkingNoInfoReply(value, lang) {
+  const name = value?.trim() || 'to mjesto';
+  const base = {
+    hr: `Nemam točne informacije o parkingu za "${name}". Mogu pomoći s:\n• opći parking uz plaže u Brelima\n• parking u centru\n• službene informacije: ${BRELA_INFO_URL}`,
+    en: `I don’t have exact parking info for "${name}". I can help with:\n• general beach parking in Brela\n• parking in the center\n• official info: ${BRELA_INFO_URL}`,
+  };
+  return base[lang] || base.en;
+}
+
 // Accommodation note (with parking info)
 const ACCOM_MSG = {
   hr: 'Većina privatnih smještaja u Brelima ima osiguran parking. Ako trebate javni: centar (Trg A. Stepinca) ili uz plaže Punta Rata, Soline, Podrače. Javite lokaciju pa pošaljem najbliže mjesto.',
@@ -1120,8 +1129,23 @@ router.post('/webhook', async (req, res) => {
   }
 
   if (conversationState.awaiting && !faqSelection && !parkingSelection && !/^[1-3]$/.test(normalizeLookup(trimmedMsg))) {
-      conversationState = { ...conversationState, awaiting: null };
+    // Handle unresolved clarifications without looping the same question
+    if (conversationState.awaiting.type === 'parking_choice') {
+      const noInfo = parkingNoInfoReply(trimmedMsg, activeLang);
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'parking', activeLang).catch(() => {});
+      await persistTurn(noInfo, { awaiting: null, lastTopic: 'parking', lastIntent: 'parking', lastBotQuestion: null });
+      console.log('[webhook] FINAL RESPONSE SENT — parking no-exact-match');
+      return res.send(twiml(noInfo));
     }
+    if (conversationState.awaiting.type === 'faq_choice') {
+      const reply = unclearReply(activeLang);
+      await persistTurn(reply, { awaiting: null, lastTopic: 'faq', lastIntent: 'faq', lastBotQuestion: null });
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
+      console.log('[webhook] FINAL RESPONSE SENT — faq choice unresolved');
+      return res.send(twiml(reply));
+    }
+    conversationState = { ...conversationState, awaiting: null };
+  }
 
   if (!parkingSelection && !faqSelection && (SHORT_UNCLEAR.has(lowerMsg) || /^[1-3]$/.test(lowerMsg))) {
     // If we have context, reuse last intent instead of generic unclear
