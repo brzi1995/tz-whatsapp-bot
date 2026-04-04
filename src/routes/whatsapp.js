@@ -964,7 +964,8 @@ router.post('/webhook', async (req, res) => {
     // Load conversation history + lightweight state
     const conversation = await getConversation(tenant.id, userPhone).catch(() => ({ messages: [], state: {} }));
     const history = Array.isArray(conversation.messages) ? conversation.messages : [];
-    let conversationState = normalizeConversationState(conversation.state);
+    // persist same session object across the request
+    const conversationState = normalizeConversationState(conversation.state);
     console.log(`[webhook] history length: ${history.length}`);
 
   // ── Language detection ─────────────────────────────────────────────────────
