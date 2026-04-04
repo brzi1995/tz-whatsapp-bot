@@ -112,6 +112,12 @@ const FORECAST_URL = 'https://weather.com/hr-HR/vrijeme/10dana/l/Brela+Splitsko+
  */
 function extractParkingLocation(message) {
   const n = norm(message);
+
+  // Direct contains checks first (no regex miss)
+  if (n.includes('center') || n.includes('centar')) return 'center';
+  if (n.includes('beach') || n.includes('plaza') || n.includes('plaža')) return 'beach';
+  if (n.includes('hotel') || n.includes('apartman') || n.includes('accommodation')) return 'accommodation';
+
   const tokens = n.split(/\s+/).filter(Boolean);
 
   // Numbered menu selections
@@ -128,7 +134,7 @@ function extractParkingLocation(message) {
   const NOISE = new Set(['parking', 'park', 'where', 'need', 'want', 'find', 'near',
     'close', 'to', 'the', 'for', 'please', 'can', 'you', 'tell', 'me', 'i',
     'a', 'an', 'in', 'at', 'by', 'is', 'are', 'there', 'any', 'do', 'have']);
-  const meaningful = tokens.filter(w => w.length > 2 && !NOISE.has(w));
+  const meaningful = tokens.filter(w => w.length > 1 && !NOISE.has(w));
 
   if (meaningful.length === 0) return null;   // nothing useful → ask
   return meaningful.join(' ');               // specific but unknown location
