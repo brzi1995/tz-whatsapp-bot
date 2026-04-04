@@ -557,20 +557,27 @@ async function handleMessage(userMsg, session, deps) {
       return TOPIC_HANDLERS[session.pendingSlot.topic].handle(msg, session, deps);
     }
 
-  // ── Priority 2: weather follow-up ────────────────────────────────────────
+  // ── Priority 2: trivial acknowledgements ─────────────────────────────────
+  // "ok", "thanks", "hvala", 👍 — send a friendly closer, preserve session.
+  } else if (!session.pendingSlot && /^(ok|okay|thanks|thank you|hvala|👍|thx|cheers|gracias|merci|danke|grazie|tack|takk|dekuji)$/i.test(msg)) {
+    if (session.lastTopic === 'parking')     return 'Glad I could help with parking 😊 Need anything else in Brela?';
+    if (session.lastTopic === 'restaurants') return 'Enjoy your meal 😊 Let me know if you need more recommendations!';
+    return 'Glad I could help 😊 If you need anything else in Brela, just let me know!';
+
+  // ── Priority 4: weather follow-up ────────────────────────────────────────
   // Time-reference messages after a weather reply continue weather.
   // detectIntent() is NOT called here either.
   } else if (isWeatherFollowUp(msg, session)) {
     activeTopic = 'weather';
 
-  // ── Priority 3: short follow-up within lastTopic context ─────────────────
+  // ── Priority 5: short follow-up within lastTopic context ─────────────────
   // Short messages (≤ 2 words) with no clear topic keyword are treated as
   // follow-ups to the last resolved topic. "Local", "near beach", "ok",
   // "center" after a restaurant or parking reply all land here.
   } else if (session.lastTopic && TOPIC_HANDLERS[session.lastTopic] && msg.split(/\s+/).length <= 2 && !Object.values(TOPIC_PATTERNS).some(p => p.test(msg))) {
     activeTopic = session.lastTopic;
 
-  // ── Priority 4: normal intent detection (no context at all) ──────────────
+  // ── Priority 6: normal intent detection (no context at all) ──────────────
   } else {
     const { topic, confidence } = detectIntent(msg, session);
     activeTopic = confidence === 'high' ? topic : null;
