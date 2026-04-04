@@ -541,24 +541,29 @@ async function handleMessage(userMsg, session, deps) {
 
   let activeTopic;
 
-  // ── Priority 1: pendingSlot wins unless the user clearly changed topic ──────
+  // ── Priority 1: pendingSlot ───────────────────────────────────────────────
+  // pendingSlot always wins. detectIntent() is NOT called here at all.
+  // The only exception is an unambiguous multi-word topic request.
   if (session.pendingSlot) {
     if (isClearTopicSwitch(msg)) {
-      // Unambiguous new request → switch topic, drop the pending slot
-      const { topic } = detectIntent(msg, session);
+      // Long explicit request → switch topic, drop pending slot.
+      // Read topic directly from TOPIC_PATTERNS — no detectIntent() call.
+      const switched = Object.keys(TOPIC_PATTERNS).find(t => TOPIC_PATTERNS[t].test(msg)) || null;
       session.pendingSlot = null;
       session.lastQuestion = null;
-      activeTopic = topic === 'unknown' ? null : topic;
+      activeTopic = switched;
     } else {
-      // Short / ambiguous message → always treat as slot answer
-      activeTopic = session.pendingSlot.topic;
+      // Short / ambiguous message → ALWAYS go to slot handler, no detection.
+      return TOPIC_HANDLERS[session.pendingSlot.topic].handle(msg, session, deps);
     }
 
-  // ── Priority 2: weather follow-up (time word after weather reply) ───────────
+  // ── Priority 2: weather follow-up ────────────────────────────────────────
+  // Time-reference messages after a weather reply continue weather.
+  // detectIntent() is NOT called here either.
   } else if (isWeatherFollowUp(msg, session)) {
     activeTopic = 'weather';
 
-  // ── Priority 3: normal intent detection ────────────────────────────────────
+  // ── Priority 3: normal intent detection (no pendingSlot, no follow-up) ───
   } else {
     const { topic, confidence } = detectIntent(msg, session);
     activeTopic = confidence === 'high' ? topic : null;
