@@ -83,23 +83,39 @@ async function getMessages(tenantId, userPhone) {
  * Trims to MAX_MESSAGES to keep token usage bounded.
  */
 async function saveConversation(tenantId, userPhone, conversation) {
+  if (!tenantId) throw new Error('Missing tenantId');
+  if (!userPhone) throw new Error('Missing userPhone');
+
   const trimmed = Array.isArray(conversation?.messages)
     ? conversation.messages.slice(-MAX_MESSAGES)
     : [];
   const state = conversation?.state && typeof conversation.state === 'object' && !Array.isArray(conversation.state)
     ? conversation.state
     : {};
+
+  // Replace undefined with null to keep JSON serializable
+  const safeMessages = trimmed.map(msg => {
+    const out = {};
+    Object.entries(msg || {}).forEach(([k, v]) => { out[k] = v === undefined ? null : v; });
+    return out;
+  });
+  const safeState = JSON.parse(JSON.stringify(state ?? {}, (_k, v) => (v === undefined ? null : v)));
+  const payload = { messages: safeMessages, state: safeState };
+  const safeSession = JSON.stringify(payload);
+
   console.log(`[db] saveMessages called | tenant_id=${tenantId} user_phone=${userPhone} messages=${trimmed.length}`);
+  console.log('Saving session', { userId: userPhone, sessionType: typeof safeState, session: safeState });
+
   try {
     const [result] = await pool.query(
       `INSERT INTO conversations (tenant_id, user_phone, messages)
        VALUES (?, ?, ?)
        ON DUPLICATE KEY UPDATE messages = VALUES(messages), updated_at = NOW()`,
-      [tenantId, userPhone, JSON.stringify({ messages: trimmed, state })]
+      [tenantId, userPhone, safeSession]
     );
     console.log(`[db] saveMessages OK | affectedRows=${result.affectedRows}`);
   } catch (err) {
-    console.error('[db] saveMessages error:', err.message);
+    console.error('saveConversation DB ERROR', err);
     throw err;
   }
 }
