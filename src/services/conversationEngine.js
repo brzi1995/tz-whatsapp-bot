@@ -563,7 +563,14 @@ async function handleMessage(userMsg, session, deps) {
   } else if (isWeatherFollowUp(msg, session)) {
     activeTopic = 'weather';
 
-  // ── Priority 3: normal intent detection (no pendingSlot, no follow-up) ───
+  // ── Priority 3: short follow-up within lastTopic context ─────────────────
+  // Short messages (≤ 2 words) with no clear topic keyword are treated as
+  // follow-ups to the last resolved topic. "Local", "near beach", "ok",
+  // "center" after a restaurant or parking reply all land here.
+  } else if (session.lastTopic && TOPIC_HANDLERS[session.lastTopic] && msg.split(/\s+/).length <= 2 && !Object.values(TOPIC_PATTERNS).some(p => p.test(msg))) {
+    activeTopic = session.lastTopic;
+
+  // ── Priority 4: normal intent detection (no context at all) ──────────────
   } else {
     const { topic, confidence } = detectIntent(msg, session);
     activeTopic = confidence === 'high' ? topic : null;
