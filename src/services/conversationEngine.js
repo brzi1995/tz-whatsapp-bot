@@ -114,9 +114,12 @@ function extractParkingLocation(message) {
   const n = norm(message);
 
   // Direct contains checks first (no regex miss)
-  if (n.includes('center') || n.includes('centar')) return 'center';
-  if (n.includes('beach') || n.includes('plaza') || n.includes('plaža')) return 'beach';
-  if (n.includes('hotel') || n.includes('apartman') || n.includes('accommodation')) return 'accommodation';
+  const centerWords = ['center', 'centar', 'city center', 'downtown', 'u centru', 'u centar'];
+  const beachWords  = ['beach', 'near beach', 'plaža', 'plaza', 'uz plažu', 'near the beach'];
+  const accWords    = ['accommodation', 'near accommodation', 'hotel', 'apartman', 'apartment', 'room', 'near hotel'];
+  for (const w of centerWords) { if (n.includes(norm(w))) return 'center'; }
+  for (const w of beachWords)  { if (n.includes(norm(w)))  return 'beach'; }
+  for (const w of accWords)    { if (n.includes(norm(w)))  return 'accommodation'; }
 
   const tokens = n.split(/\s+/).filter(Boolean);
 
@@ -219,7 +222,11 @@ async function handleParking(userMsg, session, deps) {
       session.pendingSlot = null;
       session.lastQuestion = null;
       session.lastTopic = 'parking';
-      return PARKING_GENERAL[lang] || PARKING_GENERAL.en;
+      const fallback = {
+        hr: 'Mogu pomoći s parkingom u Brelima:\n• centar\n• uz plažu\n• kod smještaja\nMolim odaberite jednu opciju.',
+        en: 'I can help with parking in Brela:\n• city center\n• near the beach\n• near accommodation\nPlease choose one option.',
+      };
+      return fallback[lang] || fallback.en;
     }
 
     session.lastTopic = 'parking';
