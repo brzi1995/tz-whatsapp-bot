@@ -928,6 +928,10 @@ router.post('/webhook', async (req, res) => {
   console.log('[webhook] incoming body:', JSON.stringify(req.body));
   res.type('text/xml');
 
+  // will be populated as we build replies, used only for error logging
+  let replyForLogs = null;
+  let sessionForLogs = null;
+
   try {
     // ── Extract + validate ───────────────────────────────────────────────────
     const { From: userPhone, To: tenantPhone, Body: userMsg } = req.body || {};
@@ -966,6 +970,7 @@ router.post('/webhook', async (req, res) => {
     const history = Array.isArray(conversation.messages) ? conversation.messages : [];
     // persist same session object across the request
     const conversationState = normalizeConversationState(conversation.state);
+    sessionForLogs = conversationState;
     console.log(`[webhook] history length: ${history.length}`);
 
   // ── Language detection ─────────────────────────────────────────────────────
@@ -995,27 +1000,35 @@ router.post('/webhook', async (req, res) => {
 
   // ── persistTurn — saves messages + state after each response ───────────────
   const persistTurn = async (assistantReply, statePatch = {}) => {
-    if (!conversationState || typeof conversationState !== 'object') {
-      conversationState = {};
-    }
-    if (!assistantReply || typeof assistantReply !== 'string') {
-      assistantReply = 'Došlo je do greške. Molimo pokušajte ponovno.';
-    }
-    const nextState = {
-      ...conversationState,
-      lastLanguage:    activeLang,
-      // Sync engine session back (engine mutates engineSession in place)
-      pendingSlot:     engineSession.pendingSlot,
-      lastTopic:       engineSession.lastTopic,
-      lastQuestion:    engineSession.lastQuestion,
-      // Backward-compat aliases (FAQ / consent code still reads these)
-      lastIntent:      engineSession.lastTopic,
-      lastBotQuestion: engineSession.lastQuestion,
-      // Explicit overrides from caller (e.g. awaiting for FAQ choice)
-      ...statePatch,
-    };
-    console.log('before persistTurn', { userId: userPhone, session: nextState, reply: assistantReply });
     try {
+      if (!conversationState || typeof conversationState !== 'object') {
+        conversationState = {};
+      }
+      if (!assistantReply || typeof assistantReply !== 'string') {
+        assistantReply = 'Došlo je do greške. Molimo pokušajte ponovno.';
+      }
+      const nextState = {
+        ...conversationState,
+        lastLanguage:    activeLang,
+        // Sync engine session back (engine mutates engineSession in place)
+        pendingSlot:     engineSession.pendingSlot,
+        lastTopic:       engineSession.lastTopic,
+        lastQuestion:    engineSession.lastQuestion,
+        // Backward-compat aliases (FAQ / consent code still reads these)
+        lastIntent:      engineSession.lastTopic,
+        lastBotQuestion: engineSession.lastQuestion,
+        // Explicit overrides from caller (e.g. awaiting for FAQ choice)
+        ...statePatch,
+      };
+
+      console.error('DEBUG before persistTurn', {
+        userId: userPhone,
+        replyType: typeof assistantReply,
+        reply: assistantReply,
+        sessionType: typeof nextState,
+        session: nextState,
+      });
+
       await saveConversation(tenant.id, userPhone, {
         messages: [
           ...history,
@@ -1024,10 +1037,15 @@ router.post('/webhook', async (req, res) => {
         ],
         state: nextState,
       });
+
+      conversationState = nextState;
     } catch (err) {
-      console.error('[webhook] saveConversation failed:', err.message);
+      console.error('PERSISTTURN FULL ERROR');
+      console.error(err);
+      console.error(err?.message);
+      console.error(err?.stack);
+      throw err;
     }
-    conversationState = nextState;
   };
 
   await setUserLang(tenant.id, userPhone, activeLang).catch(() => {});
@@ -1055,9 +1073,10 @@ router.post('/webhook', async (req, res) => {
   // ── SPAM FILTER ─────────────────────────────────────────────────────────────
   if (isSpam(trimmedMsg)) {
     await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', lang).catch(() => {});
-    await persistTurn(fallbackReply(lang), { lastTopic: 'fallback', lastIntent: 'fallback' });
+    replyForLogs = fallbackReply(lang);
+    await persistTurn(replyForLogs, { lastTopic: 'fallback', lastIntent: 'fallback' });
     console.log(`[webhook] BLOCKED — spam: "${trimmedMsg.slice(0, 40)}"`);
-    return res.send(twiml(fallbackReply(lang)));
+    return res.send(twiml(replyForLogs));
   }
 
   const model = tenant.openai_model;
@@ -1066,6 +1085,7 @@ router.post('/webhook', async (req, res) => {
   const EXACT_GREETINGS = new Set(['pozdrav', 'bok', 'hej', 'zdravo', 'dobar dan', 'hello', 'hi', 'hey', 'hallo', 'guten tag', 'ciao', 'buongiorno', 'bonjour', 'salut']);
   if (EXACT_GREETINGS.has(greetingNorm) && history.length === 0) {
     const reply = greetingReply(activeLang);
+    replyForLogs = reply;
     await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', activeLang).catch(() => {});
     engineSession.lastTopic = 'greeting';
     await persistTurn(reply);
@@ -1097,6 +1117,7 @@ router.post('/webhook', async (req, res) => {
     faqReply = cleanMixedLanguageReply(faqReply, activeLang);
     await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
     engineSession.lastTopic = 'faq';
+    replyForLogs = faqReply;
     await persistTurn(faqReply, {
       awaiting: null,
       lastFaq: { question: faqSelection.question, answer: rawAnswer,
@@ -1131,6 +1152,7 @@ router.post('/webhook', async (req, res) => {
     if (!safeReply || typeof safeReply !== 'string') {
       safeReply = 'Došlo je do greške. Molimo pokušajte ponovno.';
     }
+    replyForLogs = safeReply;
     console.log('after handleMessage', { reply: safeReply, session: engineSession });
     await logMessage(tenant.id, userPhone, trimmedMsg, engineSession.lastTopic || 'other', activeLang).catch(() => {});
     try {
@@ -1152,6 +1174,7 @@ router.post('/webhook', async (req, res) => {
       const clarifyReply = formatFaqClarifyReply(faqMatch.options || [], activeLang);
 
       await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
+      replyForLogs = clarifyReply;
       await persistTurn(clarifyReply, {
         awaiting: {
           type: 'faq_choice',
@@ -1208,6 +1231,7 @@ router.post('/webhook', async (req, res) => {
       faqReply = cleanMixedLanguageReply(faqReply, activeLang);
 
       await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
+      replyForLogs = faqReply;
       await persistTurn(faqReply, {
         awaiting: null,
         lastTopic: 'faq',
@@ -1257,14 +1281,15 @@ router.post('/webhook', async (req, res) => {
     }
 
   // Accommodation quick reply
-    if (isAccommodationQuery(effectiveMsg)) {
-      const accReply = accommodationReply(activeLang);
-      await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
-      await persistTurn(accReply, {
-        awaiting: null,
-        lastTopic: 'accommodation',
-        lastIntent: 'accommodation',
-        lastBotQuestion: null,
+  if (isAccommodationQuery(effectiveMsg)) {
+    const accReply = accommodationReply(activeLang);
+    await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
+    replyForLogs = accReply;
+    await persistTurn(accReply, {
+      awaiting: null,
+      lastTopic: 'accommodation',
+      lastIntent: 'accommodation',
+      lastBotQuestion: null,
         lastWeatherIntent: null,
         lastEventPeriod: null,
       });
@@ -1276,7 +1301,8 @@ router.post('/webhook', async (req, res) => {
   const followUp = isFollowUp(trimmedMsg) || Boolean(engineSession.pendingSlot);
   if (!followUp && !isRelevant(effectiveMsg)) {
     await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', activeLang).catch(() => {});
-    await persistTurn(offTopicReply(activeLang), {
+    replyForLogs = offTopicReply(activeLang);
+    await persistTurn(replyForLogs, {
       awaiting: null,
       lastTopic: 'fallback',
       lastIntent: 'fallback',
@@ -1292,7 +1318,8 @@ router.post('/webhook', async (req, res) => {
     const usage = await checkAndIncrementUsage(tenant.id, userPhone);
     if (!usage.allowed) {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', activeLang).catch(() => {});
-      await persistTurn(fallbackReply(activeLang), {
+      replyForLogs = fallbackReply(activeLang);
+      await persistTurn(replyForLogs, {
         awaiting: null,
         lastTopic: 'fallback',
         lastIntent: 'fallback',
@@ -1332,6 +1359,7 @@ router.post('/webhook', async (req, res) => {
 
     // STEP 8: Final fallback — only if AI fails
     const reply = aiReply || fallbackReply(activeLang);
+    replyForLogs = reply;
 
     // Persist conversation history
     await persistTurn(reply, {
@@ -1362,12 +1390,15 @@ router.post('/webhook', async (req, res) => {
     return res.send(twiml(reply));
 
   } catch (err) {
-    console.error('WHATSAPP ROUTE ERROR', {
-      message: err?.message,
-      stack: err?.stack,
+    console.error('WHATSAPP ROUTE FULL ERROR');
+    console.error(err);
+    console.error(err?.message);
+    console.error(err?.stack);
+    console.error('WHATSAPP ROUTE ERROR CONTEXT', {
       userId: req?.body?.From,
       incomingMessage: req?.body?.Body,
-      session: req?.body, // best effort; actual session logged above around persistTurn
+      session: sessionForLogs,
+      reply: replyForLogs,
     });
     const isQuota = err.status === 429 || err.code === 'insufficient_quota';
     console.log('[webhook] FINAL RESPONSE SENT — error fallback');
