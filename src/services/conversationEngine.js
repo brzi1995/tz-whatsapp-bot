@@ -488,8 +488,11 @@ function isClearTopicSwitch(message) {
  * should continue the weather conversation, not fall through to FAQ/AI.
  */
 function isWeatherFollowUp(message, session) {
-  if (session.lastTopic !== 'weather') return false;
-  return Boolean(parseWeatherFollowUp(message));
+  // allow stateless follow-ups (e.g., "5 days") even if lastTopic wasn't persisted
+  const parsed = parseWeatherFollowUp(message);
+  if (!parsed) return false;
+  // prefer when last interaction was weather, but don't block when state is missing
+  return session.lastTopic === 'weather' || true;
 }
 
 function parseWeatherFollowUp(message) {
