@@ -495,36 +495,48 @@ function isClearTopicSwitch(message) {
  * should continue the weather conversation, not fall through to FAQ/AI.
  */
 function isWeatherFollowUp(message, session) {
-  // allow stateless follow-ups (e.g., "5 days") even if lastTopic wasn't persisted
   const parsed = parseWeatherFollowUp(message);
   if (!parsed) return false;
-  // prefer when last interaction was weather, but don't block when state is missing
-  return session.lastTopic === 'weather' || true;
+
+  // Don't hijack explicit event questions.
+  const n = norm(message);
+  if (/\b(event|events|dogadj|dogadaj|događaj|eventi|veranstaltung)\b/.test(n)) return false;
+
+  // Support stateless quick replies from weather suggestions.
+  return true;
 }
 
 function parseWeatherFollowUp(message) {
   const n = norm(message);
   if (!n) return null;
 
-  // tomorrow variants
-  if (/((tom|tm)orrow'?s?|sutra|morgen|demain|domani)/.test(n)) return { type: 'tomorrow' };
-
-  // explicit 10-day
-  if (/10\s*day/.test(n)) return { type: 'long' };
-
-  // 5-day (or N-day) forecast
-  const fiveDay =
-    /(5[-\s]?day|5\s*days|forecast\s*5|5day|yes\s*5\s*days)/.test(n) ||
-    /(\d{1,2})\s*days?/.test(n);
-  if (fiveDay) {
-    const m = n.match(/(\d{1,2})\s*days?/);
-    const days = m ? parseInt(m[1], 10) : 5;
-    if (days >= 10) return { type: 'long' };
-    return { type: 'forecast', days: days || 5 };
+  // tomorrow variants (including common misspellings)
+  if (/\b(tomorrow|tommorow|tmrw|tmr|sutra|morgen|demain|domani)\b/.test(n)) {
+    return { type: 'tomorrow' };
   }
 
-  // generic "forecast" follow-up → default to 5-day
-  if (/forecast/.test(n)) return { type: 'forecast', days: 5 };
+  // explicit 10-day
+  if (/\b(10\s*day|10\s*days|10-day|10day)\b/.test(n)) {
+    return { type: 'long' };
+  }
+
+  // explicit 5-day
+  if (/\b(5\s*day|5\s*days|5-day|5day|forecast\s*5|yes\s*5\s*days)\b/.test(n)) {
+    return { type: 'forecast', days: 5 };
+  }
+
+  // generic N-days
+  const nDays = n.match(/\b(\d{1,2})\s*days?\b/);
+  if (nDays) {
+    const days = parseInt(nDays[1], 10);
+    if (days >= 10) return { type: 'long' };
+    return { type: 'forecast', days: Math.max(1, Math.min(days, 5)) };
+  }
+
+  // generic "forecast" follow-up -> default to 5-day
+  if (/\bforecast\b/.test(n)) {
+    return { type: 'forecast', days: 5 };
+  }
 
   return null;
 }
