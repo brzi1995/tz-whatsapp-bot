@@ -132,7 +132,8 @@ async function saveConversation(tenantId, userPhone, conversation) {
     }
   }
 
-  console.log(`[db] saveMessages called | tenant_id=${tenantId} user_phone=${userPhone} messages=${trimmed.length}`);
+  const payloadBytes = Buffer.byteLength(safeSession, 'utf8');
+  console.log(`[db] saveMessages called | tenant_id=${tenantId} user_phone=${userPhone} messages=${trimmed.length} bytes=${payloadBytes}`);
   console.log('Saving session', { userId: userPhone, sessionType: typeof safeState, session: safeState });
 
   try {
@@ -144,8 +145,35 @@ async function saveConversation(tenantId, userPhone, conversation) {
     );
     console.log(`[db] saveMessages OK | affectedRows=${result.affectedRows}`);
   } catch (err) {
-    console.error('saveConversation DB ERROR', err);
-    throw err;
+    console.error('saveConversation DB ERROR', {
+      message: err?.message,
+      code: err?.code,
+      errno: err?.errno,
+      sqlState: err?.sqlState,
+      sqlMessage: err?.sqlMessage,
+      sql: err?.sql,
+      payloadBytes,
+    });
+    // Fallback: try to save minimal state to avoid crashing the bot
+    try {
+      const minimal = JSON.stringify({ messages: [], state: safeState });
+      await pool.query(
+        `INSERT INTO conversations (tenant_id, user_phone, messages)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE messages = VALUES(messages), updated_at = NOW()`,
+        [tenantId, userPhone, minimal]
+      );
+      console.warn('[db] saveMessages fallback (state only) succeeded');
+    } catch (err2) {
+      console.error('saveConversation DB ERROR (fallback failed)', {
+        message: err2?.message,
+        code: err2?.code,
+        errno: err2?.errno,
+        sqlState: err2?.sqlState,
+        sqlMessage: err2?.sqlMessage,
+        sql: err2?.sql,
+      });
+    }
   }
 }
 
