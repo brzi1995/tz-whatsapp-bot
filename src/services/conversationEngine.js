@@ -85,7 +85,7 @@ function getSuggestions(topic) {
     case 'parking':
       return ['parking near beaches', 'nearby restaurants', 'weather today'];
     case 'weather':
-      return ["tomorrow's forecast", '5-day forecast', 'is it a good day for the beach'];
+      return ["tomorrow's forecast", '5-day forecast', `10-day forecast: ${FORECAST_URL}`];
     case 'events':
       return ["what's happening tonight", 'events this weekend', 'restaurants nearby'];
     case 'restaurants':
@@ -211,8 +211,6 @@ async function handleParking(userMsg, session, deps) {
 function getWeatherSubIntent(message) {
   const n = norm(message);
 
-  if (/\bbeach\b/.test(n) || /\bgood for beach\b/.test(n)) return 'beach';
-
   if (/\b(tomorrow|sutra|morgen|demain|domani)\b/.test(n)) return 'tomorrow';
 
   // "in 5 days" / "za 5 dana" / "next 5 days"
@@ -279,26 +277,6 @@ async function handleWeather(userMsg, session, deps) {
   const q = encodeURIComponent(city);
 
   try {
-    if (subIntent === 'beach') {
-      const res  = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${q}&appid=${openWeatherKey}&units=metric&lang=${owLang}`);
-      if (!res.ok) return UNAVAIL[lang] || UNAVAIL.en;
-      const data = await res.json();
-      const temp = Math.round(data.main.temp);
-      const desc = data.weather[0]?.description || '';
-      const clouds = data.clouds?.all || 0;
-      const rainish = /rain|drizzle|storm|thunder/i.test(desc);
-      const good = temp >= 22 && !rainish && clouds < 75;
-      const BEACH_REPLY = {
-        hr: good
-          ? `Za plažu danas izgleda dobro: ${temp}°C, ${desc}.`
-          : `Možda nije idealno za plažu: ${temp}°C, ${desc}.`,
-        en: good
-          ? `Looks good for the beach today: ${temp}°C, ${desc}.`
-          : `Might not be ideal for the beach: ${temp}°C, ${desc}.`,
-      };
-      return (BEACH_REPLY[lang] || BEACH_REPLY.en);
-    }
-
     if (subIntent === 'current') {
       const res  = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${q}&appid=${openWeatherKey}&units=metric&lang=${owLang}`);
       if (!res.ok) return UNAVAIL[lang] || UNAVAIL.en;
@@ -523,9 +501,7 @@ function parseWeatherFollowUp(message) {
   const n = norm(message);
   if (!n) return null;
 
-  if (/\b(tomorrow|sutra|morgen|demain|domani)\b/.test(n)) {
-    return { type: 'tomorrow' };
-  }
+  if (/\b(tomorrow|sutra|morgen|demain|domani)\b/.test(n)) return { type: 'tomorrow' };
 
   // 5-day (or N-day) forecast
   const fiveDay =
@@ -535,10 +511,6 @@ function parseWeatherFollowUp(message) {
     const m = n.match(/\b(\d{1,2})\s*days?\b/);
     const days = m ? parseInt(m[1], 10) : 5;
     return { type: 'forecast', days: days || 5 };
-  }
-
-  if (/\bbeach\b/.test(n) || /\bgood for beach\b/.test(n)) {
-    return { type: 'beach' };
   }
 
   return null;
