@@ -998,54 +998,15 @@ router.post('/webhook', async (req, res) => {
     lastQuestion: conversationState.lastQuestion || conversationState.lastBotQuestion || null,
   };
 
-  // ── persistTurn — saves messages + state after each response ───────────────
+  // ── persistTurn — temporarily disabled to avoid DB errors ───────────────
   const persistTurn = async (assistantReply, statePatch = {}) => {
-    try {
-      if (!conversationState || typeof conversationState !== 'object') {
-        conversationState = {};
-      }
-      if (!assistantReply || typeof assistantReply !== 'string') {
-        assistantReply = 'Došlo je do greške. Molimo pokušajte ponovno.';
-      }
-      const nextState = {
-        ...conversationState,
-        lastLanguage:    activeLang,
-        // Sync engine session back (engine mutates engineSession in place)
-        pendingSlot:     engineSession.pendingSlot,
-        lastTopic:       engineSession.lastTopic,
-        lastQuestion:    engineSession.lastQuestion,
-        // Backward-compat aliases (FAQ / consent code still reads these)
-        lastIntent:      engineSession.lastTopic,
-        lastBotQuestion: engineSession.lastQuestion,
-        // Explicit overrides from caller (e.g. awaiting for FAQ choice)
-        ...statePatch,
-      };
-
-      console.error('DEBUG before persistTurn', {
-        userId: userPhone,
-        replyType: typeof assistantReply,
-        reply: assistantReply,
-        sessionType: typeof nextState,
-        session: nextState,
-      });
-
-      await saveConversation(tenant.id, userPhone, {
-        messages: [
-          ...history,
-          { role: 'user',      content: trimmedMsg },
-          { role: 'assistant', content: assistantReply },
-        ],
-        state: nextState,
-      });
-
-      conversationState = nextState;
-    } catch (err) {
-      console.error('PERSISTTURN FULL ERROR');
-      console.error(err);
-      console.error(err?.message);
-      console.error(err?.stack);
-      throw err;
-    }
+    console.warn('Persistence temporarily disabled', {
+      userId: userPhone,
+      reply: assistantReply,
+      statePatch,
+    });
+    // Keep conversationState unchanged to avoid side effects
+    return;
   };
 
   await setUserLang(tenant.id, userPhone, activeLang).catch(() => {});
