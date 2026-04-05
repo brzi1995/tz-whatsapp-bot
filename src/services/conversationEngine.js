@@ -296,7 +296,7 @@ async function handleWeather(userMsg, session, deps) {
           ? `Looks good for the beach today: ${temp}°C, ${desc}.`
           : `Might not be ideal for the beach: ${temp}°C, ${desc}.`,
       };
-      return (BEACH_REPLY[lang] || BEACH_REPLY.en) + formatSuggestions('weather', ['beach', '5-day']);
+      return (BEACH_REPLY[lang] || BEACH_REPLY.en);
     }
 
     if (subIntent === 'current') {
@@ -320,7 +320,7 @@ async function handleWeather(userMsg, session, deps) {
       if (!entry) return UNAVAIL[lang] || UNAVAIL.en;
       const lbl = LABELS.tomorrow[lang] || LABELS.tomorrow.en;
       const ans = `🌤️ ${lbl}: ${Math.round(entry.main.temp)}°C, ${entry.weather[0]?.description || ''}`;
-      return ans + formatSuggestions('weather', ['tomorrow']);
+      return ans; // no extra suggestions after answering tomorrow directly
     }
 
     // Multi-day forecast
@@ -346,7 +346,7 @@ async function handleWeather(userMsg, session, deps) {
     };
     const hdrFn = FORECAST_HDR[lang] || FORECAST_HDR.en;
     const ans = `🌤️ ${hdrFn(days)}:\n${lines.join('\n')}`;
-    return ans + formatSuggestions('weather', ['5-day']);
+    return ans; // don't append further suggestions after 5-day reply
 
   } catch (err) {
     console.error('[engine/weather]', err.message);
