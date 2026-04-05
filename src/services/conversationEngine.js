@@ -506,18 +506,25 @@ function parseWeatherFollowUp(message) {
   const n = norm(message);
   if (!n) return null;
 
-  if (/\b(tomorrow|sutra|morgen|demain|domani)\b/.test(n)) return { type: 'tomorrow' };
+  // tomorrow variants
+  if (/((tom|tm)orrow'?s?|sutra|morgen|demain|domani)/.test(n)) return { type: 'tomorrow' };
+
+  // explicit 10-day
+  if (/10\s*day/.test(n)) return { type: 'long' };
 
   // 5-day (or N-day) forecast
   const fiveDay =
-    /\b(5[-\s]?day|5\s*days|forecast\s*5|5day|yes\s*5\s*days)\b/.test(n) ||
-    /\b(\d{1,2})\s*days?\b/.test(n);
+    /(5[-\s]?day|5\s*days|forecast\s*5|5day|yes\s*5\s*days)/.test(n) ||
+    /(\d{1,2})\s*days?/.test(n);
   if (fiveDay) {
-    const m = n.match(/\b(\d{1,2})\s*days?\b/);
+    const m = n.match(/(\d{1,2})\s*days?/);
     const days = m ? parseInt(m[1], 10) : 5;
     if (days >= 10) return { type: 'long' };
     return { type: 'forecast', days: days || 5 };
   }
+
+  // generic "forecast" follow-up → default to 5-day
+  if (/forecast/.test(n)) return { type: 'forecast', days: 5 };
 
   return null;
 }
