@@ -85,7 +85,7 @@ function getSuggestions(topic) {
     case 'parking':
       return ['parking near beaches', 'nearby restaurants', 'weather today'];
     case 'weather':
-      return ["tomorrow's forecast", '5-day forecast', `10-day forecast: ${FORECAST_URL}`];
+      return ["tomorrow's forecast", '5-day forecast', '10-day forecast'];
     case 'events':
       return ["what's happening tonight", 'events this weekend', 'restaurants nearby'];
     case 'restaurants':
@@ -217,14 +217,16 @@ function getWeatherSubIntent(message) {
   const dayMatch = n.match(/\b(?:in|za|next)\s+(\d{1,2})\s*(?:days?|dana|tage|giorni|jours)?\b/);
   if (dayMatch) {
     const days = parseInt(dayMatch[1], 10);
-    return days > 5 ? 'long' : { type: 'forecast', days };
+    if (days >= 10) return 'long';
+    return days > 5 ? { type: 'forecast', days: 5 } : { type: 'forecast', days };
   }
 
   // plain number + days
   const numMatch = n.match(/\b(\d{1,2})\s+(?:days?|dana|tage|giorni|jours)\b/);
   if (numMatch) {
     const days = parseInt(numMatch[1], 10);
-    return days > 5 ? 'long' : { type: 'forecast', days };
+    if (days >= 10) return 'long';
+    return days > 5 ? { type: 'forecast', days: 5 } : { type: 'forecast', days };
   }
 
   if (/\b(week|tjedan|woche|settimana|semaine)\b/.test(n)) return { type: 'forecast', days: 5 };
@@ -271,7 +273,10 @@ async function handleWeather(userMsg, session, deps) {
   if (!openWeatherKey) return UNAVAIL[lang] || UNAVAIL.en;
 
   const subIntent = getWeatherSubIntent(userMsg);
-  if (subIntent === 'long') return LONG_RANGE[lang] || LONG_RANGE.en;
+  if (subIntent === 'long') {
+    // Only include the 10-day link when explicitly requested
+    return LONG_RANGE[lang] || LONG_RANGE.en;
+  }
 
   const owLang = ['hr', 'en', 'de', 'it', 'fr'].includes(lang) ? lang : 'en';
   const q = encodeURIComponent(city);
@@ -283,7 +288,7 @@ async function handleWeather(userMsg, session, deps) {
       const data = await res.json();
       const lbl  = LABELS.current[lang] || LABELS.current.en;
       const ans = `🌤️ ${lbl}: ${Math.round(data.main.temp)}°C, ${data.weather[0]?.description || ''}`;
-      return ans + formatSuggestions('weather', ['5-day']);
+      return ans + formatSuggestions('weather');
     }
 
     // Forecast endpoint covers tomorrow + multi-day
@@ -510,6 +515,7 @@ function parseWeatherFollowUp(message) {
   if (fiveDay) {
     const m = n.match(/\b(\d{1,2})\s*days?\b/);
     const days = m ? parseInt(m[1], 10) : 5;
+    if (days >= 10) return { type: 'long' };
     return { type: 'forecast', days: days || 5 };
   }
 
@@ -603,7 +609,7 @@ async function handleMessage(userMsg, session, deps) {
     const synthMsg = (() => {
       if (weatherFollow.type === 'tomorrow') return 'tomorrow';
       if (weatherFollow.type === 'forecast') return `${weatherFollow.days} days`;
-      if (weatherFollow.type === 'beach') return 'weather today';
+      if (weatherFollow.type === 'long') return '10 days';
       return msg;
     })();
     const reply = await TOPIC_HANDLERS.weather.handle(synthMsg, session, deps);
