@@ -21,7 +21,7 @@ const TOPIC_PATTERNS = {
   parking:     /\b(parking|park\b|parkir|parkage|stationnement|parcheggio|parken|parkovat|parkiranje)\b/i,
   weather:     /\b(weather|forecast|rain|sunny|sun\b|wind|temperature|cloud|hot|cold|humid|wetter|regen|sonne|temperatur|vorhersage|vrijeme|prognoza|kiša|sunce|vjetar|temperatura|oblaci|météo|meteo|tempo|pioggia|previsione|sole|pogoda)\b/i,
   events:      /\b(event|events|veranstaltung|veranstaltungen|evento|eventi|événement|événements|evenemang|arrangement|dogadjaj|dogadjaji|dogadaj|dogadanja|dogadanja|akce|události)\b/i,
-  restaurants: /\b(restaurant|restoran|ristorante|food|dinner|lunch|eat|essen|mangiare|manger|konobi|konoba|hrana|večera|ručak|gastr|café|tavern)\b/i,
+  restaurants: /\b(restaurant|restoran|ristorante|food|dinner|lunch|eat|essen|mangiare|manger|konobi|konoba|hrana|večera|ručak|gastr|café|tavern|seafood|pizza|italian|dalmatian|cuisine)\b/i,
 };
 
 // Follow-up patterns — only active when we were already on that topic
@@ -89,7 +89,7 @@ function getSuggestions(topic) {
     case 'events':
       return ["what's happening tonight", 'events this weekend', 'restaurants nearby'];
     case 'restaurants':
-      return ['seafood', 'pizza / Italian', 'local Dalmatian cuisine', 'restaurants by the sea'];
+      return ['seafood', 'pizza / Italian'];
     default:
       return [];
   }
@@ -443,17 +443,17 @@ async function handleRestaurants(userMsg, session, deps) {
   session.lastTopic = 'restaurants';
 
   const MSG = {
-    hr: `Za restorane i konobe u Brelima:\n${restaurantUrl}\n\nMogu suziti pretragu po:\n• ribe / seafood\n• pizza\n• domaća kuhinja\n• restorani uz more`,
-    en: `For restaurants in Brela:\n${restaurantUrl}\n\nI can help narrow it down by:\n• seafood\n• pizza / Italian\n• local Dalmatian cuisine\n• restaurants by the sea`,
-    de: `Restaurants in Brela:\n${restaurantUrl}\n\nIch helfe nach:\n• Meeresfrüchte\n• Pizza / Italienisch\n• Lokale Küche\n• Am Meer`,
-    it: `Ristoranti a Brela:\n${restaurantUrl}\n\nPosso filtrare per:\n• frutti di mare\n• pizza / cucina italiana\n• cucina locale\n• sul mare`,
-    fr: `Restaurants à Brela :\n${restaurantUrl}\n\nJe peux filtrer par :\n• fruits de mer\n• pizza / cuisine italienne\n• cuisine locale\n• en bord de mer`,
-    sv: `Restauranger i Brela:\n${restaurantUrl}\n\nJag kan hjälpa med:\n• skaldjur\n• pizza / italienskt\n• lokal mat\n• vid havet`,
-    no: `Restauranter i Brela:\n${restaurantUrl}\n\nJeg kan hjelpe med:\n• sjømat\n• pizza / italiensk\n• lokal mat\n• ved havet`,
-    cs: `Restaurace v Brele:\n${restaurantUrl}\n\nMohu pomoci s:\n• mořské plody\n• pizza / italská kuchyně\n• místní kuchyně\n• u moře`,
+    hr: `Ovdje su informacije za restorane i barove u Brelima:\n${restaurantUrl}\n\nMožete birati po stilu hrane:\n• seafood\n• pizza / Italian`,
+    en: `Here are the restaurant and bar options in Brela:\n${restaurantUrl}\n\nYou can choose by food style:\n• seafood\n• pizza / Italian`,
+    de: `Hier sind Restaurants und Bars in Brela:\n${restaurantUrl}\n\nAuswahl nach Stil:\n• seafood\n• pizza / Italian`,
+    it: `Ecco ristoranti e bar a Brela:\n${restaurantUrl}\n\nPuoi scegliere per stile:\n• seafood\n• pizza / Italian`,
+    fr: `Voici les restaurants et bars à Brela :\n${restaurantUrl}\n\nVous pouvez choisir par style :\n• seafood\n• pizza / Italian`,
+    sv: `Här är restauranger och barer i Brela:\n${restaurantUrl}\n\nVälj efter matstil:\n• seafood\n• pizza / Italian`,
+    no: `Her er restauranter og barer i Brela:\n${restaurantUrl}\n\nVelg etter matstil:\n• seafood\n• pizza / Italian`,
+    cs: `Zde jsou restaurace a bary v Brele:\n${restaurantUrl}\n\nMůžete vybírat podle stylu:\n• seafood\n• pizza / Italian`,
   };
   const ans = MSG[lang] || MSG.en;
-  return ans + formatSuggestions('restaurants');
+  return ans;
 }
 
 // ─── TOPIC HANDLERS MAP ───────────────────────────────────────────────────────
