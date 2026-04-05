@@ -489,7 +489,32 @@ function isClearTopicSwitch(message) {
  */
 function isWeatherFollowUp(message, session) {
   if (session.lastTopic !== 'weather') return false;
-  return /\b(tomorrow|today|sutra|danas|morgen|demain|domani|in\s+\d+\s+days?|za\s+\d+\s+dana|next\s+\d+\s+days?)\b/i.test(message);
+  return Boolean(parseWeatherFollowUp(message));
+}
+
+function parseWeatherFollowUp(message) {
+  const n = norm(message);
+  if (!n) return null;
+
+  if (/\b(tomorrow|sutra|morgen|demain|domani)\b/.test(n)) {
+    return { type: 'tomorrow' };
+  }
+
+  // 5-day (or N-day) forecast
+  const fiveDay =
+    /\b(5[-\s]?day|5\s*days|forecast\s*5|5day|yes\s*5\s*days)\b/.test(n) ||
+    /\b(\d{1,2})\s*days?\b/.test(n);
+  if (fiveDay) {
+    const m = n.match(/\b(\d{1,2})\s*days?\b/);
+    const days = m ? parseInt(m[1], 10) : 5;
+    return { type: 'forecast', days: days || 5 };
+  }
+
+  if (/\bbeach\b/.test(n) || /\bgood for beach\b/.test(n)) {
+    return { type: 'beach' };
+  }
+
+  return null;
 }
 
 // ─── MAIN ROUTER ──────────────────────────────────────────────────────────────
@@ -574,8 +599,17 @@ async function handleMessage(userMsg, session, deps) {
   // ── Priority 3: weather follow-up ────────────────────────────────────────
   // Time-reference messages after a weather reply continue weather.
   // detectIntent() is NOT called here either.
-  if (isWeatherFollowUp(msg, session)) {
-    activeTopic = 'weather';
+  const weatherFollow = isWeatherFollowUp(msg, session) ? parseWeatherFollowUp(msg) : null;
+  if (weatherFollow) {
+    const synthMsg = (() => {
+      if (weatherFollow.type === 'tomorrow') return 'tomorrow';
+      if (weatherFollow.type === 'forecast') return `${weatherFollow.days} days`;
+      if (weatherFollow.type === 'beach') return 'weather today';
+      return msg;
+    })();
+    const reply = await TOPIC_HANDLERS.weather.handle(synthMsg, session, deps);
+    session.lastTopic = null; // clear to avoid loops
+    return reply;
 
   // ── Priority 4: short follow-up within lastTopic context ─────────────────
   // Short messages (≤ 2 words) with no clear topic keyword are treated as
