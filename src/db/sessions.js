@@ -77,6 +77,12 @@ async function getMessages(tenantId, userPhone) {
   return conversation.messages;
 }
 
+function strip4ByteChars(str) {
+  return typeof str === 'string'
+    ? str.replace(/[\u{10000}-\u{10FFFF}]/gu, '')
+    : str;
+}
+
 /**
  * Persist the conversation history for a user.
  * Inserts a new row or updates the existing one (upsert).
@@ -96,10 +102,16 @@ async function saveConversation(tenantId, userPhone, conversation) {
   // Replace undefined with null to keep JSON serializable
   const safeMessages = trimmed.map(msg => {
     const out = {};
-    Object.entries(msg || {}).forEach(([k, v]) => { out[k] = v === undefined ? null : v; });
+    Object.entries(msg || {}).forEach(([k, v]) => {
+      const val = v === undefined ? null : v;
+      out[k] = typeof val === 'string' ? strip4ByteChars(val) : val;
+    });
     return out;
   });
-  const safeState = JSON.parse(JSON.stringify(state ?? {}, (_k, v) => (v === undefined ? null : v)));
+  const safeState = JSON.parse(JSON.stringify(state ?? {}, (_k, v) => {
+    const val = v === undefined ? null : v;
+    return typeof val === 'string' ? strip4ByteChars(val) : val;
+  }));
   const payload = { messages: safeMessages, state: safeState };
 
   // Ensure payload fits into TEXT (64KB). Trim further if needed.
