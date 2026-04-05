@@ -20,13 +20,13 @@
 const TOPIC_PATTERNS = {
   parking:     /\b(parking|park\b|parkir|parkage|stationnement|parcheggio|parken|parkovat|parkiranje)\b/i,
   weather:     /\b(weather|forecast|rain|sunny|sun\b|wind|temperature|cloud|hot|cold|humid|wetter|regen|sonne|temperatur|vorhersage|vrijeme|prognoza|kiša|sunce|vjetar|temperatura|oblaci|météo|meteo|tempo|pioggia|previsione|sole|pogoda)\b/i,
-  events:      /\b(event|events|veranstaltung|veranstaltungen|evento|eventi|événement|événements|evenemang|arrangement|dogadjaj|dogadjaji|dogadaj|dogadanja|dogadanja|akce|události)\b/i,
+  events:      /\b(event|events|happening|what'?s happening|what'?s on|veranstaltung|veranstaltungen|evento|eventi|événement|événements|evenemang|arrangement|dogadjaj|dogadjaji|dogadaj|dogadanja|dogadanja|akce|události)\b/i,
   restaurants: /\b(restaurant|restoran|ristorante|food|dinner|lunch|eat|essen|mangiare|manger|konobi|konoba|hrana|večera|ručak|gastr|café|tavern|seafood|pizza|italian|dalmatian|cuisine)\b/i,
 };
 
 // Follow-up patterns — only active when we were already on that topic
 const WEATHER_FOLLOWUP = /\b(tomorrow|sutra|morgen|demain|domani|today|danas|heute|oggi|forecast|prognoza|in\s+\d+\s+days?|za\s+\d+\s+dana|next\s+\d+\s+days?|sljedec|iduc)\b/i;
-const EVENT_FOLLOWUP   = /\b(today|tonight|tomorrow|this\s+week|this\s+weekend|sutra|danas|večeras|veceras|tjedan|ovih\s+dana|ovaj\s+tjedan)\b/i;
+const EVENT_FOLLOWUP   = /\b(today|tonight|tomorrow|this\s+week|this\s+weekend|weekend|music|live\s+music|family|family-friendly|sutra|danas|večeras|veceras|tjedan|ovih\s+dana|ovaj\s+tjedan)\b/i;
 
 /**
  * Detect the topic and confidence of a message.
@@ -339,97 +339,108 @@ async function handleWeather(userMsg, session, deps) {
 
 // ─── EVENTS HANDLER ───────────────────────────────────────────────────────────
 
-const EVENT_PERIOD_PATTERNS = {
-  today:    /\b(today|tonight|danas|večeras|veceras|heute|oggi|aujourd'?hui)\b/i,
-  tomorrow: /\b(tomorrow|sutra|morgen|domani|demain)\b/i,
-  week:     /\b(this\s+week|this\s+weekend|ovaj\s+tjedan|ovih\s+dana|diese\s+woche|questa\s+settimana|cette\s+semaine)\b/i,
-};
-
-function detectEventPeriodLocal(message) {
-  for (const [period, re] of Object.entries(EVENT_PERIOD_PATTERNS)) {
-    if (re.test(message)) return period;
-  }
+function parseEventFollowUp(message) {
+  const n = norm(message);
+  if (/\b(tonight|veceras|večeras|today|danas)\b/.test(n)) return 'tonight';
+  if (/\b(weekend|this weekend|ovaj tjedan|ovih dana|this week)\b/.test(n)) return 'weekend';
+  if (/\b(live music|music|glazba|koncert)\b/.test(n)) return 'music';
+  if (/\b(family|family friendly|obitelj|djeca)\b/.test(n)) return 'family';
   return null;
 }
 
-function formatEvents(events, period, lang) {
-  const HDR = {
-    hr: { today: 'Danas u Brelima:', tomorrow: 'Sutra u Brelima:', week: 'Ovaj tjedan u Brelima:', general: 'Nadolazeći događaji u Brelima:' },
-    en: { today: 'Today in Brela:',  tomorrow: 'Tomorrow in Brela:', week: 'This week in Brela:', general: 'Upcoming events in Brela:' },
-    de: { today: 'Heute in Brela:',  tomorrow: 'Morgen in Brela:',   week: 'Diese Woche in Brela:', general: 'Kommende Veranstaltungen in Brela:' },
-    it: { today: 'Oggi a Brela:',    tomorrow: 'Domani a Brela:',    week: 'Questa settimana a Brela:', general: 'Prossimi eventi a Brela:' },
-    fr: { today: "Aujourd'hui à Brela :", tomorrow: 'Demain à Brela :', week: 'Cette semaine à Brela :', general: 'Événements à venir à Brela :' },
-    sv: { today: 'Idag i Brela:',    tomorrow: 'Imorgon i Brela:',   week: 'Denna vecka i Brela:', general: 'Kommande evenemang i Brela:' },
-    no: { today: 'I dag i Brela:',   tomorrow: 'I morgen i Brela:',  week: 'Denne uken i Brela:', general: 'Kommende arrangementer i Brela:' },
-    cs: { today: 'Dnes v Brele:',    tomorrow: 'Zítra v Brele:',     week: 'Tento týden v Brele:', general: 'Nadcházející akce v Brele:' },
-  };
-  const labels = HDR[lang] || HDR.en;
-  const header = labels[period || 'general'];
-  const lines  = events.map((ev, i) => {
-    const d    = ev.date instanceof Date ? ev.date : new Date(ev.date);
-    const date = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.`;
-    let line   = `\n${i + 1}. ${ev.title} (${date})`;
-    if (ev.description)   line += `\n   ${ev.description}`;
-    if (ev.location_link) line += `\n   📍 ${ev.location_link}`;
-    return line;
-  });
-  return header + lines.join('');
+function eventDateValue(ev) {
+  const v = ev?.date || ev?.start_at || ev?.start || ev?.datetime || ev?.time || null;
+  const d = v instanceof Date ? v : new Date(v);
+  return Number.isNaN(d.getTime()) ? Number.MAX_SAFE_INTEGER : d.getTime();
+}
+
+function eventDateLabel(ev) {
+  const raw = ev?.date || ev?.start_at || ev?.start || ev?.datetime || ev?.time || '';
+  const d = raw instanceof Date ? raw : new Date(raw);
+  if (!raw || Number.isNaN(d.getTime())) return 'Date TBD';
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  if (hh === '00' && mi === '00') return `${dd}.${mm}.`;
+  return `${dd}.${mm}. ${hh}:${mi}`;
+}
+
+function eventLocationLabel(ev) {
+  return ev?.location || ev?.venue || ev?.place || ev?.location_name || ev?.location_link || 'Brela';
+}
+
+function eventDescriptionLabel(ev) {
+  const raw = String(ev?.description || ev?.short_description || ev?.excerpt || '').replace(/\s+/g, ' ').trim();
+  if (!raw) return 'No extra details available.';
+  return raw.length > 120 ? `${raw.slice(0, 117)}...` : raw;
+}
+
+function filterEvents(events, filterKey) {
+  if (!filterKey) return events;
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const tomorrowStart = todayStart + 24 * 60 * 60 * 1000;
+  const weekendEnd = todayStart + 7 * 24 * 60 * 60 * 1000;
+
+  if (filterKey === 'tonight') {
+    return events.filter((ev) => {
+      const t = eventDateValue(ev);
+      return t >= todayStart && t < tomorrowStart;
+    });
+  }
+  if (filterKey === 'weekend') {
+    return events.filter((ev) => {
+      const t = eventDateValue(ev);
+      return t >= todayStart && t < weekendEnd;
+    });
+  }
+  if (filterKey === 'music') {
+    return events.filter((ev) => /\b(music|live|concert|dj|band|glazba|koncert)\b/i.test(`${ev?.title || ''} ${ev?.description || ''}`));
+  }
+  if (filterKey === 'family') {
+    return events.filter((ev) => /\b(family|kids|children|obitelj|djeca)\b/i.test(`${ev?.title || ''} ${ev?.description || ''}`));
+  }
+  return events;
+}
+
+function formatTopEvents(events) {
+  const sorted = [...events].sort((a, b) => eventDateValue(a) - eventDateValue(b)).slice(0, 3);
+  return sorted
+    .map((ev, i) => `${i + 1}. ${ev?.title || 'Event'}\n${eventDateLabel(ev)} • ${eventLocationLabel(ev)}\n${eventDescriptionLabel(ev)}`)
+    .join('\n\n');
 }
 
 async function handleEvents(userMsg, session, deps) {
-  const { lang, tenantId, getEventsByPeriod, getUpcomingEvents, brelaUrl } = deps;
+  const { tenantId, getUpcomingEvents } = deps;
 
   session.pendingSlot = null;
   session.lastQuestion = null;
   session.lastTopic = 'events';
-
-  const NO_EVENTS = {
-    hr: `Trenutno nema najavljenih događaja u Brelima.\nZa više informacija: ${brelaUrl}`,
-    en: `No upcoming events in Brela at the moment.\nFor more information: ${brelaUrl}`,
-    de: `Derzeit keine Veranstaltungen in Brela.\nMehr Infos: ${brelaUrl}`,
-    it: `Nessun evento in programma al momento a Brela.\nPer maggiori informazioni: ${brelaUrl}`,
-    fr: `Pas d'événements à Brela pour l'instant.\nPlus d'informations : ${brelaUrl}`,
-    sv: `Inga aktuella evenemang i Brela.\nMer info: ${brelaUrl}`,
-    no: `Ingen aktuelle arrangementer i Brela.\nMer info: ${brelaUrl}`,
-    cs: `Momentálně žádné akce v Brele.\nVíce informací: ${brelaUrl}`,
-  };
-
-  // Upcoming-as-fallback intro (when period-specific query finds nothing)
-  const PERIOD_EMPTY_UPCOMING = {
-    hr: { today: 'Danas nema događaja, ali uskoro:', tomorrow: 'Sutra nema događaja, ali uskoro:', week: 'Ovaj tjedan nema događaja, ali uskoro:' },
-    en: { today: 'No events today, but coming up:',  tomorrow: 'No events tomorrow, but coming up:', week: 'No events this week, but coming up:' },
-    de: { today: 'Heute keine Events, aber bald:',   tomorrow: 'Morgen keine Events, aber bald:',    week: 'Diese Woche keine Events, aber bald:' },
-    it: { today: 'Oggi nessun evento, ma presto:',   tomorrow: 'Domani nessun evento, ma presto:',   week: 'Questa settimana nessun evento, ma presto:' },
-    fr: { today: "Pas d'événements aujourd'hui, mais bientôt :", tomorrow: "Pas d'événements demain, mais bientôt :", week: "Pas d'événements cette semaine, mais bientôt :" },
-    sv: { today: 'Inga evenemang idag, men snart:',  tomorrow: 'Inga evenemang imorgon, men snart:',  week: 'Inga evenemang denna vecka, men snart:' },
-    no: { today: 'Ingen arrangementer i dag, men snart:', tomorrow: 'Ingen arrangementer i morgen, men snart:', week: 'Ingen arrangementer denne uken, men snart:' },
-    cs: { today: 'Dnes žádné akce, ale brzy:',       tomorrow: 'Zítra žádné akce, ale brzy:',        week: 'Tento týden žádné akce, ale brzy:' },
-  };
+  const NO_EVENTS = 'There are no confirmed events at the moment, but you can check the official local calendar at brela.hr.';
+  const NARROW = 'I can also narrow it down to:\n- tonight\n- this weekend\n- live music\n- family-friendly';
 
   try {
-    const period = detectEventPeriodLocal(userMsg);
+    const allEvents = await getUpcomingEvents(tenantId);
+    if (!allEvents.length) return NO_EVENTS;
 
-    if (period) {
-      const events = await getEventsByPeriod(tenantId, period);
-      if (events.length) return formatEvents(events, period, lang) + formatSuggestions('events');
-
-      // Period empty → show upcoming as fallback
-      const upcoming = await getUpcomingEvents(tenantId);
-      if (upcoming.length) {
-        const intros = PERIOD_EMPTY_UPCOMING[lang] || PERIOD_EMPTY_UPCOMING.en;
-        return (intros[period] || intros.today) + '\n' + formatEvents(upcoming, null, lang) + formatSuggestions('events');
-      }
-      return NO_EVENTS[lang] || NO_EVENTS.en;
+    const followUp = parseEventFollowUp(userMsg);
+    const filtered = filterEvents(allEvents, followUp);
+    if (!filtered.length) {
+      if (followUp) session.lastTopic = null;
+      return NO_EVENTS;
     }
 
-    // General "what events?" query
-    const events = await getUpcomingEvents(tenantId);
-    if (!events.length) return NO_EVENTS[lang] || NO_EVENTS.en;
-    return formatEvents(events, null, lang) + formatSuggestions('events');
+    const body = formatTopEvents(filtered);
+    if (followUp) {
+      session.lastTopic = null;
+      return body;
+    }
+    return `${body}\n\n${NARROW}`;
 
   } catch (err) {
     console.error('[engine/events]', err.message);
-    return NO_EVENTS[lang] || NO_EVENTS.en;
+    return NO_EVENTS;
   }
 }
 
@@ -541,6 +552,11 @@ function parseWeatherFollowUp(message) {
   return null;
 }
 
+function isEventFollowUp(message, session) {
+  if (session.lastTopic !== 'events') return false;
+  return Boolean(parseEventFollowUp(message));
+}
+
 // ─── MAIN ROUTER ──────────────────────────────────────────────────────────────
 
 /**
@@ -621,6 +637,12 @@ async function handleMessage(userMsg, session, deps) {
   }
 
   // ── Priority 3: weather follow-up ────────────────────────────────────────
+  // Keep event follow-ups deterministic and bypass generic intent detection.
+  if (isEventFollowUp(msg, session)) {
+    return TOPIC_HANDLERS.events.handle(msg, session, deps);
+  }
+
+  // ── Priority 4: weather follow-up ────────────────────────────────────────
   // Time-reference messages after a weather reply continue weather.
   // detectIntent() is NOT called here either.
   const weatherFollow = isWeatherFollowUp(msg, session) ? parseWeatherFollowUp(msg) : null;
@@ -635,14 +657,14 @@ async function handleMessage(userMsg, session, deps) {
     session.lastTopic = null; // clear to avoid loops
     return reply;
 
-  // ── Priority 4: short follow-up within lastTopic context ─────────────────
+  // ── Priority 5: short follow-up within lastTopic context ─────────────────
   // Short messages (≤ 2 words) with no clear topic keyword are treated as
   // follow-ups to the last resolved topic. "Local", "near beach", "ok",
   // "center" after a restaurant or parking reply all land here.
   } else if (session.lastTopic && TOPIC_HANDLERS[session.lastTopic] && msg.split(/\s+/).length <= 2 && !Object.values(TOPIC_PATTERNS).some(p => p.test(msg))) {
     activeTopic = session.lastTopic;
 
-  // ── Priority 5: normal intent detection (no context at all) ──────────────
+  // ── Priority 6: normal intent detection (no context at all) ──────────────
   } else {
     const { topic, confidence } = detectIntent(msg, session);
     activeTopic = confidence === 'high' ? topic : null;
