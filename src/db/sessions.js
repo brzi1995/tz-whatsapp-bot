@@ -86,7 +86,7 @@ async function saveConversation(tenantId, userPhone, conversation) {
   if (!tenantId) throw new Error('Missing tenantId');
   if (!userPhone) throw new Error('Missing userPhone');
 
-  const trimmed = Array.isArray(conversation?.messages)
+  let trimmed = Array.isArray(conversation?.messages)
     ? conversation.messages.slice(-MAX_MESSAGES)
     : [];
   const state = conversation?.state && typeof conversation.state === 'object' && !Array.isArray(conversation.state)
@@ -101,7 +101,24 @@ async function saveConversation(tenantId, userPhone, conversation) {
   });
   const safeState = JSON.parse(JSON.stringify(state ?? {}, (_k, v) => (v === undefined ? null : v)));
   const payload = { messages: safeMessages, state: safeState };
-  const safeSession = JSON.stringify(payload);
+
+  // Ensure payload fits into TEXT (64KB). Trim further if needed.
+  let safeSession = JSON.stringify(payload);
+  const MAX_BYTES = 64000;
+  if (Buffer.byteLength(safeSession, 'utf8') > MAX_BYTES) {
+    // drop oldest messages until within limit
+    trimmed = trimmed.slice(-(Math.max(5, Math.floor(trimmed.length * 0.5))));
+    const safeMessages2 = trimmed.map(msg => {
+      const out = {};
+      Object.entries(msg || {}).forEach(([k, v]) => { out[k] = v === undefined ? null : v; });
+      return out;
+    });
+    safeSession = JSON.stringify({ messages: safeMessages2, state: safeState });
+    if (Buffer.byteLength(safeSession, 'utf8') > MAX_BYTES) {
+      // last resort: keep no history, only state
+      safeSession = JSON.stringify({ messages: [], state: safeState });
+    }
+  }
 
   console.log(`[db] saveMessages called | tenant_id=${tenantId} user_phone=${userPhone} messages=${trimmed.length}`);
   console.log('Saving session', { userId: userPhone, sessionType: typeof safeState, session: safeState });
