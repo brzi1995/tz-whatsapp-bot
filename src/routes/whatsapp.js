@@ -846,6 +846,12 @@ function detectShortReplyLanguage(message, fallbackLang) {
   const normalized = normalizeLookup(message);
   if (/\bza\s*\d{1,2}\s*(dana?)?\b/.test(normalized) || /\b(vrijeme|prognoza|danas|sutra)\b/.test(normalized)) return 'hr';
   if (/\bin\s*\d{1,2}\s*(days?)?\b/.test(normalized) || /\b(weather|forecast|today|tomorrow)\b/.test(normalized)) return 'en';
+  if (/\bin\s*\d{1,2}\s*(tage?)?\b/.test(normalized) || /\b(wetter|vorhersage|heute|morgen)\b/.test(normalized)) return 'de';
+  if (/\btra\s*\d{1,2}\s*(giorni?)?\b/.test(normalized) || /\b(meteo|previsioni|oggi|domani)\b/.test(normalized)) return 'it';
+  if (/\bdans\s*\d{1,2}\s*(jours?)?\b/.test(normalized) || /\b(meteo|previsions?|aujourdhui|demain)\b/.test(normalized)) return 'fr';
+  if (/\bom\s*\d{1,2}\s*(dagar)?\b/.test(normalized) || /\b(vader|prognos|idag|imorgon)\b/.test(normalized)) return 'sv';
+  if (/\bom\s*\d{1,2}\s*(dager)?\b/.test(normalized) || /\b(vaer|prognose|i dag|i morgen)\b/.test(normalized)) return 'no';
+  if (/\bza\s*\d{1,2}\s*(dni)?\b/.test(normalized) || /\b(pocasi|predpoved|dnes|zitra)\b/.test(normalized)) return 'cs';
   if (/\ben\s*\d{1,2}\s*(dias|días)?\b/.test(normalized) || /\b(tiempo|pronostico|hoy|manana)\b/.test(normalized)) return 'es';
   if (/\bw\s*\d{1,2}\s*dni\b/.test(normalized) || /\b(pogoda|prognoza|dzis|dzisiaj|jutro)\b/.test(normalized)) return 'pl';
   if (normalized === 'da' || normalized === 'ne') return 'hr';
