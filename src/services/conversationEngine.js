@@ -682,14 +682,22 @@ function parseWeatherFollowUp(message) {
   return null;
 }
 
-function extractIsolatedDayNumber(message) {
-  // Accept only a standalone numeric reply such as "10", "10?", "(10)".
-  // Do NOT match mixed-topic texts like "top 10 restaurants" or "events 10.08".
-  const raw = String(message || '').trim();
-  if (!raw) return null;
-  const m = raw.match(/^[\s()[\]{}.,!?-]*([0-9]{1,2})[\s()[\]{}.,!?-]*$/);
-  if (!m) return null;
-  const days = parseInt(m[1], 10);
+function extractWeatherContextDayNumber(message) {
+  // Language-neutral numeric follow-up parser for active weather context.
+  // Supports short forms like: "10", "10?", "10 jours", "in 10", "10 días".
+  const n = norm(message);
+  if (!n) return null;
+  const words = n.split(/\s+/).filter(Boolean);
+  if (words.length === 0 || words.length > 2) return null;
+
+  // Never treat explicit non-weather topic messages as weather day follow-ups.
+  if (/\b(parking|park|restaurant|restoran|event|events|dogadj|dogadaj|događaj)\b/.test(n)) {
+    return null;
+  }
+
+  const numericWord = words.find(w => /^\d{1,2}$/.test(w));
+  if (!numericWord) return null;
+  const days = parseInt(numericWord, 10);
   if (!Number.isInteger(days) || days < 1) return null;
   return days;
 }
@@ -802,7 +810,7 @@ async function handleMessage(userMsg, session, deps) {
   // ── Priority 3a: numeric weather follow-up hard guard ───────────────────
   // If last topic is weather (or recent history looked weather), short numeric
   // replies like "10?" must stay in weather flow and never drop to fallback/AI.
-  const standaloneDays = extractIsolatedDayNumber(msg);
+  const standaloneDays = extractWeatherContextDayNumber(msg);
   const weatherContext = session.lastTopic === 'weather'
     || (!session.lastTopic && Boolean(deps?._historyLooksLikeWeather));
   if (standaloneDays && weatherContext) {
