@@ -904,6 +904,11 @@ function cleanMixedLanguageReply(reply, lang) {
     }
   }
 
+  if (lang === 'hr') {
+    text = text.replace(/\bu\s+breli\b/gi, (m) => (m[0] === 'U' ? 'U Brelima' : 'u Brelima'));
+    text = text.replace(/\bo\s+breli\b/gi, (m) => (m[0] === 'O' ? 'O Brelima' : 'o Brelima'));
+  }
+
   return text
     .replace(/\s{2,}/g, ' ')
     .replace(/ \./g, '.')
@@ -1203,6 +1208,7 @@ router.post('/webhook', async (req, res) => {
     if (!safeReply || typeof safeReply !== 'string') {
       safeReply = 'Došlo je do greške. Molimo pokušajte ponovno.';
     }
+    safeReply = cleanMixedLanguageReply(safeReply, activeLang);
     replyForLogs = safeReply;
     console.log('after handleMessage', { reply: safeReply, session: engineSession });
     await logMessage(tenant.id, userPhone, trimmedMsg, engineSession.lastTopic || 'other', activeLang).catch(() => {});
