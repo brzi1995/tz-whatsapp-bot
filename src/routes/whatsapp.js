@@ -712,7 +712,7 @@ const BRELA_TOPICS = [
   // Croatian
   'plaž', 'more', 'restoran', 'kavana', 'kafić', 'bar', 'parking', 'aktivnost',
   'izlet', 'smještaj', 'apartman', 'hotel', 'prijevoz', 'bus', 'brod', 'trajekt',
-  'hrana', 'kupanj', 'ronjenje', 'bicikl', 'iznajm', 'brela', 'punta rata', 'baška',
+  'hrana', 'vecer', 'večer', 'kupanj', 'ronjenje', 'bicikl', 'iznajm', 'brela', 'punta rata', 'baška',
   // English
   'beach', 'sea', 'ocean', 'restaur', 'restaurant', 'dinner', 'eat', 'food',
   'coffee', 'cafe', 'activit', 'excursion',
@@ -729,8 +729,8 @@ const BRELA_TOPICS = [
   'makarska', 'omiš',
 ];
 function isRelevant(msg) {
-  const lower = msg.toLowerCase();
-  return BRELA_TOPICS.some(topic => lower.includes(topic));
+  const normalized = normalizeLookup(msg);
+  return BRELA_TOPICS.some(topic => normalized.includes(normalizeLookup(topic)));
 }
 
 /**
@@ -768,7 +768,7 @@ function keywordIntent(msg) {
   if (!n) return null;
   if (n.includes('parking') || n.includes('aparcamiento') || n.includes('estacionamiento') || n.includes('parkowanie')) return 'parking';
   if (n.includes('beach') || n.includes('plaž') || n.includes('playa') || n.includes('plaza') || n.includes('plaża')) return 'beaches';
-  if (n.includes('restoran') || n.includes('restaurant') || n.includes('dinner') || n.includes('food') || n.includes('restaurante') || n.includes('restauracja') || n.includes('restauracje') || n.includes('comida') || n.includes('kolacja')) return 'restaurants';
+  if (n.includes('restoran') || n.includes('restaurant') || n.includes('dinner') || n.includes('food') || n.includes('vecer') || n.includes('veceru') || n.includes('večer') || n.includes('večeru') || n.includes('restaurante') || n.includes('restauracja') || n.includes('restauracje') || n.includes('comida') || n.includes('kolacja')) return 'restaurants';
   if (n.includes('event') || n.includes('dogadj') || n.includes('događ') || n.includes('evento') || n.includes('wydarzen')) return 'events';
   if (isWeatherQuery(msg)) return 'weather';
   return null;

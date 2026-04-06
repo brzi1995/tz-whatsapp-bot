@@ -21,7 +21,7 @@ const TOPIC_PATTERNS = {
   parking:     /\b(parking|park\b|parkir|parkage|stationnement|parcheggio|parken|parkovat|parkiranje|estacionamiento|aparcamiento|parkowanie)\b/i,
   weather:     /\b(weather|forecast|rain|sunny|sun\b|wind|temperature|cloud|hot|cold|humid|wetter|regen|sonne|temperatur|vorhersage|vrijeme|prognoza|kiša|sunce|vjetar|temperatura|oblaci|météo|meteo|tempo|pioggia|previsione|sole|pogoda|tiempo|clima|pronostico|pronóstico|lluvia|viento|nubes|deszcz|slonce|słońce|wiatr|chmury)\b/i,
   events:      /\b(event|events|happening|what'?s happening|what'?s on|veranstaltung|veranstaltungen|evento|eventi|événement|événements|evenemang|arrangement|dogadjaj|dogadjaji|dogadaj|dogadanja|dogadanja|akce|události|eventos|wydarzenia)\b/i,
-  restaurants: /\b(restaurant|restaurants|restoran|restorani|ristorante|ristoranti|restaurang|restauranger|restauranten|restaurace|restaurante|restaurantes|restauracja|restauracje|restauracj|food|dinner|lunch|eat|essen|mangiare|manger|konobi|konoba|hrana|pice|piće|vecera|večera|rucak|ručak|gastr|cafe|café|tavern|seafood|pizza|italian|dalmatian|cuisine|local|bar|bars|drink|drinks|comida|cena|cenar|jedzenie|kolacja)\b/i,
+  restaurants: /\b(restaurant|restaurants|restoran|restorani|ristorante|ristoranti|restaurang|restauranger|restauranten|restaurace|restaurante|restaurantes|restauracja|restauracje|restauracj|food|dinner|lunch|eat|essen|mangiare|manger|konobi|konoba|hrana|pice|piće|vecer|večer|vecera|večera|veceru|večeru|rucak|ručak|gastr|cafe|café|tavern|seafood|pizza|italian|dalmatian|cuisine|local|bar|bars|drink|drinks|comida|cena|cenar|jedzenie|kolacja)\b/i,
 };
 
 // Follow-up patterns — only active when we were already on that topic
