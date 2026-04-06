@@ -772,7 +772,13 @@ function isWeatherQuery(msg) {
 function keywordIntent(msg) {
   const n = normalizeMessage(msg);
   if (!n) return null;
-  if (n.includes('parking') || n.includes('aparcamiento') || n.includes('estacionamiento') || n.includes('parkowanie')) return 'parking';
+  if (
+    n.includes('parking') || n.includes('parkiranje') || n.includes('parkirati') || n.includes('parkir') ||
+    n.includes('aparcamiento') || n.includes('aparcar') || n.includes('estacionamiento') || n.includes('estacionar') ||
+    n.includes('parcheggio') || n.includes('parcheggiare') || n.includes('parchegg') || n.includes('stationnement') || n.includes('garer') ||
+    n.includes('parkering') || n.includes('parkera') || n.includes('parkere') || n.includes('parken') || n.includes('parkplatz') ||
+    n.includes('parkovani') || n.includes('parkování') || n.includes('parkov') || n.includes('parkowanie') || n.includes('zaparkowac') || n.includes('zaparkować') || n.includes('zapark')
+  ) return 'parking';
   if (n.includes('beach') || n.includes('plaž') || n.includes('playa') || n.includes('plaza') || n.includes('plaża')) return 'beaches';
   if (
     n.includes('restoran') || n.includes('restaurant') || n.includes('dinner') || n.includes('food') ||

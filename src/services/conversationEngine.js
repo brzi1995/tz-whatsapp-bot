@@ -18,9 +18,9 @@
 // ─── INTENT DETECTION ────────────────────────────────────────────────────────
 
 const TOPIC_PATTERNS = {
-  parking:     /\b(parking|park\b|parkir|parkage|stationnement|parcheggio|parken|parkovat|parkiranje|estacionamiento|aparcamiento|parkowanie)\b/i,
+  parking:     /\b(parking|park\b|parkiranje|parkirati|parkage|stationnement|garer|parcheggio|parcheggiare|parken|parkplatz|parkovat|parkovani|parkování|parkoviste|parkoviště|estacionamiento|estacionar|aparcamiento|aparcar|parkowanie|parkering|parkera|parkere|zaparkowac|zaparkować)\b/i,
   weather:     /\b(weather|forecast|rain|sunny|sun\b|wind|temperature|cloud|hot|cold|humid|wetter|regen|sonne|temperatur|vorhersage|vrijeme|prognoza|kiša|sunce|vjetar|temperatura|oblaci|météo|meteo|tempo|pioggia|previsione|sole|pogoda|tiempo|clima|pronostico|pronóstico|lluvia|viento|nubes|deszcz|slonce|słońce|wiatr|chmury)\b/i,
-  events:      /\b(event|events|happening|what'?s happening|what'?s on|veranstaltung|veranstaltungen|evento|eventi|événement|événements|evenemang|arrangement|dogadjaj|dogadjaji|dogadaj|dogadanja|dogadanja|akce|události|eventos|wydarzenia)\b/i,
+  events:      /\b(event|events|happening|what'?s happening|what'?s on|veranstaltung|veranstaltungen|evento|eventi|événement|événements|evenemang|arrangement|dogadjaj|dogadjaji|dogadaj|dogadaji|dogadanja|dogadanja|akce|události|eventos|wydarzenia)\b/i,
   restaurants: /\b(restaurant|restaurants|restoran|restorani|ristorante|ristoranti|restaurang|restauranger|restauranten|restaurace|restaurante|restaurantes|restauracja|restauracje|restauracj|food|dinner|lunch|eat|essen|abendessen|mittagessen|mangiare|manger|diner|dejeuner|déjeuner|konobi|konoba|hrana|pice|piće|vecer|večer|vecera|večera|veceru|večeru|vecere|veceře|večeře|veceri|rucak|ručak|gastr|cafe|café|tavern|seafood|pizza|italian|dalmatian|cuisine|local|bar|bars|drink|drinks|comida|cena|cenar|cenare|comer|jedzenie|kolacja|kolacje|kolacji|obiad|zjesc|zjeść|restaurang|middag|ata|spise)\b/i,
 };
 
@@ -252,16 +252,16 @@ async function handleParking(userMsg, session, deps) {
   session.lastTopic = 'parking';
 
   const SIMPLE = {
-    hr: 'Parking u Breli je najčešće dostupan u centru i uz glavne plaže. Tijekom ljeta mjesta se brzo popune, pa je najbolje doći ranije u danu. Ako želite, mogu pomoći i s plažama, restoranima, vremenom ili događanjima.',
+    hr: 'Parking u Breli je uglavnom dostupan u centru mjesta i blizu glavnih plaža. Tijekom ljeta mjesta se brzo popune, pa je najbolje doći ranije u danu. Ako želite, mogu pomoći i s plažama, restoranima, vremenom ili događanjima.',
     en: 'Parking in Brela is mainly available in the town center and near the main beach areas. During summer, spots can fill up quickly, so it is best to arrive earlier in the day. If you want, I can also help with beaches, restaurants, weather, or events.',
-    de: 'Parken in Brela ist meist im Ortszentrum und bei den Hauptstränden verfügbar. Im Sommer sind die Plätze schnell voll, daher ist es am besten, früher am Tag anzukommen. Wenn Sie möchten, helfe ich auch bei Stränden, Restaurants, Wetter oder Veranstaltungen.',
-    it: 'Il parcheggio a Brela è disponibile soprattutto nel centro e vicino alle principali spiagge. In estate i posti si riempiono rapidamente, quindi è meglio arrivare prima durante la giornata. Se vuoi, posso aiutarti anche con spiagge, ristoranti, meteo o eventi.',
-    fr: 'Le parking à Brela est surtout disponible dans le centre-ville et près des principales plages. En été, les places se remplissent vite, donc il vaut mieux arriver plus tôt dans la journée. Si vous voulez, je peux aussi aider avec les plages, restaurants, météo ou événements.',
-    sv: 'Parkering i Brela finns främst i centrum och nära de viktigaste strandområdena. På sommaren blir platserna snabbt fulla, så det är bäst att komma tidigare på dagen. Om du vill kan jag också hjälpa med stränder, restauranger, väder eller evenemang.',
+    de: 'Parken in Brela ist hauptsächlich im Ortszentrum und in der Nähe der wichtigsten Strände verfügbar. Im Sommer sind die Plätze schnell voll, daher ist es am besten, früher am Tag anzukommen. Wenn Sie möchten, kann ich auch bei Stränden, Restaurants, Wetter oder Veranstaltungen helfen.',
+    it: 'Il parcheggio a Brela è disponibile soprattutto nel centro e vicino alle principali zone balneari. In estate i posti si riempiono rapidamente, quindi è meglio arrivare prima durante la giornata. Se vuoi, posso aiutarti anche con spiagge, ristoranti, meteo o eventi.',
+    fr: 'Le parking à Brela est principalement disponible dans le centre-ville et près des principales zones de plage. En été, les places se remplissent rapidement, donc il est préférable d’arriver plus tôt dans la journée. Si vous voulez, je peux aussi aider avec les plages, restaurants, météo ou événements.',
+    sv: 'Parkering i Brela finns främst i centrum och nära de viktigaste strandområdena. Under sommaren fylls platserna snabbt, så det är bäst att komma tidigare på dagen. Om du vill kan jag också hjälpa med stränder, restauranger, väder eller evenemang.',
     no: 'Parkering i Brela er hovedsakelig tilgjengelig i sentrum og nær de viktigste strandområdene. Om sommeren fylles plassene raskt opp, så det er best å komme tidligere på dagen. Hvis du vil kan jeg også hjelpe med strender, restauranter, vær eller arrangementer.',
-    cs: 'Parkování v Brele je dostupné hlavně v centru města a u hlavních pláží. V létě se místa rychle zaplní, proto je nejlepší přijet dříve během dne. Pokud chcete, mohu pomoci také s plážemi, restauracemi, počasím nebo akcemi.',
-    es: 'El parking en Brela suele estar disponible en el centro y cerca de las principales playas. En verano las plazas se llenan rápido, así que es mejor llegar más temprano. Si quieres, también puedo ayudar con playas, restaurantes, tiempo o eventos.',
-    pl: 'Parking w Breli jest najczęściej dostępny w centrum i przy głównych plażach. Latem miejsca szybko się zapełniają, więc najlepiej przyjechać wcześniej. Jeśli chcesz, mogę też pomóc z plażami, restauracjami, pogodą i wydarzeniami.',
+    cs: 'Parkování v Brele je dostupné hlavně v centru města a poblíž hlavních plážových oblastí. V létě se místa rychle zaplní, proto je nejlepší přijet dříve během dne. Pokud chcete, mohu pomoci také s plážemi, restauracemi, počasím nebo akcemi.',
+    es: 'El parking en Brela está disponible principalmente en el centro y cerca de las principales zonas de playa. En verano las plazas se llenan rápido, por lo que es mejor llegar más temprano. Si quieres, también puedo ayudar con playas, restaurantes, tiempo o eventos.',
+    pl: 'Parking w Breli jest dostępny głównie w centrum i w pobliżu głównych stref plażowych. Latem miejsca szybko się zapełniają, dlatego najlepiej przyjechać wcześniej. Jeśli chcesz, mogę też pomóc z plażami, restauracjami, pogodą i wydarzeniami.',
   };
 
   return SIMPLE[lang] || SIMPLE.en;
