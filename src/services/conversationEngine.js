@@ -19,13 +19,13 @@
 
 const TOPIC_PATTERNS = {
   parking:     /\b(parking|park\b|parkiranje|parkirati|parkage|stationnement|garer|parcheggio|parcheggiare|parken|parkplatz|parkovat|parkovani|parkování|parkoviste|parkoviště|estacionamiento|estacionar|aparcamiento|aparcar|parkowanie|parkering|parkera|parkere|zaparkowac|zaparkować)\b/i,
-  weather:     /\b(weather|forecast|rain|sunny|sun\b|wind|temperature|cloud|hot|cold|humid|wetter|regen|sonne|temperatur|vorhersage|vrijeme|prognoza|kiša|sunce|vjetar|temperatura|oblaci|météo|meteo|tempo|pioggia|previsione|sole|pogoda|tiempo|clima|pronostico|pronóstico|lluvia|viento|nubes|deszcz|slonce|słońce|wiatr|chmury)\b/i,
+  weather:     /\b(weather|forecast|rain|sunny|sun\b|wind|temperature|cloud|hot|cold|humid|wetter|regen|sonne|temperatur|vorhersage|wetterbericht|vrijeme|vreme|prognoza|kisa|kiša|sunce|vjetar|temperatura|oblaci|meteo|météo|tempo|pioggia|previsione|sole|pogoda|tiempo|clima|pronostico|pronóstico|lluvia|viento|nubes|vader|väder|vaer|vær|regn|deszcz|slonce|słońce|wiatr|chmury|pocasi|počasí|predpoved|předpověď|dest|déšť|slunce|teplota)\b/i,
   events:      /\b(event|events|happening|what'?s happening|what'?s on|veranstaltung|veranstaltungen|evento|eventi|événement|événements|evenemang|arrangement|dogadjaj|dogadjaji|dogadaj|dogadaji|dogadanja|dogadanja|akce|události|eventos|wydarzenia)\b/i,
   restaurants: /\b(restaurant|restaurants|restoran|restorani|ristorante|ristoranti|restaurang|restauranger|restauranten|restaurace|restaurante|restaurantes|restauracja|restauracje|restauracj|food|dinner|lunch|eat|essen|abendessen|mittagessen|mangiare|manger|diner|dejeuner|déjeuner|konobi|konoba|hrana|pice|piće|vecer|večer|vecera|večera|veceru|večeru|vecere|veceře|večeře|veceri|rucak|ručak|gastr|cafe|café|tavern|seafood|pizza|italian|dalmatian|cuisine|local|bar|bars|drink|drinks|comida|cena|cenar|cenare|comer|jedzenie|kolacja|kolacje|kolacji|obiad|zjesc|zjeść|restaurang|middag|ata|spise)\b/i,
 };
 
 // Follow-up patterns — only active when we were already on that topic
-const WEATHER_FOLLOWUP = /\b(tomorrow|sutra|morgen|demain|domani|manana|mañana|jutro|today|danas|heute|oggi|hoy|dzis|dzisiaj|forecast|prognoza|pronostico|pronóstico|in\s+\d+\s+days?|za\s+\d+\s+dana|next\s+\d+\s+days?|sljedec|iduc)\b/i;
+const WEATHER_FOLLOWUP = /\b(tomorrow|sutra|morgen|demain|domani|manana|mañana|imorgon|i\s+morgen|jutro|today|danas|heute|oggi|hoy|idag|i\s+dag|dzis|dzisiaj|dnes|forecast|prognoza|pronostico|pronóstico|vorhersage|previsione|previsioni|previsions?|in\s+\d+\s+days?|za\s+\d+\s+dana|za\s+\d+\s+dni|next\s+\d+\s+days?|sljedec|iduc)\b/i;
 const EVENT_FOLLOWUP   = /\b(today|tonight|tomorrow|this\s+week|this\s+weekend|weekend|music|live\s+music|family|family-friendly|sutra|danas|večeras|veceras|tjedan|ovih\s+dana|ovaj\s+tjedan)\b/i;
 
 /**
@@ -72,6 +72,13 @@ function askSlot(session, slot) {
 function norm(text) {
   return String(text || '')
     .toLowerCase()
+    .replace(/[ä]/g, 'a')
+    .replace(/[ö]/g, 'o')
+    .replace(/[ü]/g, 'u')
+    .replace(/[ß]/g, 'ss')
+    .replace(/[å]/g, 'a')
+    .replace(/[æ]/g, 'ae')
+    .replace(/[ø]/g, 'o')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9\s]/g, ' ')
@@ -273,7 +280,7 @@ async function handleParking(userMsg, session, deps) {
 function getWeatherSubIntent(message) {
   const n = norm(message);
 
-  if (/\b(tomorrow|tommorow|tmrw|tmr|sutra|morgen|demain|domani|manana|mañana|imorgon|i morgen|zitra|jutro)\b/.test(n)) return 'tomorrow';
+  if (/\b(tomorrow|tommorow|tmrw|tmr|sutra|morgen|demain|domani|manana|mañana|imorgon|i morgen|zitra|zítra|jutro)\b/.test(n)) return 'tomorrow';
 
   // just a number in follow-up context ("5", "10")
   if (/^\d{1,2}$/.test(n)) {
@@ -283,7 +290,7 @@ function getWeatherSubIntent(message) {
   }
 
   // "in 5 days" / "za 5 dana" / "next 5 days"
-  const dayMatch = n.match(/\b(?:in|za|next|en|w)\s+(\d{1,2})\s*(?:days?|dana|tage|giorni|jours|dias|días|dagar|dager|dni)?\b/);
+  const dayMatch = n.match(/\b(?:in|za|next|en|w|dans|fra)\s+(\d{1,2})\s*(?:days?|dana|tage|giorni|jours|dias|días|dagar|dager|dni)?\b/);
   if (dayMatch) {
     const days = parseInt(dayMatch[1], 10);
     if (days >= 10) return 'long';
@@ -298,7 +305,7 @@ function getWeatherSubIntent(message) {
     return days > 5 ? { type: 'forecast', days: 5 } : { type: 'forecast', days };
   }
 
-  if (/\b(week|tjedan|woche|settimana|semaine|semana|tydzien|tydzień)\b/.test(n)) return { type: 'forecast', days: 5 };
+  if (/\b(week|tjedan|woche|settimana|semaine|semana|vecka|uke|tydzien|tydzień|tyden|týden)\b/.test(n)) return { type: 'forecast', days: 5 };
   return 'current';
 }
 
@@ -645,7 +652,7 @@ function parseWeatherFollowUp(message) {
   }
 
   // tomorrow variants (including common misspellings)
-  if (/\b(tomorrow|tommorow|tmrw|tmr|sutra|morgen|demain|domani|manana|mañana|imorgon|i morgen|zitra|jutro)\b/.test(n)) {
+  if (/\b(tomorrow|tommorow|tmrw|tmr|sutra|morgen|demain|domani|manana|mañana|imorgon|i morgen|zitra|zítra|jutro)\b/.test(n)) {
     return { type: 'tomorrow' };
   }
 
@@ -668,7 +675,7 @@ function parseWeatherFollowUp(message) {
   }
 
   // generic "forecast" follow-up -> default to 5-day
-  if (/\b(forecast|prognoza|vorhersage|previsione|previsioni|prevision|predpoved|pronostico|pronóstico)\b/.test(n)) {
+  if (/\b(forecast|prognoza|vorhersage|previsione|previsioni|prevision|predpoved|predpoved|predpověd|predpověď|pronostico|pronóstico)\b/.test(n)) {
     return { type: 'forecast', days: 5 };
   }
 

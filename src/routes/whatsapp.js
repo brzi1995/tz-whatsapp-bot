@@ -752,12 +752,14 @@ function isFollowUp(msg) {
 /** Check if message is asking about weather (to route to weather path). */
 const WEATHER_QUERY_WORDS = [
   'weather', 'forecast', 'rain', 'sun', 'wind', 'cloud', 'hot', 'cold', 'temperature',
-  'vrijeme', 'prognoza', 'kiša', 'sunce', 'vjetar', 'temperatura',
+  'vrijeme', 'vreme', 'prognoza', 'kiša', 'kisa', 'sunce', 'vjetar', 'temperatura',
   'wetter', 'regen', 'sonne', 'temperatur',
   'tempo', 'pioggia', 'sole', 'previsione',
-  'météo', 'pluie', 'soleil', 'pogoda',
+  'météo', 'meteo', 'pluie', 'soleil', 'pogoda',
   'tiempo', 'clima', 'pronóstico', 'pronostico', 'lluvia', 'viento', 'nubes',
   'deszcz', 'slonce', 'słońce', 'wiatr', 'chmury',
+  'vader', 'väder', 'vaer', 'vær', 'regn',
+  'pocasi', 'počasí', 'predpoved', 'předpověď', 'dest', 'déšť', 'slunce', 'teplota',
 ];
 function isWeatherQuery(msg) {
   const normalized = normalizeLookup(msg);
@@ -810,6 +812,13 @@ function isAccommodationQuery(msg) {
 function normalizeLookup(text) {
   return String(text || '')
     .toLowerCase()
+    .replace(/[ä]/g, 'a')
+    .replace(/[ö]/g, 'o')
+    .replace(/[ü]/g, 'u')
+    .replace(/[ß]/g, 'ss')
+    .replace(/[å]/g, 'a')
+    .replace(/[æ]/g, 'ae')
+    .replace(/[ø]/g, 'o')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/['’]/g, '')
@@ -912,6 +921,8 @@ function isWeatherFollowUp(message, conversationState) {
   return [
     'a sutra', 'a danas', 'iducih dana', 'sljedecih dana',
     'and tomorrow', 'and today', 'next days',
+    'morgen', 'heute', 'domani', 'oggi', 'demain', 'aujourdhui',
+    'imorgon', 'idag', 'i morgen', 'i dag', 'zitra', 'dnes',
     'y manana', 'mañana', 'hoy', 'proximos dias', 'próximos días',
     'jutro', 'dzisiaj', 'kolejne dni',
     'sutra', 'danas', 'tomorrow', 'today',
@@ -942,7 +953,7 @@ function detectWeatherIntent(message, conversationState = {}) {
   let requestedDays = requestedDaysMatch ? parseInt(requestedDaysMatch[1], 10) : null;
 
   // phrases like "in 5 days" / "za 4 dana"
-  const inDaysMatch = normalized.match(/\b(in|za)\s*(\d{1,2})\s*(day|days|dan|dana)?\b/);
+  const inDaysMatch = normalized.match(/\b(in|za|en|w|dans|fra)\s*(\d{1,2})\s*(day|days|dan|dana|tage|giorni|jours|dias|días|dni|dagar|dager)?\b/);
   if (inDaysMatch && !requestedDays) {
     requestedDays = parseInt(inDaysMatch[2], 10);
   }
@@ -950,9 +961,9 @@ function detectWeatherIntent(message, conversationState = {}) {
   // If continuing a weather chat, any number up to 7 defaults to forecast
   const continuingWeather = conversationState.lastTopic === 'weather' || conversationState.lastWeatherIntent;
 
-  const asksTomorrow = ['tomorrow', 'sutra', 'morgen', 'domani', 'demain', 'manana', 'mañana', 'jutro'].some(hasTerm);
-  const asksCurrent = ['today', 'danas', 'heute', 'oggi', 'aujourdhui', 'current', 'now', 'trenutno', 'sada', 'hoy', 'dzisiaj', 'dzis'].some(hasTerm);
-  const asksMulti = ['forecast', 'next', 'coming', 'days', 'dana', 'week', 'tjedan', 'tage', 'giorni', 'jours', 'previsioni', 'prognoza', 'pronostico', 'pronóstico', 'dias', 'días', 'dni', 'tydzien', 'tydzień'].some(hasTerm);
+  const asksTomorrow = ['tomorrow', 'sutra', 'morgen', 'domani', 'demain', 'manana', 'mañana', 'imorgon', 'i morgen', 'zitra', 'jutro'].some(hasTerm);
+  const asksCurrent = ['today', 'danas', 'heute', 'oggi', 'aujourdhui', 'current', 'now', 'trenutno', 'sada', 'hoy', 'idag', 'i dag', 'dzisiaj', 'dzis', 'dnes'].some(hasTerm);
+  const asksMulti = ['forecast', 'next', 'coming', 'days', 'dana', 'week', 'tjedan', 'tage', 'giorni', 'jours', 'previsioni', 'prognoza', 'vorhersage', 'pronostico', 'pronóstico', 'dias', 'días', 'dni', 'dagar', 'dager', 'vecka', 'uke', 'tydzien', 'tydzień', 'tyden', 'týden'].some(hasTerm);
 
   if (requestedDays && requestedDays > 5) return { type: 'weather_long', days: requestedDays };
   if ((requestedDays && requestedDays > 1) || asksMulti || (continuingWeather && requestedDays)) {
