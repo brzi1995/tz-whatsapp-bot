@@ -21,7 +21,7 @@ const TOPIC_PATTERNS = {
   parking:     /\b(parking|park\b|parkir|parkage|stationnement|parcheggio|parken|parkovat|parkiranje)\b/i,
   weather:     /\b(weather|forecast|rain|sunny|sun\b|wind|temperature|cloud|hot|cold|humid|wetter|regen|sonne|temperatur|vorhersage|vrijeme|prognoza|kiša|sunce|vjetar|temperatura|oblaci|météo|meteo|tempo|pioggia|previsione|sole|pogoda)\b/i,
   events:      /\b(event|events|happening|what'?s happening|what'?s on|veranstaltung|veranstaltungen|evento|eventi|événement|événements|evenemang|arrangement|dogadjaj|dogadjaji|dogadaj|dogadanja|dogadanja|akce|události)\b/i,
-  restaurants: /\b(restaurant|restoran|ristorante|food|dinner|lunch|eat|essen|mangiare|manger|konobi|konoba|hrana|večera|ručak|gastr|café|tavern|seafood|pizza|italian|dalmatian|cuisine)\b/i,
+  restaurants: /\b(restaurant|restoran|ristorante|food|dinner|lunch|eat|essen|mangiare|manger|konobi|konoba|hrana|večera|ručak|gastr|café|tavern|seafood|pizza|italian|dalmatian|cuisine|local|bar|bars|drink|drinks)\b/i,
 };
 
 // Follow-up patterns — only active when we were already on that topic
@@ -453,6 +453,15 @@ async function handleRestaurants(userMsg, session, deps) {
   session.lastQuestion = null;
   session.lastTopic = 'restaurants';
 
+  const n = norm(userMsg);
+
+  const PREF = {
+    seafood: /\b(seafood|fish|ribe|riba|frutti|mare)\b/,
+    pizza: /\b(pizza|italian|italiano)\b/,
+    local: /\b(local|dalmatian|domaca|domaća|traditional|tradicional)\b/,
+    bars: /\b(bar|bars|drink|drinks|cocktail|cocktails)\b/,
+  };
+
   const MSG = {
     hr: `Ovdje su informacije za restorane i barove u Brelima:\n${restaurantUrl}\n\nMožete birati po stilu hrane:\n• seafood\n• pizza / Italian`,
     en: `Here are the restaurant and bar options in Brela:\n${restaurantUrl}\n\nYou can choose by food style:\n• seafood\n• pizza / Italian`,
@@ -463,8 +472,31 @@ async function handleRestaurants(userMsg, session, deps) {
     no: `Her er restauranter og barer i Brela:\n${restaurantUrl}\n\nVelg etter matstil:\n• seafood\n• pizza / Italian`,
     cs: `Zde jsou restaurace a bary v Brele:\n${restaurantUrl}\n\nMůžete vybírat podle stylu:\n• seafood\n• pizza / Italian`,
   };
-  const ans = MSG[lang] || MSG.en;
-  return ans;
+  const SPECIFIC = {
+    seafood: {
+      hr: `Za seafood opcije u Brelima pogledajte:\n${restaurantUrl}`,
+      en: `For seafood options in Brela, check:\n${restaurantUrl}`,
+    },
+    pizza: {
+      hr: `Za pizza / Italian opcije u Brelima pogledajte:\n${restaurantUrl}`,
+      en: `For pizza / Italian options in Brela, check:\n${restaurantUrl}`,
+    },
+    local: {
+      hr: `Za lokalnu kuhinju u Brelima pogledajte:\n${restaurantUrl}`,
+      en: `For local cuisine in Brela, check:\n${restaurantUrl}`,
+    },
+    bars: {
+      hr: `Za barove i piće u Brelima pogledajte:\n${restaurantUrl}`,
+      en: `For bars and drinks in Brela, check:\n${restaurantUrl}`,
+    },
+  };
+
+  if (PREF.seafood.test(n)) return (SPECIFIC.seafood[lang] || SPECIFIC.seafood.en);
+  if (PREF.pizza.test(n)) return (SPECIFIC.pizza[lang] || SPECIFIC.pizza.en);
+  if (PREF.local.test(n)) return (SPECIFIC.local[lang] || SPECIFIC.local.en);
+  if (PREF.bars.test(n)) return (SPECIFIC.bars[lang] || SPECIFIC.bars.en);
+
+  return MSG[lang] || MSG.en;
 }
 
 // ─── TOPIC HANDLERS MAP ───────────────────────────────────────────────────────
