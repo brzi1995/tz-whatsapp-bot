@@ -1281,24 +1281,11 @@ router.post('/webhook', async (req, res) => {
     return res.send(twiml(faqReply));
   }
 
-  // Stay inside FAQ disambiguation flow until user picks/affirms an option.
-  // Prevents dropping to generic fallback when user replies naturally.
+  // Legacy cleanup: if an old faq_choice state exists, clear it and continue.
+  // We now prefer direct understanding over numbered clarification menus.
   if (!faqSelection && conversationState?.awaiting?.type === 'faq_choice') {
-    const options = Array.isArray(conversationState.awaiting.options) ? conversationState.awaiting.options : [];
-    if (options.length) {
-      let clarifyReply = formatFaqClarifyReply(options, activeLang);
-      clarifyReply = await alignReplyToUserLanguage(clarifyReply, trimmedMsg, model);
-      replyForLogs = clarifyReply;
-      await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
-      await persistTurn(clarifyReply, {
-        awaiting: conversationState.awaiting,
-        lastTopic: 'faq',
-        lastIntent: 'faq',
-        lastBotQuestion: 'faq_choice',
-      });
-      console.log('[webhook] FINAL RESPONSE SENT — FAQ clarification retry');
-      return res.send(twiml(clarifyReply));
-    }
+    conversationState.awaiting = null;
+    conversationState.lastBotQuestion = null;
   }
 
   // ── ENGINE — slot-based router for parking/weather/events/restaurants ───────
@@ -1345,31 +1332,64 @@ router.post('/webhook', async (req, res) => {
   // ── FAQ — database first, AI polish only ─────────────────────────────────
     const faqMatch = await getFaqMatch(tenant.id, effectiveMsg).catch(() => null);
     if (faqMatch?.matchType === 'clarify') {
-      let clarifyReply = formatFaqClarifyReply(faqMatch.options || [], activeLang);
-      clarifyReply = await alignReplyToUserLanguage(clarifyReply, trimmedMsg, model);
+      const bestOption = Array.isArray(faqMatch.options) ? faqMatch.options[0] : null;
+      if (bestOption?.answer) {
+        const rawAnswer = bestOption.answer;
+        const answerLang = detectLanguage(rawAnswer);
+        let faqReply = rawAnswer;
 
-      await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
-      replyForLogs = clarifyReply;
-      await persistTurn(clarifyReply, {
-        awaiting: {
-          type: 'faq_choice',
-          options: (faqMatch.options || []).map(option => ({
-            question: option.question,
-            answer: option.answer,
-            link_title: option.link_title || null,
-            link_url: option.link_url || null,
-            link_image: option.link_image || null,
-          })),
-        },
-        lastTopic: 'faq',
-        lastIntent: 'faq',
-        lastBotQuestion: 'faq_choice',
-        lastWeatherIntent: null,
-        lastEventPeriod: null,
-      });
+        if (answerLang !== activeLang) {
+          try {
+            let aiReply = await rageMessage({
+              message: effectiveMsg,
+              baseAnswer: rawAnswer,
+              history: getLanguageScopedHistory(history, activeLang),
+              lang: activeLang,
+              systemPrompt: tenant.system_prompt,
+              model,
+            });
+            if (aiReply && detectLanguage(aiReply) !== activeLang) {
+              aiReply = await rageMessage({
+                message: effectiveMsg,
+                baseAnswer: rawAnswer,
+                history: [],
+                lang: activeLang,
+                systemPrompt: tenant.system_prompt,
+                model,
+              });
+            }
+            faqReply = cleanMixedLanguageReply(aiReply || rawAnswer, activeLang);
+          } catch (e) {
+            console.error('[webhook] AI failed (FAQ clarify->answer):', e.message);
+          }
+        }
+        faqReply = cleanMixedLanguageReply(faqReply, activeLang);
+        faqReply = await alignReplyToUserLanguage(faqReply, trimmedMsg, model);
 
-      console.log('[webhook] FINAL RESPONSE SENT — FAQ clarification');
-      return res.send(twiml(clarifyReply));
+        await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
+        replyForLogs = faqReply;
+        await persistTurn(faqReply, {
+          awaiting: null,
+          lastTopic: 'faq',
+          lastIntent: 'faq',
+          lastBotQuestion: null,
+          lastWeatherIntent: null,
+          lastEventPeriod: null,
+          lastFaq: {
+            question: bestOption.question,
+            answer: rawAnswer,
+            link_title: bestOption.link_title || null,
+            link_url: bestOption.link_url || null,
+            link_image: bestOption.link_image || null,
+          },
+        });
+
+        console.log('[webhook] FINAL RESPONSE SENT — FAQ clarify auto-resolved');
+        if (bestOption.link_url || bestOption.link_image) {
+          return res.send(twimlWithFaqLink(faqReply, bestOption.link_title, bestOption.link_url, bestOption.link_image));
+        }
+        return res.send(twiml(faqReply));
+      }
     }
 
     if (faqMatch?.matchType === 'strong') {
