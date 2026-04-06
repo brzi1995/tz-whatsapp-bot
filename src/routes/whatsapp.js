@@ -719,11 +719,17 @@ const BRELA_TOPICS = [
   'accommodat', 'apartment', 'hotel', 'transport', 'ferry', 'boat', 'swim',
   'dive', 'snorkel', 'kayak', 'bike', 'rent', 'parking', 'spa', 'wellness',
   // German
-  'strand', 'meer', 'ausflug', 'unterkunft', 'veranstaltung',
+  'strand', 'meer', 'ausflug', 'unterkunft', 'veranstaltung', 'restaurant', 'essen', 'abendessen', 'mittagessen',
   // Italian
-  'spiaggia', 'mare', 'parcheggio', 'attività', 'escursione', 'alloggio', 'ristor',
+  'spiaggia', 'mare', 'parcheggio', 'attivita', 'attività', 'escursione', 'alloggio', 'ristor', 'ristorante', 'mangiare', 'cena', 'cenare',
   // French
-  'plage', 'mer', 'activité', 'hébergement',
+  'plage', 'mer', 'activite', 'activité', 'hebergement', 'hébergement', 'restaurant', 'diner', 'déjeuner', 'manger', 'cuisine',
+  // Spanish
+  'playa', 'mar', 'restaurante', 'comida', 'cena', 'cenar', 'comer', 'aparcamiento', 'estacionamiento',
+  // Polish
+  'plaza', 'plaża', 'restauracj', 'kolacja', 'obiad', 'zjesc', 'zjeść', 'jedzenie', 'pogoda', 'parking',
+  // Swedish / Norwegian / Czech
+  'restaurang', 'middag', 'ata', 'spise', 'restaurace', 'vecere', 'večeře', 'veceri', 'jidlo', 'jídlo',
   // General
   'croatia', 'hrvatska', 'dalmatia', 'dalmacija', 'adriatic', 'jadran',
   'makarska', 'omiš',
@@ -768,7 +774,18 @@ function keywordIntent(msg) {
   if (!n) return null;
   if (n.includes('parking') || n.includes('aparcamiento') || n.includes('estacionamiento') || n.includes('parkowanie')) return 'parking';
   if (n.includes('beach') || n.includes('plaž') || n.includes('playa') || n.includes('plaza') || n.includes('plaża')) return 'beaches';
-  if (n.includes('restoran') || n.includes('restaurant') || n.includes('dinner') || n.includes('food') || n.includes('vecer') || n.includes('veceru') || n.includes('večer') || n.includes('večeru') || n.includes('restaurante') || n.includes('restauracja') || n.includes('restauracje') || n.includes('comida') || n.includes('kolacja')) return 'restaurants';
+  if (
+    n.includes('restoran') || n.includes('restaurant') || n.includes('dinner') || n.includes('food') ||
+    n.includes('vecer') || n.includes('veceru') || n.includes('večer') || n.includes('večeru') ||
+    n.includes('restaurante') || n.includes('restauracja') || n.includes('restauracje') ||
+    n.includes('comida') || n.includes('cena') || n.includes('cenar') || n.includes('cenare') || n.includes('comer') ||
+    n.includes('kolacja') || n.includes('kolacje') || n.includes('kolacji') || n.includes('obiad') || n.includes('zjesc') || n.includes('zjeść') ||
+    n.includes('abendessen') || n.includes('mittagessen') || n.includes('essen') ||
+    n.includes('ristorante') || n.includes('mangiare') ||
+    n.includes('diner') || n.includes('manger') ||
+    n.includes('restaurang') || n.includes('middag') || n.includes('ata') || n.includes('spise') ||
+    n.includes('restaurace') || n.includes('vecere') || n.includes('večeře') || n.includes('veceri')
+  ) return 'restaurants';
   if (n.includes('event') || n.includes('dogadj') || n.includes('događ') || n.includes('evento') || n.includes('wydarzen')) return 'events';
   if (isWeatherQuery(msg)) return 'weather';
   return null;
