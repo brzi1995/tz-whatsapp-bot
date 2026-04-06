@@ -1255,6 +1255,7 @@ router.post('/webhook', async (req, res) => {
     getFaqMatch:    (msg) => getFaqMatch(tenant.id, msg),
     // Pass previous lastQuestion so the safety-net anti-loop can detect it
     _prevLastQuestion: engineSession.lastQuestion,
+    _historyLooksLikeWeather: historyLooksLikeWeather(history),
   };
 
   const engineReply = await engineHandleMessage(trimmedMsg, engineSession, engineDeps);

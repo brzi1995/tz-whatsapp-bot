@@ -682,6 +682,18 @@ function parseWeatherFollowUp(message) {
   return null;
 }
 
+function extractStandaloneDayNumber(message) {
+  const n = norm(message);
+  if (!n) return null;
+  const words = n.split(/\s+/).filter(Boolean);
+  if (words.length > 3) return null;
+  const m = n.match(/\b(\d{1,2})\b/);
+  if (!m) return null;
+  const days = parseInt(m[1], 10);
+  if (!Number.isInteger(days) || days < 1) return null;
+  return days;
+}
+
 function isEventFollowUp(message, session) {
   if (session.lastTopic !== 'events') return false;
   return Boolean(parseEventFollowUp(message));
@@ -785,6 +797,20 @@ async function handleMessage(userMsg, session, deps) {
     if (session.lastTopic === 'parking') return ACK.parking[lang] || ACK.parking.en;
     if (session.lastTopic === 'restaurants') return ACK.restaurants[lang] || ACK.restaurants.en;
     return ACK.default[lang] || ACK.default.en;
+  }
+
+  // ── Priority 3a: numeric weather follow-up hard guard ───────────────────
+  // If last topic is weather (or recent history looked weather), short numeric
+  // replies like "10?" must stay in weather flow and never drop to fallback/AI.
+  const standaloneDays = extractStandaloneDayNumber(msg);
+  const weatherContext = session.lastTopic === 'weather' || Boolean(deps?._historyLooksLikeWeather);
+  if (standaloneDays && weatherContext) {
+    const synthMsg = standaloneDays >= 10
+      ? '10 days'
+      : (standaloneDays === 1 ? 'tomorrow' : `${Math.min(Math.max(standaloneDays, 2), 5)} days`);
+    const reply = await TOPIC_HANDLERS.weather.handle(synthMsg, session, deps);
+    session.lastTopic = 'weather';
+    return reply;
   }
 
   // ── Priority 3: weather follow-up ────────────────────────────────────────
