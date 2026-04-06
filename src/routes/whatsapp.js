@@ -71,8 +71,10 @@ const GREETING_MSG = {
   sv: 'Hej! Jag är Belly, din lokala guide för Brela. Hur kan jag hjälpa till?',
   no: 'Hei! Jeg er Belly, din lokale guide for Brela. Hvordan kan jeg hjelpe?',
   cs: 'Ahoj! Jsem Belly, tvůj místní průvodce pro Brela. Jak mohu pomoci?',
+  es: '¡Hola! Soy Belly, tu guía local de Brela. ¿En qué puedo ayudarte?',
+  pl: 'Cześć! Jestem Belly, twoja lokalna przewodniczka po Breli. Jak mogę pomóc?',
 };
-function greetingReply(lang) { return GREETING_MSG[lang] || GREETING_MSG.hr; }
+function greetingReply(lang) { return GREETING_MSG[lang] || GREETING_MSG.en; }
 
 const YES_MSG = {
   hr: 'Naravno — kako vam mogu pomoći?',
@@ -83,6 +85,8 @@ const YES_MSG = {
   sv: 'Självklart — hur kan jag hjälpa till?',
   no: 'Klart — hvordan kan jeg hjelpe?',
   cs: 'Jasně — jak mohu pomoci?',
+  es: 'Claro — ¿en qué puedo ayudarte?',
+  pl: 'Jasne — jak mogę pomóc?',
 };
 const NO_MSG = {
   hr: 'U redu — tu sam ako vam nešto zatreba o Brelima.',
@@ -93,9 +97,11 @@ const NO_MSG = {
   sv: 'Okej — jag är här om du behöver något om Brela.',
   no: 'Greit — jeg er her hvis du trenger noe om Brela.',
   cs: 'Dobře — jsem tu, pokud budete něco potřebovat o Brela.',
+  es: 'De acuerdo — estoy aquí si necesitas algo sobre Brela.',
+  pl: 'W porządku — jestem tutaj, jeśli czegoś potrzebujesz o Breli.',
 };
-function yesReply(lang) { return YES_MSG[lang] || YES_MSG.hr; }
-function noReply(lang) { return NO_MSG[lang] || NO_MSG.hr; }
+function yesReply(lang) { return YES_MSG[lang] || YES_MSG.en; }
+function noReply(lang) { return NO_MSG[lang] || NO_MSG.en; }
 
 // Final fallback — used when AI returns nothing useful and for spam
 const FALLBACK_MSG = {
@@ -107,8 +113,10 @@ const FALLBACK_MSG = {
   sv: 'Jag kan hjälpa med:\n• stränder\n• parkering\n• restauranger\n• evenemang\nVad vill du veta?',
   no: 'Jeg kan hjelpe med:\n• strender\n• parkering\n• restauranter\n• arrangementer\nHva vil du vite?',
   cs: 'Mohu pomoci s:\n• pláže\n• parkování\n• restaurace\n• akce\nCo potřebujete vědět?',
+  es: 'Puedo ayudar con:\n• playas\n• parking\n• restaurantes\n• eventos\n¿Qué te interesa saber?',
+  pl: 'Mogę pomóc w:\n• plaże\n• parking\n• restauracje\n• wydarzenia\nCo chcesz wiedzieć?',
 };
-function fallbackReply(lang) { return FALLBACK_MSG[lang] || FALLBACK_MSG.hr; }
+function fallbackReply(lang) { return FALLBACK_MSG[lang] || FALLBACK_MSG.en; }
 
 const BRELA_INFO_URL = 'https://brela.hr/';
 const BRELA_CONTACT_URL = 'https://brela.hr/kontakt/';
@@ -185,6 +193,8 @@ const RESTAURANT_DIR_REPLY = {
   sv: `För restauranger och middag i Brela finns den officiella katalogen här:\n${RESTAURANT_DIR_URL}\nOm du vill kan jag också hjälpa med:\n• seafood\n• pizza\n• lokal dalmatisk mat\n• restauranger vid havet`,
   no: `For restauranter og middag i Brela finner du den offisielle oversikten her:\n${RESTAURANT_DIR_URL}\nHvis du vil kan jeg også hjelpe med:\n• seafood\n• pizza\n• lokal dalmatisk mat\n• restauranter ved sjøen`,
   cs: `Pro restaurace a večeři v Brele je oficiální seznam zde:\n${RESTAURANT_DIR_URL}\nPokud chcete, mohu pomoci také s:\n• seafood\n• pizza\n• místní dalmatská kuchyně\n• restaurace u moře`,
+  es: `Para restaurantes y cena en Brela, el directorio oficial está aquí:\n${RESTAURANT_DIR_URL}\nSi quieres, puedo ayudar también con:\n• seafood\n• pizza\n• cocina local dálmata\n• restaurantes junto al mar`,
+  pl: `Dla restauracji i kolacji w Breli oficjalna lista jest tutaj:\n${RESTAURANT_DIR_URL}\nJeśli chcesz, mogę też pomóc z:\n• seafood\n• pizza\n• lokalna kuchnia dalmatyńska\n• restauracje nad morzem`,
 };
 function restaurantDirectoryReply(lang) { return RESTAURANT_DIR_REPLY[lang] || RESTAURANT_DIR_REPLY.en; }
 
@@ -304,6 +314,8 @@ const CONSENT_ASK = {
   sv: 'Vill du ta emot notiser om evenemang i Brela?\nSvara med DA eller NE 😊',
   no: 'Vil du motta varsler om arrangementer i Brela?\nSvar med DA eller NE 😊',
   cs: 'Chcete dostávat oznámení o akcích v Brele?\nOdpovězte DA nebo NE 😊',
+  es: '¿Quieres recibir notificaciones sobre eventos en Brela?\nResponde con DA o NE 😊',
+  pl: 'Czy chcesz otrzymywać powiadomienia o wydarzeniach w Breli?\nOdpowiedz DA lub NE 😊',
 };
 
 // Invalid reply while awaiting consent
@@ -316,6 +328,8 @@ const CONSENT_INVALID = {
   sv: 'Svara med DA eller NE.',
   no: 'Svar med DA eller NE.',
   cs: 'Odpovězte prosím DA nebo NE.',
+  es: 'Por favor responde con DA o NE.',
+  pl: 'Proszę odpowiedz DA lub NE.',
 };
 
 const OPT_IN_CONFIRM = {
@@ -327,6 +341,8 @@ const OPT_IN_CONFIRM = {
   sv: 'Bra! Vi meddelar dig om evenemang 🎉',
   no: 'Flott! Vi varsler deg om arrangementer 🎉',
   cs: 'Skvěle! Budeme vás informovat o akcích 🎉',
+  es: '¡Genial! Te avisaremos sobre eventos 🎉',
+  pl: 'Super! Będziemy Cię informować o wydarzeniach 🎉',
 };
 const OPT_OUT_CONFIRM = {
   hr: 'U redu, nećeš dobivati obavijesti. Uvijek možeš pitati za pomoć! 😊',
@@ -337,6 +353,8 @@ const OPT_OUT_CONFIRM = {
   sv: 'Okej, inga aviseringar. Du kan alltid be om hjälp! 😊',
   no: 'Greit, ingen varsler. Du kan alltid be om hjelp! 😊',
   cs: 'Dobře, žádná oznámení. Vždy můžete požádat o pomoc! 😊',
+  es: 'De acuerdo, no recibirás notificaciones. ¡Siempre puedes pedir ayuda! 😊',
+  pl: 'W porządku, nie będziesz otrzymywać powiadomień. Zawsze możesz poprosić o pomoc! 😊',
 };
 
 // Language-aware labels and empty-state messages for time-specific event queries
@@ -722,6 +740,8 @@ const WEATHER_QUERY_WORDS = [
   'wetter', 'regen', 'sonne', 'temperatur',
   'tempo', 'pioggia', 'sole', 'previsione',
   'météo', 'pluie', 'soleil', 'pogoda',
+  'tiempo', 'clima', 'pronóstico', 'pronostico', 'lluvia', 'viento', 'nubes',
+  'deszcz', 'slonce', 'słońce', 'wiatr', 'chmury',
 ];
 function isWeatherQuery(msg) {
   const normalized = normalizeLookup(msg);
@@ -736,10 +756,10 @@ function isWeatherQuery(msg) {
 function keywordIntent(msg) {
   const n = normalizeMessage(msg);
   if (!n) return null;
-  if (n.includes('parking')) return 'parking';
-  if (n.includes('beach') || n.includes('plaž')) return 'beaches';
-  if (n.includes('restoran') || n.includes('restaurant') || n.includes('dinner') || n.includes('food')) return 'restaurants';
-  if (n.includes('event') || n.includes('dogadj') || n.includes('događ')) return 'events';
+  if (n.includes('parking') || n.includes('aparcamiento') || n.includes('estacionamiento') || n.includes('parkowanie')) return 'parking';
+  if (n.includes('beach') || n.includes('plaž') || n.includes('playa') || n.includes('plaza') || n.includes('plaża')) return 'beaches';
+  if (n.includes('restoran') || n.includes('restaurant') || n.includes('dinner') || n.includes('food') || n.includes('restaurante') || n.includes('restauracja') || n.includes('comida') || n.includes('kolacja')) return 'restaurants';
+  if (n.includes('event') || n.includes('dogadj') || n.includes('događ') || n.includes('evento') || n.includes('wydarzen')) return 'events';
   if (isWeatherQuery(msg)) return 'weather';
   return null;
 }
@@ -784,6 +804,8 @@ function detectShortReplyLanguage(message, fallbackLang) {
   const normalized = normalizeLookup(message);
   if (normalized === 'da' || normalized === 'ne') return 'hr';
   if (normalized === 'yes' || normalized === 'no' || normalized === 'yep' || normalized === 'nope') return 'en';
+  if (normalized === 'si' || normalized === 'sí') return 'es';
+  if (normalized === 'tak' || normalized === 'nie') return 'pl';
   return fallbackLang;
 }
 
@@ -857,6 +879,8 @@ function isWeatherFollowUp(message, conversationState) {
   return [
     'a sutra', 'a danas', 'iducih dana', 'sljedecih dana',
     'and tomorrow', 'and today', 'next days',
+    'y manana', 'mañana', 'hoy', 'proximos dias', 'próximos días',
+    'jutro', 'dzisiaj', 'kolejne dni',
     'sutra', 'danas', 'tomorrow', 'today',
   ].some(term => normalized.includes(normalizeLookup(term)));
 }
@@ -893,9 +917,9 @@ function detectWeatherIntent(message, conversationState = {}) {
   // If continuing a weather chat, any number up to 7 defaults to forecast
   const continuingWeather = conversationState.lastTopic === 'weather' || conversationState.lastWeatherIntent;
 
-  const asksTomorrow = ['tomorrow', 'sutra', 'morgen', 'domani', 'demain'].some(hasTerm);
-  const asksCurrent = ['today', 'danas', 'heute', 'oggi', 'aujourdhui', 'current', 'now', 'trenutno', 'sada'].some(hasTerm);
-  const asksMulti = ['forecast', 'next', 'coming', 'days', 'dana', 'week', 'tjedan', 'tage', 'giorni', 'jours', 'previsioni', 'prognoza'].some(hasTerm);
+  const asksTomorrow = ['tomorrow', 'sutra', 'morgen', 'domani', 'demain', 'manana', 'mañana', 'jutro'].some(hasTerm);
+  const asksCurrent = ['today', 'danas', 'heute', 'oggi', 'aujourdhui', 'current', 'now', 'trenutno', 'sada', 'hoy', 'dzisiaj', 'dzis'].some(hasTerm);
+  const asksMulti = ['forecast', 'next', 'coming', 'days', 'dana', 'week', 'tjedan', 'tage', 'giorni', 'jours', 'previsioni', 'prognoza', 'pronostico', 'pronóstico', 'dias', 'días', 'dni', 'tydzien', 'tydzień'].some(hasTerm);
 
   if (requestedDays && requestedDays > 5) return { type: 'weather_long', days: requestedDays };
   if ((requestedDays && requestedDays > 1) || asksMulti || (continuingWeather && requestedDays)) {

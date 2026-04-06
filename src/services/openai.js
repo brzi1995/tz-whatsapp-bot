@@ -27,7 +27,7 @@ async function chat(systemPrompt, messages, model = 'gpt-4o-mini') {
   return response.choices[0].message.content.trim();
 }
 
-const VALID_LANGS   = ['hr', 'en', 'de', 'it', 'fr', 'sv', 'no', 'cs'];
+const VALID_LANGS   = ['hr', 'en', 'de', 'it', 'fr', 'sv', 'no', 'cs', 'es', 'pl'];
 const VALID_INTENTS = [
   'weather_current', 'weather_tomorrow', 'weather_multi',
   'events_today', 'events_tomorrow', 'events_week', 'events',
@@ -46,6 +46,10 @@ function detectLanguageWithConfidence(message) {
 
   // Croatian-specific characters — highest confidence signal
   if (/[đšžćčĐŠŽĆČ]/.test(message)) return { lang: 'hr', score: 10, ambiguous: false };
+  // Spanish-specific punctuation/characters
+  if (/[ñÑ¡¿]/.test(message)) return { lang: 'es', score: 10, ambiguous: false };
+  // Polish-specific characters
+  if (/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/.test(message)) return { lang: 'pl', score: 10, ambiguous: false };
   // German-specific
   if (/[äöüÄÖÜß]/.test(message)) return { lang: 'de', score: 10, ambiguous: false };
   // French-specific (ç, circumflex, œ, ë) — check before Italian
@@ -70,6 +74,8 @@ function detectLanguageWithConfidence(message) {
     sv: ['idag', 'imorgon', 'tack', 'hej', 'vad', 'var', 'hur', 'evenemang'],
     no: ['i dag', 'i morgen', 'takk', 'hei', 'hva', 'hvor', 'arrangementer'],
     cs: ['dnes', 'zitra', 'diky', 'ahoj', 'kde', 'jak', 'prosim', 'akce'],
+    es: ['hola', 'gracias', 'hoy', 'manana', 'mañana', 'tiempo', 'clima', 'pronostico', 'pronóstico', 'restaurante', 'comida', 'cena', 'eventos', 'playa', 'parking'],
+    pl: ['czesc', 'cześć', 'dziekuje', 'dziękuję', 'dzis', 'dzisiaj', 'jutro', 'pogoda', 'prognoza', 'restauracja', 'jedzenie', 'kolacja', 'wydarzenia', 'plaza', 'plaża', 'parking'],
   };
 
   let best = { lang: null, score: 0 };

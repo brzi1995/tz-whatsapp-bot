@@ -18,14 +18,14 @@
 // ─── INTENT DETECTION ────────────────────────────────────────────────────────
 
 const TOPIC_PATTERNS = {
-  parking:     /\b(parking|park\b|parkir|parkage|stationnement|parcheggio|parken|parkovat|parkiranje)\b/i,
-  weather:     /\b(weather|forecast|rain|sunny|sun\b|wind|temperature|cloud|hot|cold|humid|wetter|regen|sonne|temperatur|vorhersage|vrijeme|prognoza|kiša|sunce|vjetar|temperatura|oblaci|météo|meteo|tempo|pioggia|previsione|sole|pogoda)\b/i,
-  events:      /\b(event|events|happening|what'?s happening|what'?s on|veranstaltung|veranstaltungen|evento|eventi|événement|événements|evenemang|arrangement|dogadjaj|dogadjaji|dogadaj|dogadanja|dogadanja|akce|události)\b/i,
-  restaurants: /\b(restaurant|restaurants|restoran|restorani|ristorante|ristoranti|restaurang|restauranger|restauranten|restaurace|food|dinner|lunch|eat|essen|mangiare|manger|konobi|konoba|hrana|pice|piće|vecera|večera|rucak|ručak|gastr|cafe|café|tavern|seafood|pizza|italian|dalmatian|cuisine|local|bar|bars|drink|drinks)\b/i,
+  parking:     /\b(parking|park\b|parkir|parkage|stationnement|parcheggio|parken|parkovat|parkiranje|estacionamiento|aparcamiento|parkowanie)\b/i,
+  weather:     /\b(weather|forecast|rain|sunny|sun\b|wind|temperature|cloud|hot|cold|humid|wetter|regen|sonne|temperatur|vorhersage|vrijeme|prognoza|kiša|sunce|vjetar|temperatura|oblaci|météo|meteo|tempo|pioggia|previsione|sole|pogoda|tiempo|clima|pronostico|pronóstico|lluvia|viento|nubes|deszcz|slonce|słońce|wiatr|chmury)\b/i,
+  events:      /\b(event|events|happening|what'?s happening|what'?s on|veranstaltung|veranstaltungen|evento|eventi|événement|événements|evenemang|arrangement|dogadjaj|dogadjaji|dogadaj|dogadanja|dogadanja|akce|události|eventos|wydarzenia)\b/i,
+  restaurants: /\b(restaurant|restaurants|restoran|restorani|ristorante|ristoranti|restaurang|restauranger|restauranten|restaurace|restaurante|restaurantes|restauracja|food|dinner|lunch|eat|essen|mangiare|manger|konobi|konoba|hrana|pice|piće|vecera|večera|rucak|ručak|gastr|cafe|café|tavern|seafood|pizza|italian|dalmatian|cuisine|local|bar|bars|drink|drinks|comida|cena|cenar|jedzenie|kolacja)\b/i,
 };
 
 // Follow-up patterns — only active when we were already on that topic
-const WEATHER_FOLLOWUP = /\b(tomorrow|sutra|morgen|demain|domani|today|danas|heute|oggi|forecast|prognoza|in\s+\d+\s+days?|za\s+\d+\s+dana|next\s+\d+\s+days?|sljedec|iduc)\b/i;
+const WEATHER_FOLLOWUP = /\b(tomorrow|sutra|morgen|demain|domani|manana|mañana|jutro|today|danas|heute|oggi|hoy|dzis|dzisiaj|forecast|prognoza|pronostico|pronóstico|in\s+\d+\s+days?|za\s+\d+\s+dana|next\s+\d+\s+days?|sljedec|iduc)\b/i;
 const EVENT_FOLLOWUP   = /\b(today|tonight|tomorrow|this\s+week|this\s+weekend|weekend|music|live\s+music|family|family-friendly|sutra|danas|večeras|veceras|tjedan|ovih\s+dana|ovaj\s+tjedan)\b/i;
 
 /**
@@ -91,6 +91,8 @@ function getSuggestions(topic, lang = 'en') {
       sv: ['parkering nära stränder', 'restauranger i närheten', 'väder idag'],
       no: ['parkering nær strender', 'restauranter i nærheten', 'vær i dag'],
       cs: ['parkování u pláží', 'restaurace v okolí', 'počasí dnes'],
+      es: ['parking cerca de playas', 'restaurantes cercanos', 'tiempo hoy'],
+      pl: ['parking przy plażach', 'restauracje w pobliżu', 'pogoda dziś'],
     },
     weather: {
       hr: ['prognoza za sutra', '5-dnevna prognoza', '10-dnevna prognoza'],
@@ -101,6 +103,8 @@ function getSuggestions(topic, lang = 'en') {
       sv: ['prognos för i morgon', '5-dagarsprognos', '10-dagarsprognos'],
       no: ['prognose for i morgen', '5-dagers prognose', '10-dagers prognose'],
       cs: ['předpověď na zítra', '5denní předpověď', '10denní předpověď'],
+      es: ['pronóstico de mañana', 'pronóstico de 5 días', 'pronóstico de 10 días'],
+      pl: ['prognoza na jutro', 'prognoza 5-dniowa', 'prognoza 10-dniowa'],
     },
     events: {
       hr: ['što ima večeras', 'događaji ovaj vikend', 'restorani u blizini'],
@@ -111,6 +115,8 @@ function getSuggestions(topic, lang = 'en') {
       sv: ['vad som händer ikväll', 'evenemang i helgen', 'restauranger i närheten'],
       no: ['hva som skjer i kveld', 'arrangementer i helgen', 'restauranter i nærheten'],
       cs: ['co se děje dnes večer', 'akce tento víkend', 'restaurace v okolí'],
+      es: ['qué pasa esta noche', 'eventos este fin de semana', 'restaurantes cercanos'],
+      pl: ['co dzieje się dziś wieczorem', 'wydarzenia w ten weekend', 'restauracje w pobliżu'],
     },
     restaurants: {
       hr: ['seafood', 'pizza / Italian', 'local Dalmatian cuisine', 'barovi / kokteli'],
@@ -121,6 +127,8 @@ function getSuggestions(topic, lang = 'en') {
       sv: ['seafood', 'pizza / Italian', 'local Dalmatian cuisine', 'barer / cocktails'],
       no: ['seafood', 'pizza / Italian', 'local Dalmatian cuisine', 'barer / cocktails'],
       cs: ['seafood', 'pizza / Italian', 'local Dalmatian cuisine', 'bary / koktejly'],
+      es: ['seafood', 'pizza / Italian', 'local Dalmatian cuisine', 'bares / cócteles'],
+      pl: ['seafood', 'pizza / Italian', 'local Dalmatian cuisine', 'bary / koktajle'],
     },
   };
 
@@ -143,6 +151,8 @@ function formatSuggestions(topic, lang = 'en', excludeContains = []) {
     sv: '\n\nOm du vill kan jag också hjälpa med:\n• ',
     no: '\n\nHvis du vil, kan jeg også hjelpe med:\n• ',
     cs: '\n\nPokud chcete, mohu pomoci také s:\n• ',
+    es: '\n\nSi quieres, también puedo ayudarte con:\n• ',
+    pl: '\n\nJeśli chcesz, mogę też pomóc w:\n• ',
   };
   return (LEAD[lang] || LEAD.en) + items.join('\n• ');
 }
@@ -250,6 +260,8 @@ async function handleParking(userMsg, session, deps) {
     sv: 'Parkering i Brela finns främst i centrum och nära de viktigaste strandområdena. På sommaren blir platserna snabbt fulla, så det är bäst att komma tidigare på dagen. Om du vill kan jag också hjälpa med stränder, restauranger, väder eller evenemang.',
     no: 'Parkering i Brela er hovedsakelig tilgjengelig i sentrum og nær de viktigste strandområdene. Om sommeren fylles plassene raskt opp, så det er best å komme tidligere på dagen. Hvis du vil kan jeg også hjelpe med strender, restauranter, vær eller arrangementer.',
     cs: 'Parkování v Brele je dostupné hlavně v centru města a u hlavních pláží. V létě se místa rychle zaplní, proto je nejlepší přijet dříve během dne. Pokud chcete, mohu pomoci také s plážemi, restauracemi, počasím nebo akcemi.',
+    es: 'El parking en Brela suele estar disponible en el centro y cerca de las principales playas. En verano las plazas se llenan rápido, así que es mejor llegar más temprano. Si quieres, también puedo ayudar con playas, restaurantes, tiempo o eventos.',
+    pl: 'Parking w Breli jest najczęściej dostępny w centrum i przy głównych plażach. Latem miejsca szybko się zapełniają, więc najlepiej przyjechać wcześniej. Jeśli chcesz, mogę też pomóc z plażami, restauracjami, pogodą i wydarzeniami.',
   };
 
   return SIMPLE[lang] || SIMPLE.en;
@@ -261,7 +273,7 @@ async function handleParking(userMsg, session, deps) {
 function getWeatherSubIntent(message) {
   const n = norm(message);
 
-  if (/\b(tomorrow|tommorow|tmrw|tmr|sutra|morgen|demain|domani|imorgon|i morgen|zitra)\b/.test(n)) return 'tomorrow';
+  if (/\b(tomorrow|tommorow|tmrw|tmr|sutra|morgen|demain|domani|manana|mañana|imorgon|i morgen|zitra|jutro)\b/.test(n)) return 'tomorrow';
 
   // just a number in follow-up context ("5", "10")
   if (/^\d{1,2}$/.test(n)) {
@@ -271,7 +283,7 @@ function getWeatherSubIntent(message) {
   }
 
   // "in 5 days" / "za 5 dana" / "next 5 days"
-  const dayMatch = n.match(/\b(?:in|za|next)\s+(\d{1,2})\s*(?:days?|dana|tage|giorni|jours|dagar|dager|dni)?\b/);
+  const dayMatch = n.match(/\b(?:in|za|next|en|w)\s+(\d{1,2})\s*(?:days?|dana|tage|giorni|jours|dias|días|dagar|dager|dni)?\b/);
   if (dayMatch) {
     const days = parseInt(dayMatch[1], 10);
     if (days >= 10) return 'long';
@@ -279,14 +291,14 @@ function getWeatherSubIntent(message) {
   }
 
   // plain number + days
-  const numMatch = n.match(/\b(\d{1,2})\s*(?:days?|dana|tage|giorni|jours|dagar|dager|dni)\b/);
+  const numMatch = n.match(/\b(\d{1,2})\s*(?:days?|dana|tage|giorni|jours|dias|días|dagar|dager|dni)\b/);
   if (numMatch) {
     const days = parseInt(numMatch[1], 10);
     if (days >= 10) return 'long';
     return days > 5 ? { type: 'forecast', days: 5 } : { type: 'forecast', days };
   }
 
-  if (/\b(week|tjedan|woche|settimana|semaine)\b/.test(n)) return { type: 'forecast', days: 5 };
+  if (/\b(week|tjedan|woche|settimana|semaine|semana|tydzien|tydzień)\b/.test(n)) return { type: 'forecast', days: 5 };
   return 'current';
 }
 
@@ -311,6 +323,8 @@ async function handleWeather(userMsg, session, deps) {
     sv: `🌤️ Ingen live data just nu. Detaljerad prognos: ${FORECAST_URL}`,
     no: `🌤️ Ingen live data nå. Detaljert prognose: ${FORECAST_URL}`,
     cs: `🌤️ Žádná živá data. Detailní předpověď: ${FORECAST_URL}`,
+    es: `🌤️ No tengo datos en vivo ahora. Pronóstico detallado: ${FORECAST_URL}`,
+    pl: `🌤️ Nie mam teraz danych na żywo. Szczegółowa prognoza: ${FORECAST_URL}`,
   };
   const LONG_RANGE = {
     hr: `Za 10-dnevnu prognozu za Brela: ${FORECAST_URL}`,
@@ -321,10 +335,12 @@ async function handleWeather(userMsg, session, deps) {
     sv: `10-dagsprognos för Brela: ${FORECAST_URL}`,
     no: `10-dagers prognose for Brela: ${FORECAST_URL}`,
     cs: `10denní předpověď pro Brela: ${FORECAST_URL}`,
+    es: `Pronóstico de 10 días para Brela: ${FORECAST_URL}`,
+    pl: `Prognoza 10-dniowa dla Breli: ${FORECAST_URL}`,
   };
   const LABELS = {
-    current:  { hr: 'Danas u Brelima',  en: 'Brela today',    de: 'Brela heute',  it: 'Brela oggi',   fr: "Brela aujourd'hui", sv: 'Brela idag',    no: 'Brela i dag',    cs: 'Brela dnes' },
-    tomorrow: { hr: 'Sutra u Brelima',  en: 'Brela tomorrow', de: 'Brela morgen', it: 'Brela domani', fr: 'Brela demain',       sv: 'Brela imorgon', no: 'Brela i morgen', cs: 'Brela zítra' },
+    current:  { hr: 'Danas u Brelima',  en: 'Brela today',    de: 'Brela heute',  it: 'Brela oggi',   fr: "Brela aujourd'hui", sv: 'Brela idag',    no: 'Brela i dag',    cs: 'Brela dnes', es: 'Brela hoy', pl: 'Brela dziś' },
+    tomorrow: { hr: 'Sutra u Brelima',  en: 'Brela tomorrow', de: 'Brela morgen', it: 'Brela domani', fr: 'Brela demain',       sv: 'Brela imorgon', no: 'Brela i morgen', cs: 'Brela zítra', es: 'Brela mañana', pl: 'Brela jutro' },
   };
 
   const subIntent = getWeatherSubIntent(userMsg);
@@ -334,7 +350,7 @@ async function handleWeather(userMsg, session, deps) {
   }
   if (!openWeatherKey) return UNAVAIL[lang] || UNAVAIL.en;
 
-  const owLang = ['hr', 'en', 'de', 'it', 'fr'].includes(lang) ? lang : 'en';
+  const owLang = ['hr', 'en', 'de', 'it', 'fr', 'es', 'pl'].includes(lang) ? lang : 'en';
   const q = encodeURIComponent(city);
 
   try {
@@ -382,6 +398,8 @@ async function handleWeather(userMsg, session, deps) {
       sv: (n) => `${n}-dagarsprognos Brela`,
       no: (n) => `${n}-dagersprognose Brela`,
       cs: (n) => `${n}denní prognóza Brela`,
+      es: (n) => `Pronóstico de ${n} días para Brela`,
+      pl: (n) => `Prognoza ${n}-dniowa dla Breli`,
     };
     const hdrFn = FORECAST_HDR[lang] || FORECAST_HDR.en;
     const ans = `🌤️ ${hdrFn(days)}:\n${lines.join('\n')}`;
@@ -512,9 +530,9 @@ async function handleRestaurants(userMsg, session, deps) {
   const n = norm(userMsg);
 
   const PREF = {
-    seafood: /\b(seafood|fish|ribe|riba|frutti|mare)\b/,
-    pizza: /\b(pizza|italian|italiano)\b/,
-    local: /\b(local|dalmatian|domaca|domaća|traditional|tradicional)\b/,
+    seafood: /\b(seafood|fish|ribe|riba|frutti|mare|marisco|pescado|ryby|ryba)\b/,
+    pizza: /\b(pizza|italian|italiano|wloska|włoska)\b/,
+    local: /\b(local|dalmatian|domaca|domaća|traditional|tradicional|localna|lokalna|cocina|kuchnia)\b/,
     bars: /\b(bar|bars|drink|drinks|cocktail|cocktails)\b/,
   };
 
@@ -527,23 +545,33 @@ async function handleRestaurants(userMsg, session, deps) {
     sv: `Här är restauranger och barer i Brela:\n${restaurantUrl}\n\nVälj efter matstil:\n• seafood\n• pizza / Italian\n• local Dalmatian cuisine`,
     no: `Her er restauranter og barer i Brela:\n${restaurantUrl}\n\nVelg etter matstil:\n• seafood\n• pizza / Italian\n• local Dalmatian cuisine`,
     cs: `Zde jsou restaurace a bary v Brele:\n${restaurantUrl}\n\nMůžete vybírat podle stylu:\n• seafood\n• pizza / Italian\n• local Dalmatian cuisine`,
+    es: `Aquí tienes restaurantes y bares en Brela:\n${restaurantUrl}\n\nPuedes elegir por estilo:\n• seafood\n• pizza / Italian\n• local Dalmatian cuisine`,
+    pl: `Oto restauracje i bary w Breli:\n${restaurantUrl}\n\nMożesz wybrać styl kuchni:\n• seafood\n• pizza / Italian\n• local Dalmatian cuisine`,
   };
   const SPECIFIC = {
     seafood: {
       hr: `Za seafood opcije u Brelima pogledajte:\n${restaurantUrl}`,
       en: `For seafood options in Brela, check:\n${restaurantUrl}`,
+      es: `Para opciones de seafood en Brela, mira:\n${restaurantUrl}`,
+      pl: `Opcje seafood w Breli znajdziesz tutaj:\n${restaurantUrl}`,
     },
     pizza: {
       hr: `Za pizza / Italian opcije u Brelima pogledajte:\n${restaurantUrl}`,
       en: `For pizza / Italian options in Brela, check:\n${restaurantUrl}`,
+      es: `Para opciones de pizza / Italian en Brela, mira:\n${restaurantUrl}`,
+      pl: `Opcje pizza / Italian w Breli znajdziesz tutaj:\n${restaurantUrl}`,
     },
     local: {
       hr: `Za lokalnu kuhinju u Brelima pogledajte:\n${restaurantUrl}`,
       en: `For local cuisine in Brela, check:\n${restaurantUrl}`,
+      es: `Para cocina local en Brela, mira:\n${restaurantUrl}`,
+      pl: `Lokalna kuchnia w Breli:\n${restaurantUrl}`,
     },
     bars: {
       hr: `Za barove i piće u Brelima pogledajte:\n${restaurantUrl}`,
       en: `For bars and drinks in Brela, check:\n${restaurantUrl}`,
+      es: `Para bares y bebidas en Brela, mira:\n${restaurantUrl}`,
+      pl: `Bary i drinki w Breli:\n${restaurantUrl}`,
     },
   };
 
@@ -617,22 +645,22 @@ function parseWeatherFollowUp(message) {
   }
 
   // tomorrow variants (including common misspellings)
-  if (/\b(tomorrow|tommorow|tmrw|tmr|sutra|morgen|demain|domani|imorgon|i morgen|zitra)\b/.test(n)) {
+  if (/\b(tomorrow|tommorow|tmrw|tmr|sutra|morgen|demain|domani|manana|mañana|imorgon|i morgen|zitra|jutro)\b/.test(n)) {
     return { type: 'tomorrow' };
   }
 
   // explicit 10-day
-  if (/\b(10\s*day|10\s*days|10-day|10day|10\s*dana|10\s*tage|10\s*giorni|10\s*jours|10\s*dagar|10\s*dager|10\s*dni)\b/.test(n)) {
+  if (/\b(10\s*day|10\s*days|10-day|10day|10\s*dana|10\s*tage|10\s*giorni|10\s*jours|10\s*dias|10\s*días|10\s*dagar|10\s*dager|10\s*dni)\b/.test(n)) {
     return { type: 'long' };
   }
 
   // explicit 5-day
-  if (/\b(5\s*day|5\s*days|5-day|5day|5\s*dana|5\s*tage|5\s*giorni|5\s*jours|5\s*dagar|5\s*dager|5\s*dni|forecast\s*5|yes\s*5\s*days)\b/.test(n)) {
+  if (/\b(5\s*day|5\s*days|5-day|5day|5\s*dana|5\s*tage|5\s*giorni|5\s*jours|5\s*dias|5\s*días|5\s*dagar|5\s*dager|5\s*dni|forecast\s*5|yes\s*5\s*days)\b/.test(n)) {
     return { type: 'forecast', days: 5 };
   }
 
   // generic N-days
-  const nDays = n.match(/\b(\d{1,2})\s*(?:days?|dana|tage|giorni|jours|dagar|dager|dni)\b/);
+  const nDays = n.match(/\b(\d{1,2})\s*(?:days?|dana|tage|giorni|jours|dias|días|dagar|dager|dni)\b/);
   if (nDays) {
     const days = parseInt(nDays[1], 10);
     if (days >= 10) return { type: 'long' };
@@ -640,7 +668,7 @@ function parseWeatherFollowUp(message) {
   }
 
   // generic "forecast" follow-up -> default to 5-day
-  if (/\b(forecast|prognoza|vorhersage|previsione|previsioni|prevision|predpoved)\b/.test(n)) {
+  if (/\b(forecast|prognoza|vorhersage|previsione|previsioni|prevision|predpoved|pronostico|pronóstico)\b/.test(n)) {
     return { type: 'forecast', days: 5 };
   }
 
