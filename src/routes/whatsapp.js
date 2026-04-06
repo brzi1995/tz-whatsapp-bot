@@ -844,6 +844,10 @@ function historyLooksLikeWeather(history) {
 
 function detectShortReplyLanguage(message, fallbackLang) {
   const normalized = normalizeLookup(message);
+  if (/\bza\s*\d{1,2}\s*(dana?)?\b/.test(normalized) || /\b(vrijeme|prognoza|danas|sutra)\b/.test(normalized)) return 'hr';
+  if (/\bin\s*\d{1,2}\s*(days?)?\b/.test(normalized) || /\b(weather|forecast|today|tomorrow)\b/.test(normalized)) return 'en';
+  if (/\ben\s*\d{1,2}\s*(dias|días)?\b/.test(normalized) || /\b(tiempo|pronostico|hoy|manana)\b/.test(normalized)) return 'es';
+  if (/\bw\s*\d{1,2}\s*dni\b/.test(normalized) || /\b(pogoda|prognoza|dzis|dzisiaj|jutro)\b/.test(normalized)) return 'pl';
   if (normalized === 'da' || normalized === 'ne') return 'hr';
   if (normalized === 'yes' || normalized === 'no' || normalized === 'yep' || normalized === 'nope') return 'en';
   if (normalized === 'si' || normalized === 'sí') return 'es';
@@ -1063,9 +1067,12 @@ router.post('/webhook', async (req, res) => {
     ? { lang: greetingLang, ambiguous: false }
     : detectLanguageWithConfidence(trimmedMsg);
   const stableLang = conversationState.lastLanguage || currentUser?.language || 'en';
-  const lang = langSignal.ambiguous
-    ? detectShortReplyLanguage(trimmedMsg, stableLang)
-    : (langSignal.lang || detectLanguage(trimmedMsg) || stableLang);
+  const shortLangHint = detectShortReplyLanguage(trimmedMsg);
+  const inTopicFollowUp = isWeatherFollowUp(trimmedMsg, conversationState) || isEventFollowUp(trimmedMsg, conversationState);
+  const lang = shortLangHint
+    || (langSignal.ambiguous
+      ? (inTopicFollowUp ? stableLang : detectShortReplyLanguage(trimmedMsg, stableLang))
+      : (langSignal.lang || detectLanguage(trimmedMsg) || stableLang));
   const activeLang = lang;
 
   // ── Extract engine session from stored state ────────────────────────────────
@@ -1102,7 +1109,7 @@ router.post('/webhook', async (req, res) => {
     }
   };
 
-  if (!langSignal.ambiguous || greetingLang) {
+  if (!langSignal.ambiguous || greetingLang || shortLangHint) {
     await setUserLang(tenant.id, userPhone, activeLang).catch(() => {});
   }
 
