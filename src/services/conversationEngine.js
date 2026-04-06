@@ -259,7 +259,7 @@ async function handleParking(userMsg, session, deps) {
   session.lastTopic = 'parking';
 
   const SIMPLE = {
-    hr: 'Parking u Breli je uglavnom dostupan u centru mjesta i blizu glavnih plaža. Tijekom ljeta mjesta se brzo popune, pa je najbolje doći ranije u danu. Ako želite, mogu pomoći i s plažama, restoranima, vremenom ili događanjima.',
+    hr: 'Parking u Brelima je uglavnom dostupan u centru mjesta i blizu glavnih plaža. Tijekom ljeta mjesta se brzo popune, pa je najbolje doći ranije u danu. Ako želite, mogu pomoći i s plažama, restoranima, vremenom ili događanjima.',
     en: 'Parking in Brela is mainly available in the town center and near the main beach areas. During summer, spots can fill up quickly, so it is best to arrive earlier in the day. If you want, I can also help with beaches, restaurants, weather, or events.',
     de: 'Parken in Brela ist hauptsächlich im Ortszentrum und in der Nähe der wichtigsten Strände verfügbar. Im Sommer sind die Plätze schnell voll, daher ist es am besten, früher am Tag anzukommen. Wenn Sie möchten, kann ich auch bei Stränden, Restaurants, Wetter oder Veranstaltungen helfen.',
     it: 'Il parcheggio a Brela è disponibile soprattutto nel centro e vicino alle principali zone balneari. In estate i posti si riempiono rapidamente, quindi è meglio arrivare prima durante la giornata. Se vuoi, posso aiutarti anche con spiagge, ristoranti, meteo o eventi.',
