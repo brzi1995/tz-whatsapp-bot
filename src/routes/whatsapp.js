@@ -179,6 +179,12 @@ const PARKING_CENTER_REPLY = {
 const RESTAURANT_DIR_REPLY = {
   hr: `Za restorane i večeru u Brelima, službeni popis je ovdje:\n${RESTAURANT_DIR_URL}\nAko želiš, mogu pomoći s:\n• riba / seafood\n• pizza\n• domaća kuhinja\n• restorani uz more`,
   en: `For restaurants and dinner in Brela, the official directory is here:\n${RESTAURANT_DIR_URL}\nIf you want, I can help with:\n• seafood\n• pizza\n• local cuisine\n• restaurants by the sea`,
+  de: `Für Restaurants und Abendessen in Brela ist das offizielle Verzeichnis hier:\n${RESTAURANT_DIR_URL}\nWenn Sie möchten, helfe ich auch mit:\n• Seafood\n• Pizza\n• lokale dalmatinische Küche\n• Restaurants am Meer`,
+  it: `Per ristoranti e cena a Brela, l’elenco ufficiale è qui:\n${RESTAURANT_DIR_URL}\nSe vuoi, posso aiutarti anche con:\n• seafood\n• pizza\n• cucina dalmata locale\n• ristoranti sul mare`,
+  fr: `Pour les restaurants et le dîner à Brela, le répertoire officiel est ici :\n${RESTAURANT_DIR_URL}\nSi vous voulez, je peux aussi aider avec :\n• fruits de mer\n• pizza\n• cuisine dalmate locale\n• restaurants en bord de mer`,
+  sv: `För restauranger och middag i Brela finns den officiella katalogen här:\n${RESTAURANT_DIR_URL}\nOm du vill kan jag också hjälpa med:\n• seafood\n• pizza\n• lokal dalmatisk mat\n• restauranger vid havet`,
+  no: `For restauranter og middag i Brela finner du den offisielle oversikten her:\n${RESTAURANT_DIR_URL}\nHvis du vil kan jeg også hjelpe med:\n• seafood\n• pizza\n• lokal dalmatisk mat\n• restauranter ved sjøen`,
+  cs: `Pro restaurace a večeři v Brele je oficiální seznam zde:\n${RESTAURANT_DIR_URL}\nPokud chcete, mohu pomoci také s:\n• seafood\n• pizza\n• místní dalmatská kuchyně\n• restaurace u moře`,
 };
 function restaurantDirectoryReply(lang) { return RESTAURANT_DIR_REPLY[lang] || RESTAURANT_DIR_REPLY.en; }
 
@@ -983,9 +989,10 @@ router.post('/webhook', async (req, res) => {
   const langSignal = greetingLang
     ? { lang: greetingLang, ambiguous: false }
     : detectLanguageWithConfidence(trimmedMsg);
+  const stableLang = conversationState.lastLanguage || currentUser?.language || 'en';
   const lang = langSignal.ambiguous
-    ? (conversationState.lastLanguage || currentUser?.language || 'en')
-    : (langSignal.lang || detectLanguage(trimmedMsg) || conversationState.lastLanguage || currentUser?.language || 'en');
+    ? detectShortReplyLanguage(trimmedMsg, stableLang)
+    : (langSignal.lang || detectLanguage(trimmedMsg) || stableLang);
   const activeLang = lang;
 
   // ── Extract engine session from stored state ────────────────────────────────
@@ -998,18 +1005,33 @@ router.post('/webhook', async (req, res) => {
     lastQuestion: conversationState.lastQuestion || conversationState.lastBotQuestion || null,
   };
 
-  // ── persistTurn — temporarily disabled to avoid DB errors ───────────────
+  // ── persistTurn — safe persistence (non-blocking on DB errors) ──────────
   const persistTurn = async (assistantReply, statePatch = {}) => {
-    console.warn('Persistence temporarily disabled', {
-      userId: userPhone,
-      reply: assistantReply,
-      statePatch,
+    const safeReply = typeof assistantReply === 'string' ? assistantReply : '';
+    const mergedState = normalizeConversationState({
+      ...conversationState,
+      ...statePatch,
+      pendingSlot: statePatch.pendingSlot !== undefined ? statePatch.pendingSlot : engineSession.pendingSlot,
+      lastTopic: statePatch.lastTopic !== undefined ? statePatch.lastTopic : engineSession.lastTopic,
+      lastQuestion: statePatch.lastQuestion !== undefined ? statePatch.lastQuestion : engineSession.lastQuestion,
+      lastLanguage: activeLang,
     });
-    // Keep conversationState unchanged to avoid side effects
-    return;
+    const mergedHistory = [...history, { role: 'user', content: trimmedMsg }, { role: 'assistant', content: safeReply }].slice(-40);
+
+    try {
+      await saveConversation(tenant.id, userPhone, {
+        messages: mergedHistory,
+        state: mergedState,
+      });
+      Object.assign(conversationState, mergedState);
+    } catch (err) {
+      console.error('[webhook] persistTurn failed (non-fatal):', err?.message);
+    }
   };
 
-  await setUserLang(tenant.id, userPhone, activeLang).catch(() => {});
+  if (!langSignal.ambiguous || greetingLang) {
+    await setUserLang(tenant.id, userPhone, activeLang).catch(() => {});
+  }
 
   // ── CONSENT GATE — highest priority ────────────────────────────────────────
   if (currentUser && Number(currentUser.asked_opt_in) === 1) {
