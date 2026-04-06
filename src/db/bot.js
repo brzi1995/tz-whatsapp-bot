@@ -56,18 +56,57 @@ const FAQ_TOKEN_ALIASES = {
   kupanje: 'plaza',
   kupanjeu: 'plaza',
   kupat: 'plaza',
+  kupaliste: 'plaza',
+  kupalista: 'plaza',
+  more: 'plaza',
+  mora: 'plaza',
   swim: 'plaza',
   swimming: 'plaza',
+  swimm: 'plaza',
+  bathe: 'plaza',
+  bathing: 'plaza',
   beach: 'plaza',
   beaches: 'plaza',
   plaze: 'plaza',
   plazi: 'plaza',
   plaža: 'plaza',
   plaza: 'plaza',
+  strandbad: 'plaza',
   strand: 'plaza',
+  stranden: 'plaza',
+  straende: 'plaza',
+  strander: 'plaza',
+  baden: 'plaza',
+  schwimmen: 'plaza',
+  badestelle: 'plaza',
+  badeplatz: 'plaza',
+  spiagge: 'plaza',
   spiaggia: 'plaza',
+  nuotare: 'plaza',
+  nuoto: 'plaza',
+  balneare: 'plaza',
+  plages: 'plaza',
   plage: 'plaza',
+  baignade: 'plaza',
+  baigner: 'plaza',
+  playas: 'plaza',
   playa: 'plaza',
+  nadar: 'plaza',
+  bano: 'plaza',
+  banarse: 'plaza',
+  plywac: 'plaza',
+  plywanie: 'plaza',
+  plazaa: 'plaza',
+  plazy: 'plaza',
+  simma: 'plaza',
+  badplats: 'plaza',
+  bada: 'plaza',
+  svomme: 'plaza',
+  svommeplass: 'plaza',
+  badeplass: 'plaza',
+  koupat: 'plaza',
+  koupani: 'plaza',
+  plaz: 'plaza',
 };
 
 function canonicalFaqToken(token) {
@@ -78,6 +117,10 @@ function canonicalFaqToken(token) {
 function normalizeFaqText(text) {
   return String(text || '')
     .toLowerCase()
+    .replace(/[äå]/g, 'a')
+    .replace(/[öø]/g, 'o')
+    .replace(/æ/g, 'ae')
+    .replace(/ß/g, 'ss')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9\s]/g, ' ')
