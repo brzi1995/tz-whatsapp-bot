@@ -214,9 +214,24 @@
 
 <main class="content dashboard">
   <section class="journey-frame">
-    <header class="journey-toolbar">
+    <div class="journey-browser">
       <div class="window-dots" aria-hidden="true">
         <span></span><span></span><span></span>
+      </div>
+      <div class="browser-chip" aria-label="Address bar">
+        <i data-lucide="lock"></i>
+        <span>https://dashboard.tz-brela.hr/</span>
+      </div>
+      <div class="browser-nav">
+        <button type="button" class="mini-btn" aria-label="Back"><i data-lucide="chevron-left"></i></button>
+        <button type="button" class="mini-btn" aria-label="Forward"><i data-lucide="chevron-right"></i></button>
+      </div>
+    </div>
+
+    <header class="journey-toolbar">
+      <div class="toolbar-brand">
+        <i data-lucide="layers-3"></i>
+        <span>tzcrm</span>
       </div>
       <nav class="journey-tabs" aria-label="Dashboard sections">
         <button type="button" class="journey-tab">Relationship</button>
@@ -411,9 +426,35 @@
 </main>
 
 <style>
+body {
+  background: #a6a9b1;
+}
+
+body::before,
+body::after {
+  display: none;
+}
+
+.wrapper {
+  margin: 20px;
+  min-height: calc(100vh - 40px);
+  border-radius: 28px;
+  overflow: hidden;
+  border: 1px solid rgba(67, 78, 102, 0.26);
+  background: #eef2f8;
+  box-shadow: 0 24px 52px rgba(24, 30, 43, 0.22);
+}
+
+.sidebar {
+  background: #f4f6fa;
+  border-right: 1px solid #dce4f2;
+  height: auto;
+  min-height: calc(100vh - 40px);
+}
+
 .dashboard {
-  --board-bg: #f4f6fb;
-  --board-stroke: #dde4f2;
+  --board-bg: #f6f8fc;
+  --board-stroke: #d8e0ef;
   --surface: #ffffff;
   --surface-soft: #f1f4fa;
   --ink: #111a2b;
@@ -442,13 +483,69 @@
 }
 
 .journey-frame {
-  background: radial-gradient(circle at 12% -8%, rgba(123, 181, 255, 0.19), transparent 38%),
-              radial-gradient(circle at 90% 4%, rgba(232, 141, 122, 0.14), transparent 36%),
+  background: radial-gradient(circle at 12% -8%, rgba(123, 181, 255, 0.15), transparent 38%),
+              radial-gradient(circle at 90% 4%, rgba(232, 141, 122, 0.1), transparent 36%),
               var(--board-bg);
-  border: 1px solid var(--board-stroke);
+  border: 1px solid #d4dced;
   border-radius: 28px;
-  padding: 18px 20px 20px;
-  box-shadow: 0 22px 44px rgba(19, 33, 62, 0.08);
+  padding: 14px 18px 20px;
+  box-shadow: 0 18px 34px rgba(19, 33, 62, 0.1);
+}
+
+.journey-browser {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.browser-chip {
+  justify-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #d7deeb;
+  background: #f8fafe;
+  color: #6a7a97;
+  font-size: 11px;
+  max-width: 420px;
+}
+.browser-chip svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2;
+}
+
+.browser-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-nav {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.mini-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid #d3dced;
+  background: #f9fbff;
+  color: #71819d;
+  display: grid;
+  place-items: center;
+}
+
+.mini-btn svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2;
 }
 
 .journey-toolbar {
@@ -457,6 +554,23 @@
   gap: 16px;
   align-items: center;
   margin-bottom: 18px;
+}
+
+.toolbar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #1a2740;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  text-transform: lowercase;
+}
+.toolbar-brand svg {
+  width: 20px;
+  height: 20px;
+  color: #22314f;
+  stroke-width: 2;
 }
 
 .window-dots {
@@ -902,10 +1016,38 @@
 }
 
 @media (max-width: 900px) {
+  body {
+    background: #eef2f8;
+  }
+  .wrapper {
+    margin: 0;
+    min-height: 100vh;
+    border-radius: 0;
+    border: 0;
+    box-shadow: none;
+  }
+  .sidebar {
+    min-height: auto;
+  }
+  .journey-browser {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .browser-chip {
+    justify-self: start;
+    max-width: 100%;
+    width: 100%;
+  }
+  .browser-nav {
+    justify-self: start;
+  }
   .journey-toolbar {
     grid-template-columns: 1fr;
     justify-items: start;
     gap: 10px;
+  }
+  .toolbar-brand {
+    font-size: 22px;
   }
   .journey-tabs {
     justify-content: flex-start;
