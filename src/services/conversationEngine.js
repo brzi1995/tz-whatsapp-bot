@@ -21,7 +21,8 @@ const TOPIC_PATTERNS = {
   parking:     /\b(parking|park\b|parkiranje|parkirati|parkage|stationnement|garer|parcheggio|parcheggiare|parken|parkplatz|parkovat|parkovani|parkování|parkoviste|parkoviště|estacionamiento|estacionar|aparcamiento|aparcar|parkowanie|parkering|parkera|parkere|zaparkowac|zaparkować)\b/i,
   weather:     /\b(weather|forecast|rain|sunny|sun\b|wind|temperature|cloud|hot|cold|humid|wetter|regen|sonne|temperatur|vorhersage|wetterbericht|vrijeme|vreme|prognoza|kisa|kiša|sunce|vjetar|temperatura|oblaci|meteo|météo|tempo|pioggia|previsione|sole|pogoda|tiempo|clima|pronostico|pronóstico|lluvia|viento|nubes|vader|väder|vaer|vær|regn|deszcz|slonce|słońce|wiatr|chmury|pocasi|počasí|predpoved|předpověď|dest|déšť|slunce|teplota)\b/i,
   events:      /\b(event|events|happening|what'?s happening|what'?s on|veranstaltung|veranstaltungen|evento|eventi|événement|événements|evenemang|arrangement|dogadjaj|dogadjaji|dogadaj|dogadaji|dogadanja|dogadanja|akce|události|eventos|wydarzenia)\b/i,
-  restaurants: /\b(restaurant|restaurants|restoran|restorani|ristorante|ristoranti|restaurang|restauranger|restauranten|restaurace|restaurante|restaurantes|restauracja|restauracje|restauracj|food|dinner|lunch|eat|essen|abendessen|mittagessen|mangiare|manger|diner|dejeuner|déjeuner|konobi|konoba|hrana|pice|piće|vecer|večer|vecera|večera|veceru|večeru|vecere|veceře|večeře|veceri|rucak|ručak|gastr|cafe|café|tavern|seafood|pizza|italian|dalmatian|cuisine|local|bar|bars|drink|drinks|comida|cena|cenar|cenare|comer|jedzenie|kolacja|kolacje|kolacji|obiad|zjesc|zjeść|restaurang|middag|ata|spise)\b/i,
+  restaurants: /\b(restaurant|restaurants|restoran|restorani|ristorante|ristoranti|restaurang|restauranger|restauranten|restaurace|restaurante|restaurantes|restauracja|restauracje|restauracj|food|dinner|lunch|eat|eating|essen|abendessen|mittagessen|mangiare|manger|diner|dejeuner|déjeuner|konobi|konoba|hrana|pice|piće|jesti|jede|jelo|jela|vecer|večer|vecera|večera|veceru|večeru|vecere|veceře|večeře|veceri|rucak|ručak|gastr|cafe|café|tavern|seafood|pizza|italian|dalmatian|cuisine|local|bar|bars|drink|drinks|comida|cena|cenar|cenare|comer|jedzenie|kolacja|kolacje|kolacji|obiad|zjesc|zjeść|restaurang|middag|ata|spise)\b/i,
+  beaches:     /\b(beach|beaches|swim|swimming|swimm|bathe|bathing|plaza|plaze|plazi|plaža|kupati|kupanje|kupat|more|strand|stranden|strander|strandbad|spiaggia|spiagge|nuotare|plage|plages|baignade|playa|playas|nadar|bano|banarse|plywac|plywanie|simma|badplats|bada|svomme|badeplass|koupat|koupani)\b/i,
 };
 
 // Follow-up patterns — only active when we were already on that topic
@@ -590,6 +591,24 @@ async function handleRestaurants(userMsg, session, deps) {
   return MSG[lang] || MSG.en;
 }
 
+async function handleBeaches(userMsg, session, deps) {
+  const { lang } = deps;
+  session.pendingSlot = null;
+  session.lastQuestion = null;
+  session.lastTopic = 'beaches';
+
+  const MSG = {
+    hr: 'Ako dolazite u lipnju, za kupanje u Brelima najčešći izbor su Punta Rata i Podrače zbog čistog mora i lakog pristupa. Za mirniju varijantu probajte manje uvale uz šetnicu. Ako želite, mogu preporučiti obiteljsku ili mirniju plažu.',
+    en: 'If you are coming in June, Punta Rata and Podrače are usually the best choices for swimming in Brela thanks to clean water and easy access. For a calmer option, try smaller coves along the promenade. If you want, I can suggest a family-friendly or quieter beach.',
+    de: 'Wenn Sie im Juni kommen, sind Punta Rata und Podrače in Brela meist die beste Wahl zum Baden – klares Wasser und einfacher Zugang. Für eine ruhigere Option probieren Sie kleinere Buchten entlang der Promenade. Auf Wunsch empfehle ich familienfreundliche oder ruhigere Strände.',
+    it: 'Se arrivi a giugno, per fare il bagno a Brela le scelte migliori sono di solito Punta Rata e Podrače, con mare pulito e accesso facile. Per un’atmosfera più tranquilla prova le piccole calette lungo la passeggiata. Se vuoi, posso consigliarti una spiaggia per famiglie o più tranquilla.',
+    fr: 'Si vous venez en juin, pour la baignade à Brela, Punta Rata et Podrače sont généralement les meilleurs choix grâce à une eau claire et un accès facile. Pour une option plus calme, essayez les petites criques le long de la promenade. Je peux aussi vous recommander une plage familiale ou plus tranquille.',
+    es: 'Si vienes en junio, para bañarte en Brela las opciones más recomendadas suelen ser Punta Rata y Podrače por el agua limpia y el acceso fácil. Para un ambiente más tranquilo, prueba pequeñas calas junto al paseo marítimo. Si quieres, te recomiendo una playa familiar o más tranquila.',
+    pl: 'Jeśli przyjeżdżasz w czerwcu, do kąpieli w Breli najczęściej polecane są Punta Rata i Podrače ze względu na czystą wodę i łatwy dostęp. Spokojniejszą opcją są mniejsze zatoczki przy promenadzie. Mogę też polecić plażę rodzinną albo cichszą.',
+  };
+  return MSG[lang] || MSG.en;
+}
+
 // ─── TOPIC HANDLERS MAP ───────────────────────────────────────────────────────
 
 const TOPIC_HANDLERS = {
@@ -597,6 +616,7 @@ const TOPIC_HANDLERS = {
   weather:     { handle: handleWeather },
   events:      { handle: handleEvents },
   restaurants: { handle: handleRestaurants },
+  beaches:     { handle: handleBeaches },
 };
 
 // ─── ROUTING HELPERS ──────────────────────────────────────────────────────────
