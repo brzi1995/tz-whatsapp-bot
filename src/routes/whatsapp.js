@@ -260,8 +260,22 @@ const FAQ_CHOICE_PROMPT = {
 };
 function formatFaqClarifyReply(options, lang) {
   const intro = FAQ_CHOICE_INTRO[lang] || FAQ_CHOICE_INTRO.en;
-  const prompt = FAQ_CHOICE_PROMPT[lang] || FAQ_CHOICE_PROMPT.en;
   const lines = options.slice(0, 3).map((option, index) => `${index + 1}. ${option.question}`);
+  const oneChoicePrompt = {
+    hr: 'Odgovorite s 1 ili napišite DA.',
+    en: 'Reply with 1 or YES.',
+    de: 'Antworten Sie mit 1 oder JA.',
+    it: 'Rispondi con 1 o SÌ.',
+    fr: 'Répondez avec 1 ou OUI.',
+    sv: 'Svara med 1 eller JA.',
+    no: 'Svar med 1 eller JA.',
+    cs: 'Odpovězte 1 nebo ANO.',
+    es: 'Responde con 1 o SÍ.',
+    pl: 'Odpowiedz 1 lub TAK.',
+  };
+  const prompt = lines.length <= 1
+    ? (oneChoicePrompt[lang] || oneChoicePrompt.en)
+    : (FAQ_CHOICE_PROMPT[lang] || FAQ_CHOICE_PROMPT.en);
   return `${intro}\n${lines.join('\n')}\n${prompt}`;
 }
 
@@ -844,6 +858,7 @@ function historyLooksLikeWeather(history) {
 
 function detectShortReplyLanguage(message, fallbackLang) {
   const normalized = normalizeLookup(message);
+  if (/^(da|ne)\b/.test(normalized)) return 'hr';
   if (/\bza\s*\d{1,2}\s*(dana?)?\b/.test(normalized) || /\b(vrijeme|prognoza|danas|sutra)\b/.test(normalized)) return 'hr';
   if (/\bin\s*\d{1,2}\s*(days?)?\b/.test(normalized) || /\b(weather|forecast|today|tomorrow)\b/.test(normalized)) return 'en';
   if (/\bin\s*\d{1,2}\s*(tage?)?\b/.test(normalized) || /\b(wetter|vorhersage|heute|morgen)\b/.test(normalized)) return 'de';
@@ -891,9 +906,33 @@ function resolveFaqSelection(message, conversationState) {
   const normalized = normalizeLookup(message);
   if (conversationState?.awaiting?.type !== 'faq_choice') return null;
   const options = Array.isArray(conversationState.awaiting.options) ? conversationState.awaiting.options : [];
-  if (!['1', '2', '3'].includes(normalized)) return null;
-  const selected = options[Number(normalized) - 1];
-  return selected || null;
+  if (!options.length) return null;
+  if (['1', '2', '3'].includes(normalized)) {
+    const selected = options[Number(normalized) - 1];
+    return selected || null;
+  }
+
+  // Natural confirmation while awaiting FAQ disambiguation.
+  // Example: "Da to je bilo pitanje" / "Yes that's it".
+  if (/^(da|yes|yep|yeah|ja|si|sí|oui|tak|naravno)\b/.test(normalized)) {
+    return options[0] || null;
+  }
+
+  // If user paraphrases one of offered options, pick best overlap.
+  const STOP = new Set(['the', 'and', 'for', 'that', 'this', 'to', 'is', 'are', 'it', 'i',
+    'da', 'to', 'je', 'bilo', 'pitanje', 'molim', 'please', 'question', 'odgovor', 'samo']);
+  const msgTokens = normalized.split(' ').filter(t => t.length > 2 && !STOP.has(t));
+  let best = { idx: -1, score: 0 };
+
+  options.slice(0, 3).forEach((option, idx) => {
+    const q = normalizeLookup(option.question || '');
+    const qTokens = new Set(q.split(' ').filter(t => t.length > 2 && !STOP.has(t)));
+    const score = msgTokens.reduce((sum, t) => sum + (qTokens.has(t) ? 1 : 0), 0);
+    if (score > best.score) best = { idx, score };
+  });
+
+  if (best.idx >= 0 && best.score >= 1) return options[best.idx];
+  return null;
 }
 
 function cleanMixedLanguageReply(reply, lang) {
@@ -1240,6 +1279,26 @@ router.post('/webhook', async (req, res) => {
       return res.send(twimlWithFaqLink(faqReply, faqSelection.link_title, faqSelection.link_url, faqSelection.link_image));
     }
     return res.send(twiml(faqReply));
+  }
+
+  // Stay inside FAQ disambiguation flow until user picks/affirms an option.
+  // Prevents dropping to generic fallback when user replies naturally.
+  if (!faqSelection && conversationState?.awaiting?.type === 'faq_choice') {
+    const options = Array.isArray(conversationState.awaiting.options) ? conversationState.awaiting.options : [];
+    if (options.length) {
+      let clarifyReply = formatFaqClarifyReply(options, activeLang);
+      clarifyReply = await alignReplyToUserLanguage(clarifyReply, trimmedMsg, model);
+      replyForLogs = clarifyReply;
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
+      await persistTurn(clarifyReply, {
+        awaiting: conversationState.awaiting,
+        lastTopic: 'faq',
+        lastIntent: 'faq',
+        lastBotQuestion: 'faq_choice',
+      });
+      console.log('[webhook] FINAL RESPONSE SENT — FAQ clarification retry');
+      return res.send(twiml(clarifyReply));
+    }
   }
 
   // ── ENGINE — slot-based router for parking/weather/events/restaurants ───────

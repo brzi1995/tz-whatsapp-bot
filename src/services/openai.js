@@ -66,7 +66,7 @@ function detectLanguageWithConfidence(message) {
   // Keyword scoring for plain Latin script — default wins at score 0
   const tokens = normalized.split(' ').filter(Boolean);
   const KEYWORDS = {
-    hr: ['danas', 'sutra', 'tjedan', 'hvala', 'bok', 'pozdrav', 'zdravo', 'trebam', 'pomoc', 'gdje', 'sto', 'sta', 'ima', 'nema', 'dobar', 'kako', 'dogadaj', 'dogadaja', 'vrijeme', 'plaza', 'parking', 'restoran', 'smjestaj', 'izlet', 'uvala', 'brela'],
+    hr: ['danas', 'sutra', 'tjedan', 'hvala', 'bok', 'pozdrav', 'zdravo', 'trebam', 'pomoc', 'gdje', 'sto', 'sta', 'ima', 'nema', 'dobar', 'kako', 'dogadaj', 'dogadaja', 'vrijeme', 'plaza', 'parking', 'restoran', 'smjestaj', 'izlet', 'uvala', 'brela', 'da', 'je', 'bilo', 'pitanje', 'dolazim', 'kupati', 'mjesec', 'mjesecu'],
     en: ['what', 'where', 'how', 'can', 'please', 'hello', 'thanks', 'today', 'tomorrow', 'week', 'happening', 'events', 'beach', 'restaurant', 'weather', 'parking', 'rent', 'kayak', 'prices', 'locations'],
     de: ['heute', 'morgen', 'bitte', 'danke', 'hallo', 'wie', 'was', 'wo', 'ich', 'gibt', 'veranstaltungen', 'wetter', 'strand', 'parken', 'restaurant'],
     it: ['oggi', 'domani', 'grazie', 'ciao', 'dove', 'cosa', 'sono', 'come', 'eventi', 'parcheggio', 'spiaggia', 'tempo', 'ristorante'],
