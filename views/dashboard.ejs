@@ -10,404 +10,983 @@
   if (locals.featuredEvents  === undefined) locals.featuredEvents  = [];
   if (locals.timeOfDay       === undefined) locals.timeOfDay       = { morning: 0, afternoon: 0, evening: 0 };
 
-  // Language stats
-  const _langNames = { hr:'🇭🇷 Hrvatski', en:'🇬🇧 English', de:'🇩🇪 Deutsch', it:'🇮🇹 Italiano', fr:'🇫🇷 Français', sv:'🇸🇪 Svenska', no:'🇳🇴 Norsk', cs:'🇨🇿 Čeština' };
-  const _langTotal = languages.reduce((s,r) => s + Number(r.count), 0) || 1;
-  const _topLang   = languages.length ? (_langNames[languages[0].lang] || languages[0].lang) : null;
+  const _fmtNum = (n) => new Intl.NumberFormat('hr-HR').format(Number(n) || 0);
+  const _shortText = (txt, limit) => {
+    const value = String(txt || '');
+    if (!limit || value.length <= limit) return value;
+    return value.slice(0, limit - 3) + '...';
+  };
+
+  const _langNames = {
+    hr: 'Hrvatski',
+    en: 'English',
+    de: 'Deutsch',
+    it: 'Italiano',
+    fr: 'Francais',
+    sv: 'Svenska',
+    no: 'Norsk',
+    cs: 'Cestina'
+  };
+  const _langTotal = languages.reduce((s, r) => s + Number(r.count), 0) || 1;
+  const _topLang = languages.length ? (_langNames[languages[0].lang] || languages[0].lang) : null;
   const _topLangPct = languages.length ? Math.round(Number(languages[0].count) / _langTotal * 100) : 0;
   const _topLangs = languages.slice(0, 3).map((r) => {
     const name = _langNames[r.lang] || r.lang;
-    const pct  = Math.round(Number(r.count) / _langTotal * 100);
-    return { name, pct };
+    const pct = Math.round(Number(r.count) / _langTotal * 100);
+    return { name, pct, count: Number(r.count) || 0 };
   });
 
-  // Peak activity
   const _tod = timeOfDay || {};
   const _todSlots = [
-    { label:'Jutro',   icon:'🌅', val: Number(_tod.morning)||0 },
-    { label:'Popodne', icon:'☀️', val: Number(_tod.afternoon)||0 },
-    { label:'Večer',   icon:'🌙', val: Number(_tod.evening)||0 },
+    { label: 'Jutro', icon: 'sunrise', val: Number(_tod.morning) || 0 },
+    { label: 'Popodne', icon: 'sun', val: Number(_tod.afternoon) || 0 },
+    { label: 'Vecer', icon: 'moon', val: Number(_tod.evening) || 0 }
   ];
-  const _peakSlot  = _todSlots.reduce((a, b) => b.val > a.val ? b : a, _todSlots[0]);
+  const _peakSlot = _todSlots.reduce((a, b) => b.val > a.val ? b : a, _todSlots[0]);
   const _peakTotal = _todSlots.reduce((s, x) => s + x.val, 0);
+
+  const intentLabels = {
+    faq: 'Opce informacije',
+    weather: 'Vrijeme',
+    weather_current: 'Trenutno vrijeme',
+    weather_tomorrow: 'Vrijeme sutra',
+    weather_multi: 'Vise dana',
+    events: 'Dogadaji',
+    ai: 'AI razgovor',
+    other: 'Ostalo'
+  };
+  const intentColors = {
+    faq: '#6F8FEA',
+    weather: '#7BB5FF',
+    weather_current: '#4C9AFF',
+    weather_tomorrow: '#58C2A8',
+    weather_multi: '#5CB8A0',
+    events: '#E88D7A',
+    ai: '#C47DE8',
+    other: '#BBC7DA'
+  };
+
+  const _filteredIntents = intents.filter((r) => r.intent !== 'admin_reply' && r.intent !== 'fallback');
+  const _intentChartData = _filteredIntents.slice(0, 5).map((r) => ({
+    label: intentLabels[r.intent] || r.intent,
+    value: Number(r.count) || 0,
+    color: intentColors[r.intent] || '#BBC7DA'
+  }));
+  const _intentTotal = _intentChartData.reduce((sum, row) => sum + row.value, 0);
+
+  const _timeChartData = _todSlots.map((slot, index) => ({
+    label: slot.label,
+    value: Number(slot.val) || 0,
+    color: ['#6F8FEA', '#7BB5FF', '#AFC7FF'][index]
+  }));
+
+  const _safeFeatured = Array.isArray(featuredEvents) ? featuredEvents.slice(0, 3) : [];
+
+  const _teamSource = (insights && insights.length)
+    ? insights.map((item) => item.text)
+    : _filteredIntents.map((row) => intentLabels[row.intent] || row.intent);
+
+  let _teamAvatars = _teamSource.slice(0, 7).map((label, idx) => {
+    const words = String(label || '').split(/\s+/).filter(Boolean);
+    const initials = words.slice(0, 2).map((w) => w.charAt(0).toUpperCase()).join('').slice(0, 2) || 'TZ';
+    return { initials, label, tone: (idx % 5) + 1 };
+  });
+
+  if (!_teamAvatars.length) {
+    _teamAvatars = [
+      { initials: 'TZ', label: 'Tourist Ops', tone: 1 },
+      { initials: 'FA', label: 'FAQ Team', tone: 2 },
+      { initials: 'EV', label: 'Events Team', tone: 3 },
+      { initials: 'CS', label: 'Customer Support', tone: 4 },
+      { initials: 'AI', label: 'AI Support', tone: 5 }
+    ];
+  }
+
+  const _caseTasks = [
+    {
+      icon: 'inbox',
+      title: 'Novi upiti',
+      meta: _fmtNum(totalMessages) + ' poruka u zadnjih 7 dana',
+      state: Number(totalMessages) > 0 ? 'active' : 'queued'
+    },
+    {
+      icon: 'users',
+      title: 'Aktivni korisnici',
+      meta: _fmtNum(totalUsers) + ' ukupno korisnika',
+      state: Number(totalUsers) > 0 ? 'active' : 'queued'
+    },
+    {
+      icon: 'languages',
+      title: 'Top jezik',
+      meta: _topLang ? (_topLang + ' (' + _topLangPct + '%)') : 'Nema dovoljno podataka',
+      state: _topLang ? 'done' : 'queued'
+    }
+  ];
+
+  const _identifyTasks = _filteredIntents.slice(0, 3).map((row, idx) => ({
+    icon: idx === 0 ? 'search' : (idx === 1 ? 'message-square' : 'list'),
+    title: intentLabels[row.intent] || row.intent,
+    meta: _fmtNum(row.count) + ' zahtjeva',
+    state: 'active'
+  }));
+  if (!_identifyTasks.length) {
+    _identifyTasks.push({
+      icon: 'search',
+      title: 'Ceka prve upite',
+      meta: 'Podaci ce se prikazati cim korisnici posalju poruke',
+      state: 'queued'
+    });
+  }
+
+  const _resolutionTasks = _safeFeatured.map((event, idx) => ({
+    icon: idx === 0 ? 'calendar-check' : 'calendar-days',
+    title: _shortText(event.title || 'Dogadaj bez naziva', 34),
+    meta: event.date ? ('Datum: ' + new Date(event.date).toLocaleDateString('hr-HR')) : 'Datum nije postavljen',
+    state: 'active'
+  }));
+  if (!_resolutionTasks.length) {
+    _resolutionTasks.push({
+      icon: 'wrench',
+      title: 'Postavi izdvojene dogadaje',
+      meta: 'Oznaci featured dogadaje da se prikazu ovdje',
+      state: 'queued'
+    });
+  }
+
+  const _newTasks = (insights && insights.length)
+    ? insights.slice(0, 3).map((ins, idx) => ({
+      icon: idx === 0 ? 'sparkles' : (idx === 1 ? 'bell-ring' : 'thumbs-up'),
+      title: _shortText(ins.text || 'Novi insight', 36),
+      meta: 'Automatski insight',
+      state: 'done'
+    }))
+    : [
+      { icon: 'clipboard-list', title: 'Dodaj prvi insight', meta: 'Insight traka puni se kad stignu poruke', state: 'queued' },
+      { icon: 'book-marked', title: 'Azuriraj FAQ odgovore', meta: 'Odgovori na najcesca pitanja', state: 'queued' }
+    ];
+
+  const _journeyColumns = [
+    { title: 'Case Allocation', tasks: _caseTasks },
+    { title: 'Issue Identification', tasks: _identifyTasks },
+    { title: 'Technical Resolution', tasks: _resolutionTasks },
+    { title: 'New Tasks', tasks: _newTasks }
+  ];
+
+  const _today = new Date().toLocaleDateString('hr-HR');
+  const _knowledgeRows = [];
+
+  if (_filteredIntents.length) {
+    const firstIntent = _filteredIntents[0];
+    _knowledgeRows.push({
+      subject: 'Najtrazeniji upit',
+      status: 'Active',
+      start: _today,
+      end: '-',
+      owner: intentLabels[firstIntent.intent] || firstIntent.intent
+    });
+  }
+  if (_topLang) {
+    _knowledgeRows.push({
+      subject: 'Primarni jezik',
+      status: 'Executed',
+      start: _today,
+      end: '-',
+      owner: _topLang + ' (' + _topLangPct + '%)'
+    });
+  }
+  if (_safeFeatured.length) {
+    _knowledgeRows.push({
+      subject: 'Izdvojeni dogadaj',
+      status: 'Active',
+      start: _today,
+      end: _safeFeatured[0].date ? new Date(_safeFeatured[0].date).toLocaleDateString('hr-HR') : '-',
+      owner: _shortText(_safeFeatured[0].title || 'Dogadaj', 24)
+    });
+  }
+  _knowledgeRows.push({
+    subject: 'Human takeover',
+    status: humanTakeover ? 'Active' : 'Paused',
+    start: _today,
+    end: '-',
+    owner: humanTakeover ? 'Ukljucen' : 'Iskljucen'
+  });
 %>
 
 <main class="content dashboard">
-  <section class="hero-shell">
-    <div class="hero-top">
-      <div>
-        <p class="eyebrow">TZ Brela • Live pregled</p>
-        <h1>Vidi što gosti traže u nekoliko sekundi</h1>
-        <p class="lede">Sažetak poruka, jezika i interesa gostiju na jednom mjestu — brzo za odluke i spremno za prodaju.</p>
-        <div class="hero-actions">
-          <a href="/admin/faq" class="btn btn-primary">Uredi FAQ</a>
-          <a href="/admin/events" class="btn btn-ghost">Planiraj događaje</a>
-        </div>
+  <section class="journey-frame">
+    <header class="journey-toolbar">
+      <div class="window-dots" aria-hidden="true">
+        <span></span><span></span><span></span>
       </div>
-      <div class="hero-chip">
-        <span class="chip-label">Peak vrijeme</span>
-        <% if (_peakTotal > 0) { %>
-          <strong><%= _peakSlot.icon %> <%= _peakSlot.label %></strong>
-        <% } else { %>
-          <strong>—</strong>
-        <% } %>
-        <span class="chip-sub">Najviše aktivnosti u zadnjih 7 dana</span>
+      <nav class="journey-tabs" aria-label="Dashboard sections">
+        <button type="button" class="journey-tab">Relationship</button>
+        <button type="button" class="journey-tab">Opportunities</button>
+        <button type="button" class="journey-tab">Leads</button>
+        <button type="button" class="journey-tab">Calendar</button>
+        <button type="button" class="journey-tab is-active">Cases</button>
+        <button type="button" class="journey-tab">Reports</button>
+      </nav>
+      <div class="toolbar-actions">
+        <button type="button" class="circle-btn" aria-label="Search"><i data-lucide="search"></i></button>
+        <button type="button" class="circle-btn" aria-label="Notifications"><i data-lucide="bell"></i></button>
+        <button type="button" class="circle-btn" aria-label="Settings"><i data-lucide="settings-2"></i></button>
       </div>
-    </div>
+    </header>
 
-    <div class="hero-kpis">
-      <div class="kpi-card highlight">
-        <div class="kpi-icon"><i data-lucide="message-circle"></i></div>
-        <div class="kpi-label">Ukupno poruka</div>
-        <div class="kpi-value"><%= totalMessages %></div>
-        <div class="kpi-sub">zadnjih 7 dana</div>
+    <div class="journey-header">
+      <div class="journey-title-group">
+        <p class="eyebrow">Customer Workspace</p>
+        <h1>Customer Journeys</h1>
+        <p class="lede">Operativni pregled poruka, jezika i zahtjeva gostiju u jednom boardu, bez promjene postojece logike aplikacije.</p>
       </div>
-      <div class="kpi-card">
-        <div class="kpi-icon"><i data-lucide="users"></i></div>
-        <div class="kpi-label">Korisnici</div>
-        <div class="kpi-value"><%= totalUsers %></div>
-        <div class="kpi-sub">ukupno osoba</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-icon"><i data-lucide="globe"></i></div>
-        <div class="kpi-label">Top jezik</div>
-        <% if (_topLang) { %>
-          <div class="kpi-value"><%= _topLangPct %>%</div>
-          <div class="kpi-sub"><%= _topLang %></div>
-        <% } else { %>
-          <div class="kpi-value muted">—</div>
-          <div class="kpi-sub">čeka prve goste</div>
-        <% } %>
-      </div>
-    </div>
-
-    <% if (insights && insights.length) { %>
-    <div class="pill-row">
-      <% insights.forEach(function(ins) { %>
-        <span class="pill"><%= ins.icon %> <%= ins.text %></span>
-      <% }); %>
-    </div>
-    <% } %>
-
-    <% if (_topLangs && _topLangs.length) { %>
-    <div class="pill-row" style="margin-top:10px">
-      <span class="pill" style="font-weight:700; color:#0A7EA4; border-color:rgba(10,126,164,0.25); background:rgba(10,126,164,0.08)">Top jezici</span>
-      <% _topLangs.forEach(function(l) { %>
-        <span class="pill"><%= l.name %> · <%= l.pct %>%</span>
-      <% }); %>
-    </div>
-    <% } %>
-  </section>
-
-  <section class="grid-panels">
-    <div class="panel panel-featured">
-      <div class="panel-header">
-        <div>
-          <p class="eyebrow">Događaji</p>
-          <h2>Izdvojeni događaji</h2>
-        </div>
-        <a href="/admin/events" class="btn btn-secondary btn-sm">
-          <i data-lucide="settings-2"></i> Upravljaj
-        </a>
-      </div>
-      <% if (!featuredEvents || !featuredEvents.length) { %>
-        <div class="panel-empty">
-          Nema izdvojenih događaja — označi ih u listi događaja.
-        </div>
-      <% } else { %>
-        <div class="feat-list">
-          <% featuredEvents.forEach(function(ev) {
-               const dateStr = ev.date ? new Date(ev.date).toLocaleDateString('hr-HR') : '—';
-          %>
-          <div class="feat-row">
-            <div class="feat-body">
-              <div class="feat-title"><%= ev.title %></div>
-              <% if (ev.description) { %>
-                <div class="feat-desc"><%= ev.description %></div>
-              <% } %>
-            </div>
-            <div class="feat-date"><%= dateStr %></div>
-          </div>
+      <div class="journey-team" aria-label="Journey team overview">
+        <div class="team-stack">
+          <% _teamAvatars.forEach(function(member) { %>
+            <span class="avatar tone-<%= member.tone %>" title="<%= member.label %>"><%= member.initials %></span>
           <% }); %>
         </div>
-      <% } %>
-    </div>
-  </section>
-
-  <section class="grid-panels two-col">
-    <div class="panel">
-      <div class="panel-header">
-        <div>
-          <p class="eyebrow">Tempo poruka</p>
-          <h2>Poruke po danu</h2>
+        <div class="team-meta">
+          <strong><%= _fmtNum(_teamAvatars.length) %> aktivnih tokova</strong>
+          <span>Prikaz temeljen na live podacima</span>
         </div>
-        <span class="chart-badge">Posljednjih 7 dana</span>
       </div>
-      <canvas id="msgChart" height="80"></canvas>
     </div>
 
-    <% const intentLabels = {
-         faq:'Opće informacije',
-         weather:'Vrijeme', weather_current:'Vrijeme', weather_tomorrow:'Vrijeme', weather_multi:'Vrijeme',
-         events:'Događaji',
-         ai:'AI razgovor',
-         other:'Ostalo'
-       };
-       const intentColors = { faq:'#0A7EA4', weather:'#0891b2', events:'#16a34a', ai:'#7c3aed' };
-       const _filteredIntents = intents.filter(r => r.intent !== 'admin_reply' && r.intent !== 'fallback');
-       const intentTotal  = _filteredIntents.reduce((s,r) => s + Number(r.count), 0) || 1;
-    %>
-    <% if (_filteredIntents.length) { %>
-    <div class="panel">
-      <div class="panel-header">
+    <div class="kpi-strip" role="list" aria-label="KPI">
+      <article class="kpi-pill" role="listitem">
+        <i data-lucide="message-circle"></i>
         <div>
-          <p class="eyebrow">Interes gostiju</p>
-          <h2>Upiti turista</h2>
+          <span>Poruke</span>
+          <strong><%= _fmtNum(totalMessages) %></strong>
         </div>
-        <span class="chart-badge">Po tipu</span>
-      </div>
-      <% _filteredIntents.forEach(function(r) {
-           const pct = Math.round(Number(r.count) / intentTotal * 100);
-           const col = intentColors[r.intent] || '#94a3b8';
-           const lbl = intentLabels[r.intent] || r.intent;
-      %>
-        <div class="ibar">
-          <div class="ibar-label">
-            <span><%= lbl %></span>
-            <span class="ibar-count"><%= r.count %> (<%= pct %>%)</span>
-          </div>
-          <div class="ibar-track">
-            <div class="ibar-fill" style="width:<%= pct %>%;background:<%= col %>"></div>
-          </div>
+      </article>
+      <article class="kpi-pill" role="listitem">
+        <i data-lucide="users"></i>
+        <div>
+          <span>Korisnici</span>
+          <strong><%= _fmtNum(totalUsers) %></strong>
         </div>
+      </article>
+      <article class="kpi-pill" role="listitem">
+        <i data-lucide="languages"></i>
+        <div>
+          <span>Top jezik</span>
+          <strong><%= _topLang ? _topLang : 'N/A' %></strong>
+        </div>
+      </article>
+      <article class="kpi-pill" role="listitem">
+        <i data-lucide="clock-3"></i>
+        <div>
+          <span>Peak vrijeme</span>
+          <strong><%= _peakTotal > 0 ? _peakSlot.label : 'N/A' %></strong>
+        </div>
+      </article>
+    </div>
+
+    <div class="journey-board">
+      <% _journeyColumns.forEach(function(column, colIndex) { %>
+        <article class="journey-column <%= colIndex === _journeyColumns.length - 1 ? 'is-last' : '' %>">
+          <header class="journey-col-header">
+            <h2><%= column.title %></h2>
+            <span><%= _fmtNum(column.tasks.length) %></span>
+          </header>
+          <div class="journey-card">
+            <% column.tasks.forEach(function(task) { %>
+              <div class="journey-task">
+                <div class="task-icon"><i data-lucide="<%= task.icon %>"></i></div>
+                <div class="task-copy">
+                  <p class="task-title"><%= task.title %></p>
+                  <p class="task-meta"><%= task.meta %></p>
+                </div>
+                <span class="task-state <%= task.state %>" aria-hidden="true"></span>
+              </div>
+            <% }); %>
+          </div>
+        </article>
       <% }); %>
     </div>
-    <% } %>
   </section>
 
+  <section class="analytics-row">
+    <article class="data-panel">
+      <header class="panel-head">
+        <div>
+          <p class="eyebrow">Suggested Knowledge</p>
+          <h2>Operativni podsjetnik</h2>
+        </div>
+        <span class="soft-badge">Live Sync</span>
+      </header>
+      <div class="table-shell">
+        <table>
+          <thead>
+            <tr>
+              <th>Subject</th>
+              <th>Status</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Owner</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% _knowledgeRows.forEach(function(row) { %>
+              <tr>
+                <td><%= row.subject %></td>
+                <td><span class="status-chip <%= row.status.toLowerCase() %>"><%= row.status %></span></td>
+                <td><%= row.start %></td>
+                <td><%= row.end %></td>
+                <td><%= row.owner %></td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <article class="data-panel">
+      <header class="panel-head">
+        <div>
+          <p class="eyebrow">Support Ticket Journey</p>
+          <h2>Distribucija zahtjeva</h2>
+        </div>
+        <span class="soft-badge">7 dana</span>
+      </header>
+      <div class="donut-grid">
+        <section class="donut-card">
+          <div class="donut-head">
+            <h3>Tip upita</h3>
+            <strong><%= _fmtNum(_intentTotal) %></strong>
+          </div>
+          <% if (_intentChartData.length) { %>
+            <div class="donut-canvas"><canvas id="intentDonutChart"></canvas></div>
+            <ul class="legend-list">
+              <% _intentChartData.forEach(function(row) { %>
+                <li>
+                  <span class="dot" style="background:<%= row.color %>"></span>
+                  <span><%= row.label %></span>
+                  <strong><%= _fmtNum(row.value) %></strong>
+                </li>
+              <% }); %>
+            </ul>
+          <% } else { %>
+            <p class="panel-empty">Nema dovoljno podataka za graf tipova upita.</p>
+          <% } %>
+        </section>
+
+        <section class="donut-card">
+          <div class="donut-head">
+            <h3>Dio dana</h3>
+            <strong><%= _fmtNum(_peakTotal) %></strong>
+          </div>
+          <% if (_peakTotal > 0) { %>
+            <div class="donut-canvas"><canvas id="timeDonutChart"></canvas></div>
+            <ul class="legend-list">
+              <% _timeChartData.forEach(function(row) { %>
+                <li>
+                  <span class="dot" style="background:<%= row.color %>"></span>
+                  <span><%= row.label %></span>
+                  <strong><%= _fmtNum(row.value) %></strong>
+                </li>
+              <% }); %>
+            </ul>
+          <% } else { %>
+            <p class="panel-empty">Nema aktivnosti za raspodjelu po dijelu dana.</p>
+          <% } %>
+        </section>
+      </div>
+    </article>
+  </section>
+
+  <section class="data-panel trend-panel">
+    <header class="panel-head">
+      <div>
+        <p class="eyebrow">Traffic Monitor</p>
+        <h2>Poruke po danu</h2>
+      </div>
+      <span class="soft-badge">Posljednjih 7 dana</span>
+    </header>
+    <div class="trend-canvas-wrap">
+      <canvas id="msgChart" height="92"></canvas>
+    </div>
+  </section>
 </main>
 
 <style>
 .dashboard {
-  --accent: #0A7EA4;
-  --accent-2: #D95F2B;
-  --accent-soft: rgba(10,126,164,0.12);
-  --sand: #F3EFE8;
-  --navy: #FAF7F2;
-  --panel: #FFFFFF;
-  --panel-2: #F3EFE8;
-  --stroke: rgba(0,0,0,0.06);
+  --board-bg: #f4f6fb;
+  --board-stroke: #dde4f2;
+  --surface: #ffffff;
+  --surface-soft: #f1f4fa;
+  --ink: #111a2b;
+  --muted: #5f6f87;
+  --accent: #6f8fea;
+  --accent-soft: rgba(111, 143, 234, 0.14);
+  --line: #c9d3e8;
+
+  max-width: 1320px;
+  padding: 22px 24px 34px;
 }
-.dashboard h1 { font-size: var(--fs-2xl); margin-bottom: 8px; letter-spacing: -.4px; line-height: var(--lh-tight); }
-.dashboard .lede { color: #5C6880; max-width: 540px; font-size: var(--fs-base); line-height: var(--lh-relaxed); margin-bottom: 0; }
-.eyebrow {
+
+.dashboard .lede {
+  color: var(--muted);
+  max-width: 660px;
+  margin-top: 6px;
+}
+
+.dashboard .eyebrow {
   text-transform: uppercase;
-  letter-spacing: .14em;
+  letter-spacing: 0.12em;
   font-size: var(--fs-xs);
-  color: #5C6880;
   font-weight: 700;
-  margin-bottom: 6px;
+  color: #7182a3;
+  margin-bottom: 4px;
 }
 
-.hero-shell {
-  background: radial-gradient(circle at 12% 20%, rgba(10,126,164,0.14), transparent 32%), radial-gradient(circle at 88% 12%, rgba(217,95,43,0.10), transparent 30%), linear-gradient(145deg, #FAF7F2 0%, #EEF4F8 50%, #F3EFE8 100%);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 20px 24px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.07);
-  position: relative;
-  overflow: hidden;
-  margin-bottom: 20px;
+.journey-frame {
+  background: radial-gradient(circle at 12% -8%, rgba(123, 181, 255, 0.19), transparent 38%),
+              radial-gradient(circle at 90% 4%, rgba(232, 141, 122, 0.14), transparent 36%),
+              var(--board-bg);
+  border: 1px solid var(--board-stroke);
+  border-radius: 28px;
+  padding: 18px 20px 20px;
+  box-shadow: 0 22px 44px rgba(19, 33, 62, 0.08);
 }
-.hero-shell::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse at 65% 50%, rgba(255,255,255,0.5), transparent 55%);
-  opacity: .6;
-  pointer-events: none;
-}
-.hero-shell > * { position: relative; z-index: 1; }
-.hero-top {
-  display: flex;
-  gap: 18px;
-  align-items: flex-start;
-  justify-content: space-between;
-  flex-wrap: wrap;
-}
-.hero-actions {
-  display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px;
-}
-.dashboard .btn-primary {
-  background: linear-gradient(135deg, #076d8e, #0A7EA4);
-  border-color: rgba(10,126,164,0.35);
-}
-.dashboard .btn-primary:hover { box-shadow: 0 6px 22px rgba(10,126,164,0.3); }
-.dashboard .btn-ghost { color: var(--text); border-color: var(--border); }
-.dashboard .btn-ghost:hover { border-color: rgba(10,126,164,0.3); }
-.hero-chip {
-  padding: 14px 16px;
-  border-radius: 14px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  min-width: 200px;
-  color: var(--text);
-  box-shadow: var(--shadow-xs);
-}
-.chip-label { display: block; font-size: var(--fs-sm); text-transform: uppercase; letter-spacing: .08em; color: #5C6880; margin-bottom: 6px; }
-.chip-sub { display: block; color: #5C6880; font-size: var(--fs-sm); margin-top: 4px; }
 
-.hero-kpis {
+.journey-toolbar {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-  margin-top: 16px;
+  grid-template-columns: auto 1fr auto;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 18px;
 }
-.kpi-card {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 12px 14px;
-  box-shadow: var(--shadow-xs);
-  position: relative;
-  overflow: hidden;
-  isolation: isolate;
-}
-.kpi-card.highlight {
-  background: linear-gradient(135deg, rgba(10,126,164,0.12), rgba(250,247,242,0.95));
-  border-color: rgba(10,126,164,0.3);
-  box-shadow: 0 4px 20px rgba(10,126,164,0.12);
-}
-.kpi-icon { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 10px; background: rgba(10,126,164,0.1); color: #0A7EA4; margin-bottom: 10px; }
-.kpi-icon svg { width: 16px; height: 16px; }
-.kpi-label { font-size: var(--fs-sm); color: #5C6880; letter-spacing: .02em; line-height: var(--lh-snug); }
-.kpi-value { font-size: var(--fs-2xl); font-weight: 800; color: var(--text); margin-top: 4px; line-height: var(--lh-tight); }
-.kpi-value.muted { color: var(--muted); }
-.kpi-sub { font-size: var(--fs-sm); color: #5C6880; margin-top: 2px; line-height: var(--lh-snug); }
 
-.pill-row {
-  display: flex;
-  flex-wrap: wrap;
+.window-dots {
+  display: inline-flex;
   gap: 6px;
-  margin-top: 12px;
+  align-items: center;
 }
-.pill {
-  padding: 5px 10px;
+.window-dots span {
+  width: 10px;
+  height: 10px;
   border-radius: 999px;
-  background: var(--surface-2);
-  color: var(--text);
-  border: 1px solid var(--border);
+  background: #ccd4e5;
+}
+.window-dots span:nth-child(1) { background: #f28b82; }
+.window-dots span:nth-child(2) { background: #fdd663; }
+.window-dots span:nth-child(3) { background: #79d68b; }
+
+.journey-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.journey-tab {
+  border: 1px solid transparent;
+  background: transparent;
+  color: #667794;
+  border-radius: 999px;
   font-size: var(--fs-sm);
+  padding: 6px 12px;
+  min-height: 32px;
+  cursor: default;
 }
 
-.grid-panels { display: grid; gap: 14px; margin-bottom: 14px; }
-.grid-panels.two-col { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.journey-tab.is-active {
+  background: #111a2b;
+  color: #f3f6ff;
+  box-shadow: 0 8px 18px rgba(17, 26, 43, 0.2);
+}
 
-.panel {
-  background: var(--panel);
-  border: 1px solid var(--stroke);
-  border-radius: 16px;
-  padding: 16px 18px;
-  box-shadow: var(--shadow-sm);
+.toolbar-actions {
+  display: inline-flex;
+  gap: 8px;
 }
-.panel-featured {
-  background: linear-gradient(160deg, rgba(10,126,164,0.07), rgba(250,247,242,0.98));
-  border-color: rgba(10,126,164,0.2);
+
+.circle-btn {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--board-stroke);
+  background: #f9fbff;
+  color: #5f6f87;
 }
-.panel-header {
+.circle-btn svg { width: 15px; height: 15px; stroke-width: 2; }
+
+.journey-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: end;
+  margin-bottom: 14px;
+}
+
+.dashboard h1 {
+  font-size: 34px;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+  margin-bottom: 0;
+}
+
+.journey-team {
+  display: grid;
+  grid-template-columns: auto;
+  gap: 8px;
+  justify-items: end;
+}
+
+.team-stack {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: nowrap;
-  margin-bottom: 10px;
-}
-.panel h2 { font-size: var(--fs-md); line-height: var(--lh-snug); }
-.panel-empty { color: #5C6880; font-size: var(--fs-body); padding: 6px 4px 2px; }
-
-.feat-list { display: flex; flex-direction: column; gap: 8px; }
-.feat-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  background: var(--surface-2);
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  transition: transform .15s var(--ease), border-color .15s, background .15s;
-}
-.feat-row:hover { transform: translateY(-1px); border-color: rgba(10,126,164,0.22); background: rgba(10,126,164,0.04); }
-.feat-body { flex: 1; min-width: 0; }
-.feat-title { font-weight: 700; font-size: var(--fs-body); color: var(--text); line-height: var(--lh-snug); }
-.feat-desc { font-size: var(--fs-sm); color: #5C6880; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.feat-date {
-  font-size: var(--fs-sm); font-weight: 700;
-  color: #A84620;
-  background: rgba(217,95,43,0.1);
-  border: 1px solid rgba(217,95,43,0.25);
-  padding: 5px 10px; border-radius: 14px;
-  white-space: nowrap; flex-shrink: 0;
+  justify-content: flex-end;
 }
 
-.chart-badge {
+.avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #f5f8ff;
+  border: 2px solid #f4f6fb;
+  margin-left: -8px;
+  box-shadow: 0 8px 16px rgba(14, 28, 55, 0.18);
+}
+.avatar:first-child { margin-left: 0; }
+.avatar.tone-1 { background: linear-gradient(145deg, #6f8fea, #4f73da); }
+.avatar.tone-2 { background: linear-gradient(145deg, #7bb5ff, #4e8fef); }
+.avatar.tone-3 { background: linear-gradient(145deg, #58c2a8, #3c9d86); }
+.avatar.tone-4 { background: linear-gradient(145deg, #e88d7a, #d26b57); }
+.avatar.tone-5 { background: linear-gradient(145deg, #c47de8, #a35bce); }
+
+.team-meta {
+  display: grid;
+  justify-items: end;
+  gap: 1px;
+}
+.team-meta strong { font-size: var(--fs-sm); color: #2b3a55; }
+.team-meta span { font-size: var(--fs-xs); color: #74839f; }
+
+.kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.kpi-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--board-stroke);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.86);
+  padding: 10px 12px;
+}
+.kpi-pill svg { width: 16px; height: 16px; color: #5b78d8; stroke-width: 2; }
+.kpi-pill span { display: block; font-size: var(--fs-xs); color: #75839b; }
+.kpi-pill strong { display: block; font-size: var(--fs-md); color: #162135; letter-spacing: -0.01em; }
+
+.journey-board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.journey-column {
+  position: relative;
+}
+
+.journey-column::after {
+  content: '';
+  position: absolute;
+  right: -12px;
+  top: 50%;
+  width: 12px;
+  border-top: 2px dashed var(--line);
+  opacity: 0.75;
+}
+.journey-column.is-last::after { display: none; }
+
+.journey-col-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.journey-col-header h2 {
+  font-size: var(--fs-body);
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+.journey-col-header span {
+  font-size: var(--fs-xs);
+  color: #6e7e99;
+  background: rgba(111, 143, 234, 0.12);
+  border: 1px solid rgba(111, 143, 234, 0.23);
   border-radius: 999px;
-  background: rgba(10,126,164,0.08);
-  color: #0A7EA4;
-  border: 1px solid rgba(10,126,164,0.2);
+  padding: 2px 8px;
+}
+
+.journey-card {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #d7deec;
+  border-radius: 20px;
+  padding: 8px;
+  min-height: 242px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.journey-task {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #e2e8f3;
+  border-radius: 12px;
+  background: #f8faff;
+  padding: 8px;
+}
+
+.task-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: var(--accent-soft);
+  color: #5677de;
+}
+.task-icon svg { width: 14px; height: 14px; stroke-width: 2; }
+
+.task-copy { min-width: 0; }
+.task-title {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: #152239;
+  line-height: 1.35;
+}
+.task-meta {
+  font-size: var(--fs-xs);
+  color: #6d7d98;
+  line-height: 1.35;
+}
+
+.task-state {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+  border: 1px solid transparent;
+}
+.task-state.active { background: #6f8fea; border-color: #5b7ddd; }
+.task-state.done { background: #55c4a8; border-color: #39aa8d; }
+.task-state.queued { background: #d2dae9; border-color: #b5c2d9; }
+
+.analytics-row {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.data-panel {
+  border-radius: 20px;
+  border: 1px solid var(--board-stroke);
+  background: #f8fbff;
+  padding: 14px;
+  box-shadow: 0 14px 30px rgba(20, 34, 62, 0.06);
+}
+
+.panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.panel-head h2 {
+  margin: 0;
+  font-size: var(--fs-md);
+}
+
+.soft-badge {
+  font-size: var(--fs-xs);
+  color: #617290;
+  border: 1px solid #cfdaee;
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+.table-shell {
+  overflow: auto;
+  border: 1px solid #dbe4f3;
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.table-shell table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 560px;
+}
+
+.table-shell th,
+.table-shell td {
+  border-bottom: 1px solid #ecf1f8;
+  padding: 10px 11px;
+  text-align: left;
   font-size: var(--fs-sm);
 }
 
-.ibar { margin-bottom: 12px; }
-.ibar:last-child { margin-bottom: 0; }
-.ibar-label { display: flex; justify-content: space-between; font-size: var(--fs-sm); margin-bottom: 6px; font-weight: 600; color: var(--text); line-height: var(--lh-snug); }
-.ibar-count { color: #5C6880; font-weight: 500; }
-.ibar-track { background: rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.08); border-radius: 16px; height: 8px; overflow: hidden; }
-.ibar-fill  { height: 100%; border-radius: 16px; transition: width .45s cubic-bezier(.4,0,.2,1); opacity: 1; }
+.table-shell th {
+  color: #7788a6;
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: #f7fafe;
+}
+
+.table-shell tbody tr:last-child td { border-bottom: none; }
+
+.status-chip {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: var(--fs-xs);
+  border: 1px solid transparent;
+}
+.status-chip.active {
+  color: #4069da;
+  background: rgba(111, 143, 234, 0.14);
+  border-color: rgba(111, 143, 234, 0.24);
+}
+.status-chip.executed {
+  color: #2f8f76;
+  background: rgba(88, 194, 168, 0.16);
+  border-color: rgba(88, 194, 168, 0.27);
+}
+.status-chip.paused {
+  color: #7f8fa9;
+  background: rgba(154, 167, 191, 0.16);
+  border-color: rgba(154, 167, 191, 0.28);
+}
+
+.donut-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.donut-card {
+  background: #ffffff;
+  border: 1px solid #d9e3f2;
+  border-radius: 14px;
+  padding: 10px;
+}
+
+.donut-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.donut-head h3 {
+  font-size: var(--fs-sm);
+  color: #2d3d58;
+  font-weight: 700;
+}
+.donut-head strong {
+  font-size: var(--fs-sm);
+  color: #425d9f;
+}
+
+.donut-canvas {
+  height: 148px;
+  padding: 4px;
+}
+
+.legend-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.legend-list li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-xs);
+  color: #5f6f88;
+}
+.legend-list li strong {
+  color: #2a3c5e;
+  font-size: var(--fs-xs);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.panel-empty {
+  font-size: var(--fs-sm);
+  color: #6f7f9a;
+  padding: 8px 0;
+}
+
+.trend-panel {
+  margin-top: 14px;
+  background: linear-gradient(165deg, #f8fbff 0%, #f2f6ff 100%);
+}
+
+.trend-canvas-wrap {
+  border-radius: 14px;
+  border: 1px solid #d9e3f2;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.journey-frame,
+.analytics-row,
+.trend-panel {
+  animation: liftIn 0.45s var(--ease) both;
+}
+.analytics-row { animation-delay: 0.08s; }
+.trend-panel { animation-delay: 0.16s; }
+
+@keyframes liftIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .journey-frame,
+  .analytics-row,
+  .trend-panel {
+    animation: none;
+  }
+}
+
+@media (max-width: 1200px) {
+  .dashboard {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .journey-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .journey-column::after { display: none; }
+  .analytics-row {
+    grid-template-columns: 1fr;
+  }
+}
 
 @media (max-width: 900px) {
-  .hero-shell { padding: 18px 20px; }
-  .hero-top { flex-direction: column; gap: 12px; }
-  .hero-chip { min-width: 0; width: 100%; }
-  .hero-actions { width: 100%; }
+  .journey-toolbar {
+    grid-template-columns: 1fr;
+    justify-items: start;
+    gap: 10px;
+  }
+  .journey-tabs {
+    justify-content: flex-start;
+    overflow-x: auto;
+    width: 100%;
+    padding-bottom: 2px;
+  }
+  .toolbar-actions {
+    justify-self: start;
+  }
+  .journey-header {
+    grid-template-columns: 1fr;
+  }
+  .journey-team {
+    justify-items: start;
+  }
+  .team-stack {
+    justify-content: flex-start;
+  }
+  .team-meta {
+    justify-items: start;
+  }
+  .kpi-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
-@media (max-width: 640px) {
-  .hero-kpis { grid-template-columns: repeat(2, 1fr); }
-  .grid-panels.two-col { grid-template-columns: 1fr; }
-  .panel { padding: 14px 14px; }
-  .feat-row { align-items: flex-start; }
-  .feat-date { margin-top: 2px; }
-  .kpi-value { font-size: var(--fs-xl); }
+
+@media (max-width: 720px) {
+  .journey-frame {
+    border-radius: 20px;
+    padding: 14px;
+  }
+  .dashboard h1 {
+    font-size: 28px;
+  }
+  .journey-board {
+    grid-template-columns: 1fr;
+  }
+  .journey-card {
+    min-height: 0;
+  }
+  .donut-grid {
+    grid-template-columns: 1fr;
+  }
 }
-@media (max-width: 480px) {
-  .hero-shell { padding: 14px 16px; border-radius: 16px; }
-  .dashboard h1 { font-size: var(--fs-xl); }
+
+@media (max-width: 520px) {
+  .kpi-strip {
+    grid-template-columns: 1fr;
+  }
+  .kpi-pill {
+    min-height: 52px;
+  }
 }
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
 (function () {
-  const today  = new Date();
+  if (typeof Chart === 'undefined') return;
+
+  const uiFont = "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif";
+
+  const today = new Date();
   const labels = [];
   const dataMap = {};
 
   <% perDay.forEach(function(row) {
     const d = row.day instanceof Date ? row.day.toISOString().slice(0,10) : String(row.day).slice(0,10);
   %>
-  dataMap['<%= d %>'] = <%= row.count %>;
+  dataMap['<%= d %>'] = <%= Number(row.count) || 0 %>;
   <% }); %>
 
   for (let i = 6; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
-    labels.push(d.toLocaleDateString('hr-HR', { weekday:'short', day:'numeric', month:'numeric' }));
+    labels.push(d.toLocaleDateString('hr-HR', { weekday: 'short', day: 'numeric', month: 'numeric' }));
     const key = d.toISOString().slice(0, 10);
     if (!dataMap[key]) dataMap[key] = 0;
   }
+
   const values = [];
   for (let i = 6; i >= 0; i--) {
     const d = new Date(today);
@@ -415,53 +994,126 @@
     values.push(dataMap[d.toISOString().slice(0, 10)] || 0);
   }
 
-  const ctx = document.getElementById('msgChart').getContext('2d');
-  const gradient = ctx.createLinearGradient(0, 0, 0, 220);
-  gradient.addColorStop(0, 'rgba(10,126,164,0.9)');
-  gradient.addColorStop(1, 'rgba(10,126,164,0.35)');
+  const msgCanvas = document.getElementById('msgChart');
+  if (msgCanvas) {
+    const ctx = msgCanvas.getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, 240);
+    gradient.addColorStop(0, 'rgba(111,143,234,0.95)');
+    gradient.addColorStop(1, 'rgba(123,181,255,0.42)');
 
-  new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Poruke',
-        data: values,
-        backgroundColor: gradient,
-        borderRadius: 8,
-        borderSkipped: false,
-        hoverBackgroundColor: '#076d8e',
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: '#FFFFFF',
-          titleColor: '#5C6880',
-          bodyColor: '#1A1A2E',
-          borderColor: '#DDD8CE',
-          borderWidth: 1,
-          padding: 10,
-          cornerRadius: 10,
-          displayColors: false,
-          callbacks: { label: c => ` ${c.parsed.y} poruka` }
-        }
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Poruke',
+          data: values,
+          borderRadius: 9,
+          borderSkipped: false,
+          backgroundColor: gradient,
+          hoverBackgroundColor: '#5b7ddd'
+        }]
       },
-      scales: {
-        y: {
-          beginAtZero: true,
-          ticks: { precision: 0, color: '#5C6880', font: { size: 11, family: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" } },
-          grid: { color: 'rgba(0,0,0,0.05)', drawBorder: false }
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#fefefe',
+            titleColor: '#5d6d89',
+            bodyColor: '#1f2d45',
+            borderColor: '#d9e3f2',
+            borderWidth: 1,
+            padding: 10,
+            displayColors: false,
+            cornerRadius: 10,
+            callbacks: {
+              label: (c) => ' ' + c.parsed.y + ' poruka'
+            }
+          }
         },
-        x: {
-          ticks: { color: '#5C6880', font: { size: 11, family: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" } },
-          grid: { display: false }
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              precision: 0,
+              color: '#6f7f98',
+              font: { family: uiFont, size: 11 }
+            },
+            grid: { color: 'rgba(127,142,168,0.16)', drawBorder: false }
+          },
+          x: {
+            ticks: {
+              color: '#6f7f98',
+              font: { family: uiFont, size: 11 }
+            },
+            grid: { display: false }
+          }
         }
       }
-    }
-  });
+    });
+  }
+
+  const intentRows = <%- JSON.stringify(_intentChartData) %>;
+  const intentCanvas = document.getElementById('intentDonutChart');
+  if (intentCanvas && intentRows.length) {
+    new Chart(intentCanvas, {
+      type: 'doughnut',
+      data: {
+        labels: intentRows.map((row) => row.label),
+        datasets: [{
+          data: intentRows.map((row) => row.value),
+          backgroundColor: intentRows.map((row) => row.color),
+          borderWidth: 0,
+          hoverOffset: 3
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '68%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => ' ' + ctx.label + ': ' + ctx.parsed
+            }
+          }
+        }
+      }
+    });
+  }
+
+  const timeRows = <%- JSON.stringify(_timeChartData) %>;
+  const timeCanvas = document.getElementById('timeDonutChart');
+  if (timeCanvas && timeRows.some((row) => row.value > 0)) {
+    new Chart(timeCanvas, {
+      type: 'doughnut',
+      data: {
+        labels: timeRows.map((row) => row.label),
+        datasets: [{
+          data: timeRows.map((row) => row.value),
+          backgroundColor: timeRows.map((row) => row.color),
+          borderWidth: 0,
+          hoverOffset: 3
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '68%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => ' ' + ctx.label + ': ' + ctx.parsed
+            }
+          }
+        }
+      }
+    });
+  }
 })();
 </script>
 
