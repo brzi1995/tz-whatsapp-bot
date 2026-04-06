@@ -463,14 +463,14 @@ async function handleRestaurants(userMsg, session, deps) {
   };
 
   const MSG = {
-    hr: `Ovdje su informacije za restorane i barove u Brelima:\n${restaurantUrl}\n\nMožete birati po stilu hrane:\n• seafood\n• pizza / Italian`,
-    en: `Here are the restaurant and bar options in Brela:\n${restaurantUrl}\n\nYou can choose by food style:\n• seafood\n• pizza / Italian`,
-    de: `Hier sind Restaurants und Bars in Brela:\n${restaurantUrl}\n\nAuswahl nach Stil:\n• seafood\n• pizza / Italian`,
-    it: `Ecco ristoranti e bar a Brela:\n${restaurantUrl}\n\nPuoi scegliere per stile:\n• seafood\n• pizza / Italian`,
-    fr: `Voici les restaurants et bars à Brela :\n${restaurantUrl}\n\nVous pouvez choisir par style :\n• seafood\n• pizza / Italian`,
-    sv: `Här är restauranger och barer i Brela:\n${restaurantUrl}\n\nVälj efter matstil:\n• seafood\n• pizza / Italian`,
-    no: `Her er restauranter og barer i Brela:\n${restaurantUrl}\n\nVelg etter matstil:\n• seafood\n• pizza / Italian`,
-    cs: `Zde jsou restaurace a bary v Brele:\n${restaurantUrl}\n\nMůžete vybírat podle stylu:\n• seafood\n• pizza / Italian`,
+    hr: `Ovdje su informacije za restorane i barove u Brelima:\n${restaurantUrl}\n\nMožete birati po stilu hrane:\n• seafood\n• pizza / Italian\n• local Dalmatian cuisine`,
+    en: `Here are the restaurant and bar options in Brela:\n${restaurantUrl}\n\nYou can choose by food style:\n• seafood\n• pizza / Italian\n• local Dalmatian cuisine`,
+    de: `Hier sind Restaurants und Bars in Brela:\n${restaurantUrl}\n\nAuswahl nach Stil:\n• seafood\n• pizza / Italian\n• local Dalmatian cuisine`,
+    it: `Ecco ristoranti e bar a Brela:\n${restaurantUrl}\n\nPuoi scegliere per stile:\n• seafood\n• pizza / Italian\n• local Dalmatian cuisine`,
+    fr: `Voici les restaurants et bars à Brela :\n${restaurantUrl}\n\nVous pouvez choisir par style :\n• seafood\n• pizza / Italian\n• local Dalmatian cuisine`,
+    sv: `Här är restauranger och barer i Brela:\n${restaurantUrl}\n\nVälj efter matstil:\n• seafood\n• pizza / Italian\n• local Dalmatian cuisine`,
+    no: `Her er restauranter og barer i Brela:\n${restaurantUrl}\n\nVelg etter matstil:\n• seafood\n• pizza / Italian\n• local Dalmatian cuisine`,
+    cs: `Zde jsou restaurace a bary v Brele:\n${restaurantUrl}\n\nMůžete vybírat podle stylu:\n• seafood\n• pizza / Italian\n• local Dalmatian cuisine`,
   };
   const SPECIFIC = {
     seafood: {
