@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getTenant, getConversation, saveConversation } = require('../db/sessions');
-const { detectLanguage, detectLanguageWithConfidence, rageMessage } = require('../services/openai');
+const { chat, detectLanguage, detectLanguageWithConfidence, rageMessage } = require('../services/openai');
 const { logMessage, getFaqMatch, getUpcomingEvents, getEventsByPeriod, checkAndIncrementUsage, detectEventPeriod, upsertWhatsappUser, getWhatsappUser, setOptIn, setAskedOptIn, setUserLang } = require('../db/bot');
 const { handleMessage: engineHandleMessage } = require('../services/conversationEngine');
 
@@ -926,6 +926,48 @@ function cleanMixedLanguageReply(reply, lang) {
     .trim();
 }
 
+async function alignReplyToUserLanguage(reply, userMessage, model = 'gpt-4o-mini') {
+  const safeReply = typeof reply === 'string' ? reply.trim() : '';
+  const safeUser = typeof userMessage === 'string' ? userMessage.trim() : '';
+  if (!safeReply || !safeUser) return safeReply || reply;
+
+  const userWords = normalizeLookup(safeUser).split(/\s+/).filter(Boolean);
+  const shortInput = userWords.length <= 2;
+  const userLang = detectLanguageWithConfidence(safeUser);
+  const replyLang = detectLanguageWithConfidence(safeReply);
+  const userHasNonAscii = /[^\x00-\x7F]/.test(safeUser);
+
+  const clearMismatch = Boolean(userLang.lang && replyLang.lang && userLang.lang !== replyLang.lang);
+  const likelyUnknownMismatch = Boolean(!userLang.lang && userHasNonAscii && (!replyLang.lang || replyLang.lang === 'en'));
+  const shouldAlign = !shortInput && (clearMismatch || likelyUnknownMismatch);
+
+  if (!shouldAlign) return safeReply;
+
+  try {
+    const translated = await chat(
+      [
+        'You are a strict translation layer for a tourism chatbot.',
+        'Rewrite the assistant answer in the SAME language as the user message.',
+        'Keep facts, numbers, links, bullet points, and meaning exactly the same.',
+        'Do not add or remove information.',
+        'If the answer is already in the same language, return it unchanged.',
+        'Return only the rewritten answer text.',
+      ].join(' '),
+      [
+        {
+          role: 'user',
+          content: `User message:\n${safeUser}\n\nAssistant answer:\n${safeReply}`,
+        },
+      ],
+      model
+    );
+    return typeof translated === 'string' && translated.trim() ? translated.trim() : safeReply;
+  } catch (err) {
+    console.error('[webhook] alignReplyToUserLanguage failed:', err?.message);
+    return safeReply;
+  }
+}
+
 function isWeatherFollowUp(message, conversationState) {
   const topic = conversationState?.lastTopic || conversationState?.lastIntent;
   if (topic !== 'weather' && !conversationState?.lastWeatherIntent) return false;
@@ -1184,6 +1226,7 @@ router.post('/webhook', async (req, res) => {
       } catch (e) { /* keep rawAnswer */ }
     }
     faqReply = cleanMixedLanguageReply(faqReply, activeLang);
+    faqReply = await alignReplyToUserLanguage(faqReply, trimmedMsg, model);
     await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
     engineSession.lastTopic = 'faq';
     replyForLogs = faqReply;
@@ -1222,6 +1265,7 @@ router.post('/webhook', async (req, res) => {
       safeReply = 'Došlo je do greške. Molimo pokušajte ponovno.';
     }
     safeReply = cleanMixedLanguageReply(safeReply, activeLang);
+    safeReply = await alignReplyToUserLanguage(safeReply, trimmedMsg, model);
     replyForLogs = safeReply;
     console.log('after handleMessage', { reply: safeReply, session: engineSession });
     await logMessage(tenant.id, userPhone, trimmedMsg, engineSession.lastTopic || 'other', activeLang).catch(() => {});
@@ -1241,7 +1285,8 @@ router.post('/webhook', async (req, res) => {
   // ── FAQ — database first, AI polish only ─────────────────────────────────
     const faqMatch = await getFaqMatch(tenant.id, effectiveMsg).catch(() => null);
     if (faqMatch?.matchType === 'clarify') {
-      const clarifyReply = formatFaqClarifyReply(faqMatch.options || [], activeLang);
+      let clarifyReply = formatFaqClarifyReply(faqMatch.options || [], activeLang);
+      clarifyReply = await alignReplyToUserLanguage(clarifyReply, trimmedMsg, model);
 
       await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
       replyForLogs = clarifyReply;
@@ -1299,6 +1344,7 @@ router.post('/webhook', async (req, res) => {
         }
       }
       faqReply = cleanMixedLanguageReply(faqReply, activeLang);
+      faqReply = await alignReplyToUserLanguage(faqReply, trimmedMsg, model);
 
       await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
       replyForLogs = faqReply;
@@ -1352,7 +1398,8 @@ router.post('/webhook', async (req, res) => {
 
   // Accommodation quick reply
   if (isAccommodationQuery(effectiveMsg)) {
-    const accReply = accommodationReply(activeLang);
+    let accReply = accommodationReply(activeLang);
+    accReply = await alignReplyToUserLanguage(accReply, trimmedMsg, model);
     await logMessage(tenant.id, userPhone, trimmedMsg, 'faq', activeLang).catch(() => {});
     replyForLogs = accReply;
     await persistTurn(accReply, {
@@ -1371,7 +1418,8 @@ router.post('/webhook', async (req, res) => {
   const followUp = isFollowUp(trimmedMsg) || Boolean(engineSession.pendingSlot);
   if (!followUp && !isRelevant(effectiveMsg)) {
     await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', activeLang).catch(() => {});
-    replyForLogs = offTopicReply(activeLang);
+    const offTopic = await alignReplyToUserLanguage(offTopicReply(activeLang), trimmedMsg, model);
+    replyForLogs = offTopic;
     await persistTurn(replyForLogs, {
       awaiting: null,
       lastTopic: 'fallback',
@@ -1381,14 +1429,15 @@ router.post('/webhook', async (req, res) => {
       lastEventPeriod: null,
     });
     console.log(`[webhook] FINAL RESPONSE SENT — off-topic: "${trimmedMsg.slice(0, 40)}"`);
-    return res.send(twiml(offTopicReply(activeLang)));
+    return res.send(twiml(offTopic));
   }
 
     // ── Rate limit ───────────────────────────────────────────────────────────
     const usage = await checkAndIncrementUsage(tenant.id, userPhone);
     if (!usage.allowed) {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', activeLang).catch(() => {});
-      replyForLogs = fallbackReply(activeLang);
+      const limitReply = await alignReplyToUserLanguage(fallbackReply(activeLang), trimmedMsg, model);
+      replyForLogs = limitReply;
       await persistTurn(replyForLogs, {
         awaiting: null,
         lastTopic: 'fallback',
@@ -1398,7 +1447,7 @@ router.post('/webhook', async (req, res) => {
         lastEventPeriod: null,
       });
       console.log('[webhook] FINAL RESPONSE SENT — rate limited');
-      return res.send(twiml(fallbackReply(activeLang)));
+      return res.send(twiml(limitReply));
     }
 
     // ── STEP 6: AI FALLBACK — tourism questions not covered by DB ────────────
@@ -1428,7 +1477,7 @@ router.post('/webhook', async (req, res) => {
     }
 
     // STEP 8: Final fallback — only if AI fails
-    const reply = aiReply || fallbackReply(activeLang);
+    const reply = await alignReplyToUserLanguage(aiReply || fallbackReply(activeLang), trimmedMsg, model);
     replyForLogs = reply;
 
     // Persist conversation history
