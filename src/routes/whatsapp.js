@@ -29,14 +29,14 @@ function normalizeMessage(msg) {
 // Pure acknowledgements — no reply needed
 const TRIVIAL = new Set([
   'ok', 'okay', 'k', 'yes', 'no', 'yep', 'nope', 'thanks', 'thx', 'ty', 'np',
-  'hvala', 'nein', 'danke', 'grazie', 'merci',
+  'hvala', 'nein', 'danke', 'grazie', 'merci', 'si', 'sí', 'tak', 'nie',
 ]);
 const SHORT_UNCLEAR = new Set(['da', 'ne', 'yes', 'no', 'yep', 'nope']);
 
 // Greetings — short messages only (≤3 words), handled without AI
 const GREETING_WORDS = [
   'hello', 'hi', 'hey', 'bok', 'hej', 'zdravo', 'hallo', 'ciao',
-  'bonjour', 'salut', 'buenas', 'buongiorno', 'dobar dan', 'guten tag',
+  'bonjour', 'salut', 'hola', 'buenas', 'buongiorno', 'dobar dan', 'guten tag', 'czesc', 'cześć',
 ];
 const GREETING_LANGUAGE = {
   pozdrav: 'hr',
@@ -52,6 +52,10 @@ const GREETING_LANGUAGE = {
   buongiorno: 'it',
   bonjour: 'fr',
   salut: 'fr',
+  hola: 'es',
+  buenas: 'es',
+  czesc: 'pl',
+  'cześć': 'pl',
 };
 function isGreeting(msg) {
   const lower = msg.toLowerCase().trim().replace(/[!?.,]*$/, '');
@@ -131,6 +135,8 @@ const OFF_TOPIC_MSG = {
   sv: 'Jag kan hjälpa med Brela (stränder, parkering, väder, evenemang, restauranger). Säg exakt vad du behöver.',
   no: 'Jeg kan hjelpe med Brela (strender, parkering, vær, arrangementer, restauranter). Si akkurat hva du trenger.',
   cs: 'Pomohu s informacemi o Brele (pláže, parkování, počasí, akce, restaurace). Napište přesně, co potřebujete.',
+  es: 'Puedo ayudar con Brela (playas, parking, tiempo, eventos, restaurantes). Dime exactamente qué necesitas.',
+  pl: 'Mogę pomóc w Breli (plaże, parking, pogoda, wydarzenia, restauracje). Napisz dokładnie, czego potrzebujesz.',
 };
 function offTopicReply(lang) { return OFF_TOPIC_MSG[lang] || OFF_TOPIC_MSG.en; }
 
@@ -143,6 +149,8 @@ const UNCLEAR_MSG = {
   sv: 'Jag är inte säker på vad du menar.\nKan du skriva lite mer exakt?',
   no: 'Jeg er ikke helt sikker på hva du mener.\nKan du være litt mer konkret?',
   cs: 'Nejsem si jistý, co přesně potřebujete.\nMůžete otázku napsat trochu přesněji?',
+  es: 'No estoy seguro de qué necesitas exactamente.\n¿Puedes escribirlo un poco más claro?',
+  pl: 'Nie jestem pewien, czego dokładnie potrzebujesz.\nMożesz napisać to trochę jaśniej?',
 };
 function unclearReply(lang) { return UNCLEAR_MSG[lang] || UNCLEAR_MSG.en; }
 
@@ -155,6 +163,8 @@ const CLARIFY_MSG = {
   sv: 'Jag kan hjälpa till, men jag behöver lite mer information.\nSkriv platsen eller vad du exakt behöver.',
   no: 'Jeg kan hjelpe, men jeg trenger litt mer informasjon.\nSkriv stedet eller hva du trenger helt konkret.',
   cs: 'Mohu pomoci, ale potřebuji trochu více podrobností.\nNapište místo nebo co přesně potřebujete.',
+  es: 'Puedo ayudar, pero necesito un poco más de detalle.\nEscribe la ubicación o qué necesitas exactamente.',
+  pl: 'Mogę pomóc, ale potrzebuję trochę więcej szczegółów.\nNapisz lokalizację albo czego dokładnie potrzebujesz.',
 };
 
 const PARKING_CLARIFY_MSG = {
@@ -758,7 +768,7 @@ function keywordIntent(msg) {
   if (!n) return null;
   if (n.includes('parking') || n.includes('aparcamiento') || n.includes('estacionamiento') || n.includes('parkowanie')) return 'parking';
   if (n.includes('beach') || n.includes('plaž') || n.includes('playa') || n.includes('plaza') || n.includes('plaża')) return 'beaches';
-  if (n.includes('restoran') || n.includes('restaurant') || n.includes('dinner') || n.includes('food') || n.includes('restaurante') || n.includes('restauracja') || n.includes('comida') || n.includes('kolacja')) return 'restaurants';
+  if (n.includes('restoran') || n.includes('restaurant') || n.includes('dinner') || n.includes('food') || n.includes('restaurante') || n.includes('restauracja') || n.includes('restauracje') || n.includes('comida') || n.includes('kolacja')) return 'restaurants';
   if (n.includes('event') || n.includes('dogadj') || n.includes('događ') || n.includes('evento') || n.includes('wydarzen')) return 'events';
   if (isWeatherQuery(msg)) return 'weather';
   return null;
@@ -1089,7 +1099,7 @@ router.post('/webhook', async (req, res) => {
   const model = tenant.openai_model;
 
   // ── GREETING (exact match, first message only) ──────────────────────────────
-  const EXACT_GREETINGS = new Set(['pozdrav', 'bok', 'hej', 'zdravo', 'dobar dan', 'hello', 'hi', 'hey', 'hallo', 'guten tag', 'ciao', 'buongiorno', 'bonjour', 'salut']);
+  const EXACT_GREETINGS = new Set(['pozdrav', 'bok', 'hej', 'zdravo', 'dobar dan', 'hello', 'hi', 'hey', 'hallo', 'guten tag', 'ciao', 'buongiorno', 'bonjour', 'salut', 'hola', 'buenas', 'czesc', 'cześć']);
   if (EXACT_GREETINGS.has(greetingNorm) && history.length === 0) {
     const reply = greetingReply(activeLang);
     replyForLogs = reply;

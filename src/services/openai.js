@@ -75,7 +75,7 @@ function detectLanguageWithConfidence(message) {
     no: ['i dag', 'i morgen', 'takk', 'hei', 'hva', 'hvor', 'arrangementer'],
     cs: ['dnes', 'zitra', 'diky', 'ahoj', 'kde', 'jak', 'prosim', 'akce'],
     es: ['hola', 'gracias', 'hoy', 'manana', 'mañana', 'tiempo', 'clima', 'pronostico', 'pronóstico', 'restaurante', 'comida', 'cena', 'eventos', 'playa', 'parking'],
-    pl: ['czesc', 'cześć', 'dziekuje', 'dziękuję', 'dzis', 'dzisiaj', 'jutro', 'pogoda', 'prognoza', 'restauracja', 'jedzenie', 'kolacja', 'wydarzenia', 'plaza', 'plaża', 'parking'],
+    pl: ['czesc', 'cześć', 'dziekuje', 'dziękuję', 'dzis', 'dzisiaj', 'jutro', 'pogoda', 'prognoza', 'restauracja', 'restauracje', 'jedzenie', 'kolacja', 'wydarzenia', 'plaza', 'plaża', 'parking'],
   };
 
   let best = { lang: null, score: 0 };
