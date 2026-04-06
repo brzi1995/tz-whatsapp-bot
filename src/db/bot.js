@@ -50,6 +50,31 @@ const FAQ_STOPWORDS = new Set([
   'brela', 'brelima', 'hrvatska', 'croatia', 'dalmacija', 'dalmatia', 'makarska',
 ]);
 
+const FAQ_TOKEN_ALIASES = {
+  // beaches / swimming intent
+  kupati: 'plaza',
+  kupanje: 'plaza',
+  kupanjeu: 'plaza',
+  kupat: 'plaza',
+  swim: 'plaza',
+  swimming: 'plaza',
+  beach: 'plaza',
+  beaches: 'plaza',
+  plaze: 'plaza',
+  plazi: 'plaza',
+  plaža: 'plaza',
+  plaza: 'plaza',
+  strand: 'plaza',
+  spiaggia: 'plaza',
+  plage: 'plaza',
+  playa: 'plaza',
+};
+
+function canonicalFaqToken(token) {
+  const t = String(token || '').toLowerCase().trim();
+  return FAQ_TOKEN_ALIASES[t] || t;
+}
+
 function normalizeFaqText(text) {
   return String(text || '')
     .toLowerCase()
@@ -61,10 +86,12 @@ function normalizeFaqText(text) {
 }
 
 function tokenizeFaqText(text) {
-  return normalizeFaqText(text)
+  const tokens = normalizeFaqText(text)
     .split(' ')
     .filter(Boolean)
-    .filter(token => token.length > 1 && !FAQ_STOPWORDS.has(token));
+    .filter(token => token.length > 1 && !FAQ_STOPWORDS.has(token))
+    .map(canonicalFaqToken);
+  return [...new Set(tokens)];
 }
 
 function matchFaqToken(userToken, faqToken) {
@@ -79,7 +106,6 @@ function matchFaqToken(userToken, faqToken) {
  * Try to match a user message against FAQ entries for the tenant.
  * Returns either:
  *   - { matchType: 'strong', ...faqData }
- *   - { matchType: 'clarify', score, options }
  *   - null when nothing matches at all
  * @param {number} tenantId
  * @param {string} userMessage
@@ -171,10 +197,15 @@ async function getFaqMatch(tenantId, userMessage) {
       }));
 
     if (clarificationOptions.length) {
+      const top = clarificationOptions[0];
       return {
-        matchType: 'clarify',
-        score: clarificationOptions[0].score,
-        options: clarificationOptions,
+        matchType: 'strong',
+        question: top.question,
+        answer: top.answer,
+        score: top.score,
+        link_title: top.link_title || null,
+        link_url: top.link_url || null,
+        link_image: top.link_image || null,
       };
     }
 
