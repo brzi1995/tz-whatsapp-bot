@@ -89,7 +89,7 @@ function getSuggestions(topic) {
     case 'events':
       return ["what's happening tonight", 'events this weekend', 'restaurants nearby'];
     case 'restaurants':
-      return ['seafood', 'pizza / Italian'];
+      return ['seafood', 'pizza / Italian', 'local Dalmatian cuisine', 'bars / cocktails'];
     default:
       return [];
   }
