@@ -598,4 +598,45 @@ router.post('/broadcast/:id/remove', requireAuth, async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Event importer — brela.hr scraper
+// ---------------------------------------------------------------------------
+
+// POST /admin/import-events
+// Body: { month: 'YYYY-MM' }
+// Returns JSON: { imported: N, total: N }
+router.post('/import-events', requireAuth, async (req, res) => {
+  const tenantId = req.session.tenantId;
+  const { month } = req.body;
+
+  if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+    return res.status(400).json({ error: 'Invalid month. Use YYYY-MM format.' });
+  }
+
+  try {
+    const { fetchBrelaEvents } = require('../services/brelaEvents');
+    const scraped = await fetchBrelaEvents(month);
+
+    let imported = 0;
+    for (const ev of scraped) {
+      const [existing] = await pool.query(
+        'SELECT id FROM events WHERE tenant_id = ? AND title = ? AND date = ? LIMIT 1',
+        [tenantId, ev.title, ev.date]
+      );
+      if (existing.length) continue;
+
+      await pool.query(
+        'INSERT INTO events (tenant_id, title, description, date, location_link, featured, is_active) VALUES (?, ?, ?, ?, ?, 0, 1)',
+        [tenantId, ev.title, '', ev.date, ev.link || null]
+      );
+      imported++;
+    }
+
+    return res.json({ imported, total: scraped.length });
+  } catch (err) {
+    console.error('[admin] import-events error:', err.message);
+    return res.status(500).json({ error: 'Import failed: ' + err.message });
+  }
+});
+
 module.exports = router;

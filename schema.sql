@@ -49,11 +49,13 @@ CREATE TABLE IF NOT EXISTS events (
   date           DATE         NOT NULL,
   location_link  VARCHAR(500),
   featured       TINYINT(1)   NOT NULL DEFAULT 0,
+  is_active      TINYINT(1)   NOT NULL DEFAULT 1,
   FOREIGN KEY (tenant_id) REFERENCES tenants(id)
 );
 
 -- Migration for existing installs (safe to run multiple times):
 -- ALTER TABLE events ADD COLUMN IF NOT EXISTS featured TINYINT(1) NOT NULL DEFAULT 0;
+-- ALTER TABLE events ADD COLUMN IF NOT EXISTS is_active TINYINT(1) NOT NULL DEFAULT 1;
 
 -- All inbound messages with intent classification and detected language
 CREATE TABLE IF NOT EXISTS messages (
