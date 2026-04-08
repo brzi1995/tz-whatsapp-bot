@@ -753,6 +753,10 @@ const BRELA_TOPICS = [
   'water', 'clean', 'safe', 'safe to', 'visit', 'sightseeing', 'attraction',
   'what to do', 'things to do', 'what to see', 'opening', 'open', 'cash',
   'internet', 'wifi', 'wi-fi', 'medical', 'emergency',
+  // Entertainment / culture
+  'cinema', 'movie', 'film', 'kino', 'nightlife', 'night life', 'entertainment',
+  'culture', 'museum', 'muzej', 'galerij', 'gallery', 'concert', 'koncert',
+  'club', 'noćni', 'nocni', 'nachtleben', 'vita notturna', 'vie nocturne',
 ];
 function isRelevant(msg) {
   const normalized = normalizeLookup(msg);
@@ -971,20 +975,23 @@ function cleanMixedLanguageReply(reply, lang) {
     .trim();
 }
 
-async function alignReplyToUserLanguage(reply, userMessage, model = 'gpt-4o-mini') {
+async function alignReplyToUserLanguage(reply, userMessage, model = 'gpt-4o-mini', knownLang = null) {
   const safeReply = typeof reply === 'string' ? reply.trim() : '';
   const safeUser = typeof userMessage === 'string' ? userMessage.trim() : '';
   if (!safeReply || !safeUser) return safeReply || reply;
 
   const userWords = normalizeLookup(safeUser).split(/\s+/).filter(Boolean);
-  const shortInput = userWords.length <= 2;
-  const userLang = detectLanguageWithConfidence(safeUser);
+  // If we know the user's language from session, don't skip on short input
+  const shortInput = !knownLang && userWords.length <= 2;
+  const userLang = knownLang ? { lang: knownLang, confidence: 1 } : detectLanguageWithConfidence(safeUser);
   const replyLang = detectLanguageWithConfidence(safeReply);
   const userHasNonAscii = /[^\x00-\x7F]/.test(safeUser);
 
   const clearMismatch = Boolean(userLang.lang && replyLang.lang && userLang.lang !== replyLang.lang);
   const likelyUnknownMismatch = Boolean(!userLang.lang && userHasNonAscii && (!replyLang.lang || replyLang.lang === 'en'));
-  const shouldAlign = !shortInput && (clearMismatch || likelyUnknownMismatch);
+  // Also align when we have a confirmed user language and reply seems to contain non-user-language text
+  const knownLangMismatch = Boolean(knownLang && knownLang !== 'hr' && replyLang.lang && replyLang.lang !== knownLang);
+  const shouldAlign = !shortInput && (clearMismatch || likelyUnknownMismatch || knownLangMismatch);
 
   if (!shouldAlign) return safeReply;
 
@@ -1254,7 +1261,7 @@ router.post('/webhook', async (req, res) => {
   }
 
   // ── TRIVIAL ACK (ok/thanks/etc.) without pending context → silent ──────────
-  if (TRIVIAL.has(lowerMsg) && !engineSession.pendingSlot) {
+  if (TRIVIAL.has(lowerMsg) && !engineSession.pendingSlot && !engineSession.lastTopic) {
     console.log('[webhook] FINAL RESPONSE SENT — trivial ack (empty)');
     return res.send(emptyTwiml());
   }
@@ -1325,7 +1332,7 @@ router.post('/webhook', async (req, res) => {
       safeReply = 'Došlo je do greške. Molimo pokušajte ponovno.';
     }
     safeReply = cleanMixedLanguageReply(safeReply, activeLang);
-    safeReply = await alignReplyToUserLanguage(safeReply, trimmedMsg, model);
+    safeReply = await alignReplyToUserLanguage(safeReply, trimmedMsg, model, activeLang);
     replyForLogs = safeReply;
     console.log('after handleMessage', { reply: safeReply, session: engineSession });
     await logMessage(tenant.id, userPhone, trimmedMsg, engineSession.lastTopic || 'other', activeLang).catch(() => {});

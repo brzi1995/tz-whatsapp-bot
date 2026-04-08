@@ -266,7 +266,7 @@ async function handleParking(userMsg, session, deps) {
     en: 'Parking in Brela is mainly available in the town center and near the main beach areas. During summer, spots can fill up quickly, so it is best to arrive earlier in the day. If you want, I can also help with beaches, restaurants, weather, or events.',
     de: 'Parken in Brela ist hauptsächlich im Ortszentrum und in der Nähe der wichtigsten Strände verfügbar. Im Sommer sind die Plätze schnell voll, daher ist es am besten, früher am Tag anzukommen. Wenn Sie möchten, kann ich auch bei Stränden, Restaurants, Wetter oder Veranstaltungen helfen.',
     it: 'Il parcheggio a Brela è disponibile soprattutto nel centro e vicino alle principali zone balneari. In estate i posti si riempiono rapidamente, quindi è meglio arrivare prima durante la giornata. Se vuoi, posso aiutarti anche con spiagge, ristoranti, meteo o eventi.',
-    fr: 'Le parking à Brela est principalement disponible dans le centre-ville et près des principales zones de plage. En été, les places se remplissent rapidement, donc il est préférable d’arriver plus tôt dans la journée. Si vous voulez, je peux aussi aider avec les plages, restaurants, météo ou événements.',
+    fr: 'Le parking à Brela est principalement disponible dans le centre-ville et près des principales zones de plage. En été, les places se remplissent rapidement, donc il est préférable d\'arriver plus tôt dans la journée. Si vous voulez, je peux aussi aider avec les plages, restaurants, météo ou événements.',
     sv: 'Parkering i Brela finns främst i centrum och nära de viktigaste strandområdena. Under sommaren fylls platserna snabbt, så det är bäst att komma tidigare på dagen. Om du vill kan jag också hjälpa med stränder, restauranger, väder eller evenemang.',
     no: 'Parkering i Brela er hovedsakelig tilgjengelig i sentrum og nær de viktigste strandområdene. Om sommeren fylles plassene raskt opp, så det er best å komme tidligere på dagen. Hvis du vil kan jeg også hjelpe med strender, restauranter, vær eller arrangementer.',
     cs: 'Parkování v Brele je dostupné hlavně v centru města a poblíž hlavních plážových oblastí. V létě se místa rychle zaplní, proto je nejlepší přijet dříve během dne. Pokud chcete, mohu pomoci také s plážemi, restauracemi, počasím nebo akcemi.',
@@ -838,23 +838,84 @@ async function handleRestaurants(userMsg, session, deps) {
   return MSG[lang] || MSG.en;
 }
 
+const BEACH_FAMILY_MSG = {
+  hr: 'Za obitelji preporučujem plažu Soline — plitko more, pješčano dno i mirna atmosfera. Podrače je isto dobar izbor s pristupačnim ulazom u more.',
+  en: 'For families, Soline beach is ideal — shallow water, sandy bottom, and a calm atmosphere. Podrače is also a good pick with easy water entry.',
+  de: 'Für Familien empfehle ich Soline — flaches Wasser, Sandboden und ruhige Atmosphäre. Podrače ist ebenfalls gut mit einfachem Zugang zum Wasser.',
+  it: 'Per le famiglie consiglio Soline — acqua bassa, fondale sabbioso e atmosfera tranquilla. Anche Podrače è ottima con un ingresso facile.',
+  fr: 'Pour les familles, la plage de Soline est idéale — eau peu profonde, fond sableux et atmosphère calme. Podrače est aussi un bon choix avec un accès facile.',
+  sv: 'För familjer rekommenderas Soline — grunt vatten, sandbotten och lugn atmosfär. Podrače är också ett bra val med enkel tillgång till vattnet.',
+  no: 'For familier anbefales Soline — grunt vann, sanbunn og rolig atmosfære. Podrače er også et godt valg med enkel tilgang til vannet.',
+  cs: 'Pro rodiny doporučuji Soline — mělká voda, písčité dno a klidná atmosféra. Podrače je také dobrý výběr s jednoduchým vstupem do vody.',
+  es: 'Para familias, la playa de Soline es ideal — agua poco profunda, fondo arenoso y ambiente tranquilo. Podrače también es buena con fácil acceso al agua.',
+  pl: 'Dla rodzin polecam plażę Soline — płytka woda, piaszczyte dno i spokojna atmosfera. Podrače to też dobry wybór z łatwym wejściem do wody.',
+};
+
+const BEACH_QUIET_MSG = {
+  hr: 'Za mir i tišinu probajte manje uvale između Podrača i Baške Vode — do njih se dolazi pješice uz obalni put. Manje gužve, prirodniji ambijent.',
+  en: 'For peace and quiet, try the small coves between Podrače and Baška Voda — reachable on foot along the coastal path. Less crowded, more natural feel.',
+  de: 'Für Ruhe probieren Sie die kleinen Buchten zwischen Podrače und Baška Voda — zu Fuß über den Küstenweg erreichbar. Weniger Trubel, naturbelassener.',
+  it: 'Per la tranquillità prova le piccole calette tra Podrače e Baška Voda — raggiungibili a piedi lungo il sentiero costiero. Meno affollate, più naturali.',
+  fr: 'Pour la tranquillité, essayez les petites criques entre Podrače et Baška Voda — accessibles à pied le long du sentier côtier. Moins de monde, plus naturel.',
+  sv: 'För lugn och ro, prova de små vikarna mellan Podrače och Baška Voda — nåbara till fots längs kustleden. Mindre folk, mer naturligt.',
+  no: 'For ro og stillhet, prøv de små vikene mellom Podrače og Baška Voda — tilgjengelige til fots langs kystveien. Mindre folksomt, mer naturlig.',
+  cs: 'Pro klid zkuste malé zátoky mezi Podrače a Baška Voda — dostupné pěšky po pobřežní stezce. Méně rušno, přírodnější prostředí.',
+  es: 'Para tranquilidad, prueba las pequeñas calas entre Podrače y Baška Voda — accesibles a pie por el camino costero. Menos gente, más natural.',
+  pl: 'Dla spokoju spróbuj małych zatok między Podrače a Baška Voda — dostępnych pieszo wzdłuż ścieżki nadmorskiej. Mniej tłoczno, bardziej naturalnie.',
+};
+
 async function handleBeaches(userMsg, session, deps) {
   const { lang } = deps;
+
+  // Sub-routing: follow-up preference after generic beach reply
+  if (session.lastTopic === 'beaches') {
+    const lower = userMsg.toLowerCase();
+    const isFamily = /\b(family|families|famil\w+|kind|child|children|kid|kids|baby|babies|obitelj|djeca|deca|famille|enfants?|kinder|familia|ni[nñ]os?|bambini|rodzin\w*|dzieci)\b/i.test(lower);
+    const isQuiet = /\b(quiet|calm|peace|tran|ruhig|calme|tranquil|silencio|ticho|cisza|lugn|rolig)\b/i.test(lower);
+    const isYes = /^(yes|yeah|yep|sure|ok|okay|da|si|sí|ja|oui|tak|ano|sim)\b/i.test(lower.trim());
+
+    if (isFamily) {
+      session.lastTopic = 'beaches';
+      return BEACH_FAMILY_MSG[lang] || BEACH_FAMILY_MSG.en;
+    }
+    if (isQuiet) {
+      session.lastTopic = 'beaches';
+      return BEACH_QUIET_MSG[lang] || BEACH_QUIET_MSG.en;
+    }
+    if (isYes) {
+      // Generic "yes" — prompt them to choose
+      const WHICH = {
+        hr: 'Trebate li obiteljsku plažu (plitko more, mirno) ili mirnu plažu (manje gužve)?',
+        en: 'Are you looking for a family-friendly beach (shallow, calm) or a quiet beach (fewer crowds)?',
+        de: 'Suchen Sie einen familienfreundlichen Strand (flach, ruhig) oder einen ruhigen Strand (weniger Trubel)?',
+        it: 'Cerchi una spiaggia per famiglie (acque basse, calma) o una spiaggia tranquilla (meno affollata)?',
+        fr: 'Vous cherchez une plage familiale (eau peu profonde, calme) ou une plage tranquille (moins de monde)?',
+        sv: 'Letar du efter en familjevänlig strand (grunt, lugnt) eller en lugn strand (färre besökare)?',
+        no: 'Leter du etter en familievennlig strand (grunt, rolig) eller en stille strand (færre folk)?',
+        cs: 'Hledáte rodinnou pláž (mělká, klidná) nebo klidnou pláž (méně lidí)?',
+        es: '¿Buscas una playa familiar (agua tranquila, poco profunda) o una playa tranquila (menos gente)?',
+        pl: 'Szukasz plaży rodzinnej (płytka, spokojna) czy cichej plaży (mniej ludzi)?',
+      };
+      session.lastTopic = 'beaches';
+      return WHICH[lang] || WHICH.en;
+    }
+  }
+
   session.pendingSlot = null;
   session.lastQuestion = null;
   session.lastTopic = 'beaches';
 
   const MSG = {
-    hr: 'Ako dolazite u lipnju, za kupanje u Brelima najčešći izbor su Punta Rata i Podrače zbog čistog mora i lakog pristupa. Za mirniju varijantu probajte manje uvale uz šetnicu. Ako želite, mogu preporučiti obiteljsku ili mirniju plažu.',
-    en: 'If you are coming in June, Punta Rata and Podrače are usually the best choices for swimming in Brela thanks to clean water and easy access. For a calmer option, try smaller coves along the promenade. If you want, I can suggest a family-friendly or quieter beach.',
-    de: 'Wenn Sie im Juni kommen, sind Punta Rata und Podrače in Brela meist die beste Wahl zum Baden – klares Wasser und einfacher Zugang. Für eine ruhigere Option probieren Sie kleinere Buchten entlang der Promenade. Auf Wunsch empfehle ich familienfreundliche oder ruhigere Strände.',
-    it: 'Se arrivi a giugno, per fare il bagno a Brela le scelte migliori sono di solito Punta Rata e Podrače, con mare pulito e accesso facile. Per un’atmosfera più tranquilla prova le piccole calette lungo la passeggiata. Se vuoi, posso consigliarti una spiaggia per famiglie o più tranquilla.',
-    fr: 'Si vous venez en juin, pour la baignade à Brela, Punta Rata et Podrače sont généralement les meilleurs choix grâce à une eau claire et un accès facile. Pour une option plus calme, essayez les petites criques le long de la promenade. Je peux aussi vous recommander une plage familiale ou plus tranquille.',
-    sv: 'Om du kommer i juni är Punta Rata och Podrače oftast de bästa valen för bad i Brela tack vare klart vatten och enkel tillgång. För ett lugnare alternativ kan du prova mindre vikar längs strandpromenaden. Om du vill kan jag rekommendera en familjevänlig eller lugnare strand.',
-    no: 'Hvis du kommer i juni, er Punta Rata og Podrače som regel de beste valgene for bading i Brela med klart vann og enkel tilgang. For et roligere alternativ kan du prøve mindre viker langs promenaden. Hvis du vil, kan jeg anbefale en familievennlig eller roligere strand.',
-    cs: 'Pokud přijedete v červnu, pro koupání v Brele jsou obvykle nejlepší volbou Punta Rata a Podrače díky čisté vodě a snadnému přístupu. Pro klidnější variantu zkuste menší zátoky podél promenády. Pokud chcete, doporučím rodinnou nebo klidnější pláž.',
-    es: 'Si vienes en junio, para bañarte en Brela las opciones más recomendadas suelen ser Punta Rata y Podrače por el agua limpia y el acceso fácil. Para un ambiente más tranquilo, prueba pequeñas calas junto al paseo marítimo. Si quieres, te recomiendo una playa familiar o más tranquila.',
-    pl: 'Jeśli przyjeżdżasz w czerwcu, do kąpieli w Breli najczęściej polecane są Punta Rata i Podrače ze względu na czystą wodę i łatwy dostęp. Spokojniejszą opcją są mniejsze zatoczki przy promenadzie. Mogę też polecić plażę rodzinną albo cichszą.',
+    hr: 'Za kupanje u Brelima najčešći izbor su Punta Rata i Podrače — čisto more i lak pristup. Za mirniju varijantu probajte manje uvale uz šetnicu. Mogu preporučiti obiteljsku ili mirniju plažu ako želite.',
+    en: 'For swimming in Brela, Punta Rata and Podrače are the top choices — clean water and easy access. For a calmer option, try smaller coves along the promenade. I can suggest a family-friendly or quieter beach if you like.',
+    de: 'Zum Baden in Brela sind Punta Rata und Podrače die besten Optionen – klares Wasser und einfacher Zugang. Für eine ruhigere Option probieren Sie kleinere Buchten entlang der Promenade. Auf Wunsch empfehle ich familienfreundliche oder ruhigere Strände.',
+    it: 'Per nuotare a Brela, Punta Rata e Podrače sono le scelte migliori — mare pulito e accesso facile. Per un\'atmosfera più tranquilla prova le piccole calette lungo la passeggiata. Posso consigliarti una spiaggia per famiglie o più tranquilla.',
+    fr: 'Pour se baigner à Brela, Punta Rata et Podrače sont les meilleurs choix — eau claire et accès facile. Pour une option plus calme, essayez les petites criques le long de la promenade. Je peux vous recommander une plage familiale ou plus tranquille.',
+    sv: 'För att bada i Brela är Punta Rata och Podrače de bästa valen — klart vatten och enkel tillgång. För ett lugnare alternativ, prova mindre vikar längs strandpromenaden. Jag kan rekommendera en familjevänlig eller lugnare strand.',
+    no: 'For bading i Brela er Punta Rata og Podrače de beste valgene — klart vann og enkel tilgang. For et roligere alternativ, prøv mindre viker langs promenaden. Jeg kan anbefale en familievennlig eller roligere strand.',
+    cs: 'Pro koupání v Brele jsou nejlepší volbou Punta Rata a Podrače — čistá voda a snadný přístup. Pro klidnější variantu zkuste menší zátoky podél promenády. Mohu doporučit rodinnou nebo klidnější pláž.',
+    es: 'Para bañarse en Brela, Punta Rata y Podrače son las mejores opciones — agua limpia y acceso fácil. Para un ambiente más tranquilo, prueba pequeñas calas junto al paseo marítimo. Puedo recomendarte una playa familiar o más tranquila.',
+    pl: 'Do kąpieli w Breli najczęściej polecane są Punta Rata i Podrače — czysta woda i łatwy dostęp. Spokojniejszą opcją są mniejsze zatoczki przy promenadzie. Mogę polecić plażę rodzinną albo cichszą.',
   };
   return MSG[lang] || MSG.en;
 }
@@ -1154,7 +1215,7 @@ async function handleMessage(userMsg, session, deps) {
         en: 'Great, glad the parking info helped. Need anything else in Brela?',
         de: 'Super, freut mich dass die Parkinfo geholfen hat. Brauchen Sie noch etwas zu Brela?',
         it: 'Perfetto, felice che le info sul parcheggio abbiano aiutato. Ti serve altro su Brela?',
-        fr: 'Parfait, content que les infos parking aient aidé. Besoin d’autre chose sur Brela ?',
+        fr: 'Parfait, content que les infos parking aient aidé. Besoin d\'autre chose sur Brela ?',
         sv: 'Toppen, kul att parkeringsinfo hjälpte. Behöver du något mer om Brela?',
         no: 'Flott, bra at parkeringsinfoen hjalp. Trenger du noe mer om Brela?',
         cs: 'Skvělé, jsem rád že informace o parkování pomohly. Potřebujete ještě něco o Brele?',
@@ -1164,7 +1225,7 @@ async function handleMessage(userMsg, session, deps) {
         en: 'Great, let me know if you want more food and drink options in Brela.',
         de: 'Super, sagen Sie Bescheid wenn Sie mehr Tipps für Essen und Getränke in Brela möchten.',
         it: 'Perfetto, dimmi se vuoi altre opzioni per cibo e drink a Brela.',
-        fr: 'Parfait, dites-moi si vous voulez plus d’options pour manger et boire à Brela.',
+        fr: 'Parfait, dites-moi si vous voulez plus d\'options pour manger et boire à Brela.',
         sv: 'Toppen, säg till om du vill ha fler mat- och dryckestips i Brela.',
         no: 'Flott, si ifra hvis du vil ha flere tips om mat og drikke i Brela.',
         cs: 'Skvělé, dejte vědět pokud chcete další tipy na jídlo a pití v Brele.',
@@ -1174,7 +1235,7 @@ async function handleMessage(userMsg, session, deps) {
         en: 'Glad that helped. If you want, I can share more info for Brela.',
         de: 'Freut mich, dass es geholfen hat. Wenn Sie möchten, gebe ich gern mehr Infos zu Brela.',
         it: 'Felice che sia stato utile. Se vuoi, posso dare altre info su Brela.',
-        fr: 'Content que cela ait aidé. Si vous voulez, je peux donner plus d’infos sur Brela.',
+        fr: 'Content que cela ait aidé. Si vous voulez, je peux donner plus d\'infos sur Brela.',
         sv: 'Kul att det hjälpte. Om du vill kan jag ge mer info om Brela.',
         no: 'Bra at det hjalp. Hvis du vil kan jeg gi mer info om Brela.',
         cs: 'Jsem rád, že to pomohlo. Pokud chcete, mohu dát další informace o Brele.',
