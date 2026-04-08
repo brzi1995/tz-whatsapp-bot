@@ -1233,10 +1233,17 @@ async function handleMessage(userMsg, session, deps) {
     return reply;
 
   // ── Priority 5: short follow-up within lastTopic context ─────────────────
-  // Short messages (≤ 2 words) with no clear topic keyword are treated as
-  // follow-ups to the last resolved topic. "Local", "near beach", "ok",
-  // "center" after a restaurant or parking reply all land here.
-  } else if (session.lastTopic && TOPIC_HANDLERS[session.lastTopic] && msg.split(/\s+/).length <= 2 && !Object.values(TOPIC_PATTERNS).some(p => p.test(msg))) {
+  // Two sub-cases:
+  // a) ≤ 2 words with no topic keyword ("local", "center", "ok")
+  // b) ≤ 4 words starting with a location preposition ("near the beach",
+  //    "at the harbor") — these are qualifiers for the current topic, not
+  //    new topic requests, so bypass the topic-pattern block entirely.
+  } else if (session.lastTopic && TOPIC_HANDLERS[session.lastTopic] && (() => {
+    const words = msg.split(/\s+/).length;
+    const isLocationQualifier = /^(near|at\b|in\b|by\b|around|next to|close to|uz\b|blizu|pored|kod)\b/i.test(msg) && words <= 4;
+    const isShort = words <= 2 && !Object.values(TOPIC_PATTERNS).some(p => p.test(msg));
+    return isLocationQualifier || isShort;
+  })()) {
     session.followUpCount = (session.followUpCount || 0) + 1;
     activeTopic = session.lastTopic;
 
