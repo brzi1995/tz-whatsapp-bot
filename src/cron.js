@@ -1,6 +1,7 @@
 const pool = require('./db/index');
 const { sendMessage } = require('./services/twilio');
 const { generateOptInMessage } = require('./services/openai');
+const { importAllTenantEvents } = require('./services/eventImporter');
 
 async function runOptInOutreach() {
   // Cache generated messages per language within this run to avoid redundant AI calls
@@ -57,9 +58,23 @@ async function runOptInOutreach() {
   }
 }
 
+async function runEventImport() {
+  console.log('[cron] running event import');
+  try {
+    await importAllTenantEvents();
+  } catch (err) {
+    console.error('[cron] event import error:', err.message);
+  }
+}
+
 function startCron() {
   console.log('[cron] opt-in outreach started (60s interval)');
   setInterval(runOptInOutreach, 60 * 1000);
+
+  // Import events on startup, then every 6 hours
+  runEventImport();
+  setInterval(runEventImport, 6 * 60 * 60 * 1000);
+  console.log('[cron] event import scheduled (6h interval, first run immediately)');
 }
 
 module.exports = { startCron };

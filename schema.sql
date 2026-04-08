@@ -42,20 +42,26 @@ CREATE TABLE IF NOT EXISTS faq (
 );
 
 CREATE TABLE IF NOT EXISTS events (
-  id             INT AUTO_INCREMENT PRIMARY KEY,
-  tenant_id      INT          NOT NULL,
-  title          VARCHAR(255) NOT NULL,
-  description    TEXT         NOT NULL,
-  date           DATE         NOT NULL,
-  location_link  VARCHAR(500),
-  featured       TINYINT(1)   NOT NULL DEFAULT 0,
-  is_active      TINYINT(1)   NOT NULL DEFAULT 1,
+  id                  INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id           INT          NOT NULL,
+  title               VARCHAR(255) NOT NULL,
+  description         TEXT         NOT NULL,
+  date                DATE         NOT NULL,
+  location_link       VARCHAR(500),
+  featured            TINYINT(1)   NOT NULL DEFAULT 0,
+  is_active           TINYINT(1)   NOT NULL DEFAULT 1,
+  category            VARCHAR(100)          DEFAULT NULL,
+  send_notification   TINYINT(1)   NOT NULL DEFAULT 0,
+  notification_status VARCHAR(20)  NOT NULL DEFAULT 'none',
   FOREIGN KEY (tenant_id) REFERENCES tenants(id)
 );
 
 -- Migration for existing installs (safe to run multiple times):
 -- ALTER TABLE events ADD COLUMN IF NOT EXISTS featured TINYINT(1) NOT NULL DEFAULT 0;
 -- ALTER TABLE events ADD COLUMN IF NOT EXISTS is_active TINYINT(1) NOT NULL DEFAULT 1;
+-- ALTER TABLE events ADD COLUMN IF NOT EXISTS category VARCHAR(100) DEFAULT NULL;
+-- ALTER TABLE events ADD COLUMN IF NOT EXISTS send_notification TINYINT(1) NOT NULL DEFAULT 0;
+-- ALTER TABLE events ADD COLUMN IF NOT EXISTS notification_status VARCHAR(20) NOT NULL DEFAULT 'none';
 
 -- All inbound messages with intent classification and detected language
 CREATE TABLE IF NOT EXISTS messages (

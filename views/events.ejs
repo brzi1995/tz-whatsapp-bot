@@ -44,21 +44,58 @@
     </form>
   </div>
 
+  <%# ── Import from brela.hr ─────────────────────────────────────────── %>
+  <div class="add-form" style="margin-top:16px">
+    <h2>Uvezi s brela.hr</h2>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 12px">Automatski dohvati događaje s brela.hr/dogadanja za odabrani mjesec.</p>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <input type="month" id="importMonth" value="<%= new Date().toISOString().slice(0,7) %>" style="max-width:180px">
+      <button id="importBtn" class="btn btn-primary" onclick="runImport()">
+        <i data-lucide="download"></i> Uvezi događaje
+      </button>
+      <span id="importStatus" style="font-size:13px;color:var(--muted)"></span>
+    </div>
+  </div>
+
+  <%# ── List controls ───────────────────────────────────────────────── %>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+    <div style="font-size:13px;color:var(--muted)">
+      <%= events.length %> događaj<%= events.length === 1 ? '' : 'a' %>
+      <% if (!showInactive) { %>
+        &nbsp;·&nbsp;<a href="/admin/events?showInactive=1" style="color:var(--blue);text-decoration:none">Prikaži neaktivne</a>
+      <% } else { %>
+        &nbsp;(uključujući neaktivne) ·&nbsp;<a href="/admin/events" style="color:var(--blue);text-decoration:none">Sakrij neaktivne</a>
+      <% } %>
+    </div>
+  </div>
+
   <% if (events.length === 0) { %>
-    <div class="empty">Nema događaja. Dodajte prvi gore.</div>
+    <div class="empty">Nema događaja. Dodajte prvi gore ili uvezite s brela.hr.</div>
   <% } else { %>
     <div class="item-list">
       <% events.forEach(function(ev) {
            const dateStr = ev.date
              ? new Date(ev.date).toLocaleDateString('hr-HR', { day:'numeric', month:'long', year:'numeric' })
              : null;
+           const isActive = ev.is_active !== 0;
+           const categoryLabels = {
+             festival: 'Festival', sport: 'Sport', concert: 'Koncert',
+             gastronomy: 'Gastronomija', family: 'Obitelj', exhibition: 'Izložba',
+             traditional: 'Tradicija', nightlife: 'Noćni život',
+           };
       %>
-      <div class="item-card">
+      <div class="item-card<%= isActive ? '' : ' item-card--inactive' %>">
         <div class="item-card-body">
           <div class="item-card-title">
             <%= ev.title %>
             <% if (ev.featured) { %>
               <span class="tag tag-amber" style="margin-left:6px">⭐ Izdvojeno</span>
+            <% } %>
+            <% if (!isActive) { %>
+              <span class="tag" style="margin-left:6px;background:var(--surface-2);color:var(--muted)">Neaktivno</span>
+            <% } %>
+            <% if (ev.category && categoryLabels[ev.category]) { %>
+              <span class="tag tag-blue" style="margin-left:6px"><%= categoryLabels[ev.category] %></span>
             <% } %>
           </div>
           <div class="item-card-meta">
@@ -68,6 +105,12 @@
           </div>
         </div>
         <div class="item-card-actions">
+          <form method="POST" action="/admin/events/<%= ev.id %>/toggle-active">
+            <button type="submit" class="btn btn-sm" title="<%= isActive ? 'Deaktiviraj' : 'Aktiviraj' %>"
+              style="background:<%= isActive ? 'var(--surface-2)' : '#dcfce7' %>;color:<%= isActive ? '#71717a' : '#16a34a' %>;border:1px solid <%= isActive ? 'var(--border)' : '#bbf7d0' %>">
+              <%= isActive ? '⏸' : '▶' %>
+            </button>
+          </form>
           <form method="POST" action="/admin/events/<%= ev.id %>/toggle-featured">
             <button type="submit" class="btn btn-sm" title="<%= ev.featured ? 'Ukloni isticanje' : 'Istakni' %>"
               style="background:<%= ev.featured ? 'var(--amber-light)' : 'var(--surface-2)' %>;color:<%= ev.featured ? 'var(--amber)' : '#71717a' %>;border:1px solid <%= ev.featured ? '#fde68a' : 'var(--border)' %>">
@@ -113,6 +156,40 @@
 .feat-check input[type="checkbox"] { width: auto; margin: 0; accent-color: var(--blue); }
 .feat-check-hint { font-size: 12px; font-weight: 400; color: var(--muted); }
 .ev-checks { display: flex; flex-direction: column; gap: 8px; }
+.item-card--inactive { opacity: 0.55; }
+.tag-blue { background: #dbeafe; color: #1d4ed8; }
 </style>
+
+<script>
+async function runImport() {
+  const month = document.getElementById('importMonth').value;
+  const btn   = document.getElementById('importBtn');
+  const status = document.getElementById('importStatus');
+
+  if (!month) { status.textContent = 'Odaberite mjesec.'; return; }
+
+  btn.disabled = true;
+  status.textContent = 'Uvoz u tijeku…';
+
+  try {
+    const res = await fetch('/admin/import-events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ month }),
+    });
+    const data = await res.json();
+    if (data.error) {
+      status.textContent = 'Greška: ' + data.error;
+    } else {
+      status.textContent = `Uvezeno: ${data.imported} · Preskočeno: ${data.skipped ?? 0} · Greške: ${data.errors ?? 0}`;
+      if (data.imported > 0) setTimeout(() => location.reload(), 1200);
+    }
+  } catch (e) {
+    status.textContent = 'Mrežna greška.';
+  } finally {
+    btn.disabled = false;
+  }
+}
+</script>
 
 <%- include('partials/foot') %>

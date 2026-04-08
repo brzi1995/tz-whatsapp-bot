@@ -39,6 +39,10 @@ try {
     const pool = require('./src/db/index');
     pool.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS featured TINYINT(1) NOT NULL DEFAULT 0')
       .catch(err => console.warn('[migration] events.featured:', err.message));
+    pool.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS is_active TINYINT(1) NOT NULL DEFAULT 1')
+      .catch(err => console.warn('[migration] events.is_active:', err.message));
+    pool.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS category VARCHAR(100) DEFAULT NULL')
+      .catch(err => console.warn('[migration] events.category:', err.message));
     pool.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS send_notification TINYINT(1) NOT NULL DEFAULT 0')
       .catch(err => console.warn('[migration] events.send_notification:', err.message));
     pool.query("ALTER TABLE events ADD COLUMN IF NOT EXISTS notification_status VARCHAR(20) NOT NULL DEFAULT 'none'")

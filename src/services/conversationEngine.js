@@ -20,9 +20,11 @@
 const TOPIC_PATTERNS = {
   parking:     /\b(parking|park\b|parkiranje|parkirati|parkage|stationnement|garer|parcheggio|parcheggiare|parken|parkplatz|parkovat|parkovani|parkování|parkoviste|parkoviště|estacionamiento|estacionar|aparcamiento|aparcar|parkowanie|parkering|parkera|parkere|zaparkowac|zaparkować)\b/i,
   weather:     /\b(weather|forecast|rain|sunny|sun\b|wind|temperature|cloud|hot|cold|humid|wetter|regen|sonne|temperatur|vorhersage|wetterbericht|vrijeme|vreme|prognoza|kisa|kiša|sunce|vjetar|temperatura|oblaci|meteo|météo|tempo|pioggia|previsione|sole|pogoda|tiempo|clima|pronostico|pronóstico|lluvia|viento|nubes|vader|väder|vaer|vær|regn|deszcz|slonce|słońce|wiatr|chmury|pocasi|počasí|predpoved|předpověď|dest|déšť|slunce|teplota)\b/i,
-  events:      /\b(event|events|happening|what'?s happening|what'?s on|veranstaltung|veranstaltungen|evento|eventi|événement|événements|evenemang|arrangement|dogadjaj|dogadjaji|dogadaj|dogadaji|dogadanja|dogadanja|akce|události|eventos|wydarzenia)\b/i,
+  events:      /\b(event|events|happening|what'?s happening|what'?s on|veranstaltung|veranstaltungen|evento|eventi|événement|événements|evenemang|arrangement|dogadjaj|dogadjaji|dogadaj|dogadaji|dogadanja|događaj|događaji|događanje|događanja|akce|události|eventos|wydarzenia)\b/i,
   restaurants: /\b(restaurant|restaurants|restoran|restorani|ristorante|ristoranti|restaurang|restauranger|restauranten|restaurace|restaurante|restaurantes|restauracja|restauracje|restauracj|food|dinner|lunch|eat|eating|essen|abendessen|mittagessen|mangiare|manger|diner|dejeuner|déjeuner|konobi|konoba|hrana|pice|piće|jesti|jede|jelo|jela|vecer|večer|vecera|večera|veceru|večeru|vecere|veceře|večeře|veceri|rucak|ručak|gastr|cafe|café|tavern|seafood|pizza|italian|dalmatian|cuisine|local|bar|bars|drink|drinks|comida|cena|cenar|cenare|comer|jedzenie|kolacja|kolacje|kolacji|obiad|zjesc|zjeść|restaurang|middag|ata|spise)\b/i,
-  beaches:     /\b(beach|beaches|swim|swimming|swimm|bathe|bathing|plaza|plaze|plazi|plaža|kupati|kupanje|kupat|more|strand|stranden|strander|strandbad|spiaggia|spiagge|nuotare|plage|plages|baignade|playa|playas|nadar|bano|banarse|plywac|plywanie|simma|badplats|bada|svomme|badeplass|koupat|koupani)\b/i,
+  beaches:     /\b(beach|beaches|swim|swimming|swimm|bathe|bathing|plaza|plaze|plazi|plaža|plaže|plažu|plaži|kupati|kupanje|kupam|kupat|more|strand|stranden|strander|strender|strandbad|Strände|Stränden|spiaggia|spiagge|nuotare|plage|plages|baignade|playa|playas|nadar|bano|banarse|plywac|plywanie|simma|badplats|bada|svomme|badeplass|koupat|koupani)\b/i,
+  transport:   /\b(ferry|trajekt|prijevoz|shuttle|airport|flughafen|aeroport|aeroporto|aeropuerto|lotnisko|letiste|how to get|how do i get|how can i get|how to reach|how to arrive|how to come|bus from|bus to|bus line|bus station|bus stop|bus timetable|getting here|kako doci|kako doći|come arrivare|comment venir|wie komm|jak dojecha)\b/i,
+  services:    /\b(pharmacy|ljekarna|apoteka|ljekarnica|apotheke|pharmacie|farmacia|farmacja|lekarnie|lékárna|atm|bankomat|cash machine|cash point|cashpoint|geldautomat|distributeur|get cash|withdraw|doctor|lijecnik|liječnik|arzt|médecin|medico|lekarz|hospital|bolnica|ambulance|hitna|taxi|cab)\b/i,
 };
 
 // Follow-up patterns — only active when we were already on that topic
@@ -421,6 +423,80 @@ async function handleWeather(userMsg, session, deps) {
 
 // ─── EVENTS HANDLER ───────────────────────────────────────────────────────────
 
+// Canonical category keys shown to the user
+const EVENT_CATEGORIES = ['concert', 'traditional', 'festival', 'exhibition', 'family', 'sport', 'gastronomy', 'nightlife'];
+
+// User-facing labels per language
+const CATEGORY_LABELS = {
+  concert:     { hr: 'koncerti',               en: 'concerts',           de: 'Konzerte',         it: 'concerti',            fr: 'concerts',                sv: 'konserter',               no: 'konserter',               cs: 'koncerty'        },
+  traditional: { hr: 'tradicionalni događaji',  en: 'traditional events', de: 'Traditionelles',   it: 'eventi tradizionali', fr: 'événements traditionnels', sv: 'traditionella evenemang', no: 'tradisjonelle arrangement', cs: 'tradiční akce'  },
+  festival:    { hr: 'festivali',               en: 'festivals',          de: 'Festivals',        it: 'festival',            fr: 'festivals',               sv: 'festivaler',              no: 'festivaler',              cs: 'festivaly'       },
+  exhibition:  { hr: 'izložbe',                 en: 'exhibitions',        de: 'Ausstellungen',    it: 'mostre',              fr: 'expositions',             sv: 'utställningar',           no: 'utstillinger',            cs: 'výstavy'         },
+  family:      { hr: 'obiteljska događanja',    en: 'family events',      de: 'Familienprogramm', it: 'eventi familiari',    fr: 'activités familiales',    sv: 'familjeaktiviteter',      no: 'familieaktiviteter',      cs: 'rodinné akce'    },
+  sport:       { hr: 'sport',                   en: 'sports',             de: 'Sport',            it: 'sport',               fr: 'sports',                  sv: 'sport',                   no: 'sport',                   cs: 'sport'           },
+  gastronomy:  { hr: 'gastronomija',            en: 'gastronomy',         de: 'Gastronomie',      it: 'gastronomia',         fr: 'gastronomie',             sv: 'gastronomi',              no: 'gastronomi',              cs: 'gastronomie'     },
+  nightlife:   { hr: 'noćni život',             en: 'nightlife',          de: 'Nachtleben',       it: 'vita notturna',       fr: 'vie nocturne',            sv: 'nöjesliv',                no: 'nattliv',                 cs: 'noční život'     },
+};
+
+// Regex patterns for detecting each category from normalised text.
+// No trailing \b so prefix stems like "koncer" match "koncerti", "festival" matches "festivali", etc.
+const CATEGORY_DETECT = {
+  concert:     /\b(koncer|concert|glazb|music|muzik|konzert|konserter|koncerty)/,
+  traditional: /\b(tradicij|traditional|folk|narodni|folklor|traditionell)/,
+  festival:    /\b(festival|fest)/,
+  exhibition:  /\b(izlozb|exhibition|ausstellung|mostra|exposition|vystav|utstillin)/,
+  family:      /\b(obitel|djec|family|familie|bambini|enfants|kids|children|rodinne)/,
+  sport:       /\b(sport\b|utrk|run\b|swim|plivanj|tenis|vaterpolo|football)/,
+  gastronomy:  /\b(gastr|degusta|kulinar|wine\b|vino\b)/,
+  nightlife:   /\b(nocni|nightlife|nattliv|nocturn|vita notturna|vie nocturne|party|disco|club)/,
+};
+
+/**
+ * Priority-ordered keyword lists for inferring category from event title/description.
+ *
+ * Uses substring matching (text.includes) so stems work without word-boundary
+ * constraints — "sportski" contains "sport", "festivali" contains "festival".
+ *
+ * Priority: festival > sport > concert > gastronomy > family > exhibition > traditional > nightlife
+ */
+const CATEGORY_KEYWORDS = [
+  { cat: 'festival',    words: ['festival', 'fest', 'manifestacija'] },
+  { cat: 'sport',       words: ['sport', 'utrka', 'maraton', 'run', 'trcanje', 'tenis', 'vaterpolo', 'football', 'plivanj', 'swim', 'regat'] },
+  { cat: 'concert',     words: ['koncert', 'koncer', 'glazba', 'glazb', 'music', 'muzika', 'live', 'band', 'dj set'] },
+  { cat: 'gastronomy',  words: ['hrana', 'degustacija', 'vino', 'wine', 'gastr', 'kulinar', 'okus', 'kuhinja'] },
+  { cat: 'family',      words: ['djeca', 'obitelj', 'kids', 'children', 'family', 'familie', 'bambini', 'enfants'] },
+  { cat: 'exhibition',  words: ['izlozba', 'exhibition', 'ausstellung', 'mostra', 'exposition', 'galeri'] },
+  { cat: 'traditional', words: ['tradicij', 'traditional', 'folk', 'narodni', 'folklor', 'ribarska', 'ribar'] },
+  { cat: 'nightlife',   words: ['nocni', 'nightlife', 'party', 'disco', 'club'] },
+];
+
+/**
+ * Infer a category from an event's title + description.
+ *
+ * Uses norm() for lowercase + accent stripping, then checks each category's
+ * keyword list as substrings in priority order. First match wins.
+ * Returns a canonical category key or null.
+ */
+function inferEventCategory(ev) {
+  const text = norm(`${ev.title || ''} ${ev.description || ''}`);
+  for (const { cat, words } of CATEGORY_KEYWORDS) {
+    if (words.some(w => text.includes(w))) return cat;
+  }
+  return null;
+}
+
+/**
+ * Detect which event category the user is asking about.
+ * Returns canonical key or null.
+ */
+function detectEventCategory(message) {
+  const n = norm(message);
+  for (const [cat, re] of Object.entries(CATEGORY_DETECT)) {
+    if (re.test(n)) return cat;
+  }
+  return null;
+}
+
 function parseEventFollowUp(message) {
   const n = norm(message);
   if (/\b(tonight|veceras|večeras|today|danas)\b/.test(n)) return 'tonight';
@@ -494,35 +570,177 @@ function formatTopEvents(events) {
 }
 
 async function handleEvents(userMsg, session, deps) {
-  const { tenantId, getUpcomingEvents } = deps;
+  const { tenantId, getUpcomingEvents, lang } = deps;
 
-  session.pendingSlot = null;
+  session.pendingSlot  = null;
   session.lastQuestion = null;
-  session.lastTopic = 'events';
-  const NO_EVENTS = 'There are no confirmed events at the moment, but you can check the official local calendar at brela.hr.';
-  const NARROW = 'I can also narrow it down to:\n- tonight\n- this weekend\n- live music\n- family-friendly';
+
+  const NO_EVENTS_MSG = {
+    hr: 'Trenutno nema potvrđenih nadolazećih događanja za taj period. Za više informacija možete kontaktirati turističku zajednicu ili provjeriti službenu stranicu:\nhttps://brela.hr/dogadanja',
+    en: 'No confirmed upcoming events for this period. Contact the tourist board or check the official page:\nhttps://brela.hr/dogadanja',
+    de: 'Keine bestätigten Veranstaltungen für diesen Zeitraum. Mehr Infos:\nhttps://brela.hr/dogadanja',
+    it: 'Nessun evento confermato per questo periodo. Contatta l\'ufficio turistico o visita:\nhttps://brela.hr/dogadanja',
+    fr: 'Pas d\'événements confirmés pour cette période. Contactez l\'office du tourisme ou:\nhttps://brela.hr/dogadanja',
+    sv: 'Inga bekräftade evenemang för den perioden. Mer information:\nhttps://brela.hr/dogadanja',
+    no: 'Ingen bekreftede arrangementer for den perioden. Mer informasjon:\nhttps://brela.hr/dogadanja',
+    cs: 'Žádné potvrzené akce pro toto období. Více informací:\nhttps://brela.hr/dogadanja',
+    es: 'Sin eventos confirmados para este período. Más info:\nhttps://brela.hr/dogadanja',
+    pl: 'Brak potwierdzonych wydarzeń na ten okres. Więcej info:\nhttps://brela.hr/dogadanja',
+  };
+
+  const CATEGORIES_INTRO = {
+    hr: 'Ovaj mjesec u Brelima ima više događanja.\n\nMogu ih izdvojiti po kategoriji:',
+    en: 'There are several events in Brela this month.\n\nI can show them by category:',
+    de: 'Diesen Monat gibt es in Brela mehrere Veranstaltungen.\n\nIch kann sie nach Kategorie zeigen:',
+    it: 'Questo mese a Brela ci sono diversi eventi.\n\nPosso mostrarli per categoria:',
+    fr: 'Ce mois-ci à Brela, il y a plusieurs événements.\n\nJe peux les afficher par catégorie:',
+    sv: 'Det finns flera evenemang i Brela den här månaden.\n\nJag kan visa dem efter kategori:',
+    no: 'Det er flere arrangementer i Brela denne måneden.\n\nJeg kan vise dem etter kategori:',
+    cs: 'Tento měsíc je v Brele více akcí.\n\nMohu je ukázat podle kategorie:',
+    es: 'Este mes hay varios eventos en Brela.\n\nPuedo mostrarlos por categoría:',
+    pl: 'W tym miesiącu w Breli jest kilka wydarzeń.\n\nMogę je pokazać według kategorii:',
+  };
+
+  const CATEGORIES_FOOTER = {
+    hr: '\n\nNapišite kategoriju koja vas zanima.',
+    en: '\n\nType the category you\'re interested in.',
+    de: '\n\nGeben Sie die Kategorie ein, die Sie interessiert.',
+    it: '\n\nScrivi la categoria che ti interessa.',
+    fr: '\n\nÉcrivez la catégorie qui vous intéresse.',
+    sv: '\n\nSkriv kategorin du är intresserad av.',
+    no: '\n\nSkriv kategorien du er interessert i.',
+    cs: '\n\nNapište kategorii, která vás zajímá.',
+    es: '\n\nEscribe la categoría que te interesa.',
+    pl: '\n\nWpisz kategorię, która cię interesuje.',
+  };
 
   try {
     const allEvents = await getUpcomingEvents(tenantId);
-    if (!allEvents.length) return NO_EVENTS;
-
-    const followUp = parseEventFollowUp(userMsg);
-    const filtered = filterEvents(allEvents, followUp);
-    if (!filtered.length) {
-      if (followUp) session.lastTopic = null;
-      return NO_EVENTS;
-    }
-
-    const body = formatTopEvents(filtered);
-    if (followUp) {
+    if (!allEvents || !allEvents.length) {
       session.lastTopic = null;
-      return body;
+      return NO_EVENTS_MSG[lang] || NO_EVENTS_MSG.en;
     }
-    return `${body}\n\n${NARROW}`;
+
+    // Categorise: use DB category when known, else infer from title/description
+    const grouped = {};
+    for (const ev of allEvents) {
+      const cat = (ev.category && EVENT_CATEGORIES.includes(ev.category))
+        ? ev.category
+        : inferEventCategory(ev);
+      if (cat) {
+        if (!grouped[cat]) grouped[cat] = [];
+        grouped[cat].push(ev);
+      }
+    }
+
+    // Only show canonical categories that actually have events
+    const present = EVENT_CATEGORIES.filter(c => grouped[c] && grouped[c].length > 0);
+
+    if (!present.length) {
+      // No categorisable events — fall back to listing top events directly
+      session.lastTopic = null;
+      return formatTopEvents(allEvents);
+    }
+
+    // Set topic so the next user message routes to handleEventCategory
+    session.lastTopic = 'events';
+
+    const intro  = CATEGORIES_INTRO[lang]  || CATEGORIES_INTRO.en;
+    const footer = CATEGORIES_FOOTER[lang] || CATEGORIES_FOOTER.en;
+    const lines  = present
+      .map(cat => `• ${CATEGORY_LABELS[cat][lang] || CATEGORY_LABELS[cat].en}`)
+      .join('\n');
+
+    return `${intro}\n${lines}${footer}`;
 
   } catch (err) {
     console.error('[engine/events]', err.message);
-    return NO_EVENTS;
+    session.lastTopic = null;
+    return NO_EVENTS_MSG[lang] || NO_EVENTS_MSG.en;
+  }
+}
+
+/**
+ * Follow-up: user replied with a category name after seeing the category menu.
+ * Shows max 4 events for that category, then clears lastTopic.
+ */
+async function handleEventCategory(userMsg, session, deps) {
+  const { tenantId, getUpcomingEvents, lang } = deps;
+
+  // Always clear event context after showing results — no further follow-up
+  session.lastTopic    = null;
+  session.pendingSlot  = null;
+  session.lastQuestion = null;
+
+  const cat = detectEventCategory(userMsg);
+
+  const NO_RESULTS = {
+    hr: 'Nema događanja u toj kategoriji za ovaj period.\nhttps://brela.hr/dogadanja',
+    en: 'No events in that category for this period.\nhttps://brela.hr/dogadanja',
+    de: 'Keine Veranstaltungen in dieser Kategorie für diesen Zeitraum.\nhttps://brela.hr/dogadanja',
+    it: 'Nessun evento in questa categoria per questo periodo.\nhttps://brela.hr/dogadanja',
+    fr: 'Pas d\'événements dans cette catégorie pour cette période.\nhttps://brela.hr/dogadanja',
+    sv: 'Inga evenemang i den kategorin för den perioden.\nhttps://brela.hr/dogadanja',
+    no: 'Ingen arrangementer i den kategorien for den perioden.\nhttps://brela.hr/dogadanja',
+    cs: 'Žádné akce v této kategorii pro toto období.\nhttps://brela.hr/dogadanja',
+    es: 'Sin eventos en esa categoría para este período.\nhttps://brela.hr/dogadanja',
+    pl: 'Brak wydarzeń w tej kategorii na ten okres.\nhttps://brela.hr/dogadanja',
+  };
+
+  const CAT_HDR = {
+    hr: (label) => `Događanja — ${label}:`,
+    en: (label) => `Events — ${label}:`,
+    de: (label) => `Veranstaltungen — ${label}:`,
+    it: (label) => `Eventi — ${label}:`,
+    fr: (label) => `Événements — ${label}:`,
+    sv: (label) => `Evenemang — ${label}:`,
+    no: (label) => `Arrangementer — ${label}:`,
+    cs: (label) => `Akce — ${label}:`,
+    es: (label) => `Eventos — ${label}:`,
+    pl: (label) => `Wydarzenia — ${label}:`,
+  };
+
+  try {
+    const allEvents = await getUpcomingEvents(tenantId);
+
+    let filtered = [];
+    if (cat) {
+      filtered = allEvents.filter(ev => {
+        const evCat = (ev.category && EVENT_CATEGORIES.includes(ev.category))
+          ? ev.category
+          : inferEventCategory(ev);
+        return evCat === cat;
+      });
+    }
+
+    if (!filtered.length) {
+      return NO_RESULTS[lang] || NO_RESULTS.en;
+    }
+
+    const top      = filtered.slice(0, 4);
+    const catLabel = cat
+      ? (CATEGORY_LABELS[cat][lang] || CATEGORY_LABELS[cat].en)
+      : userMsg.trim();
+    const hdrFn    = CAT_HDR[lang] || CAT_HDR.en;
+
+    const lines = top.map((ev, i) => {
+      const d       = ev.date instanceof Date ? ev.date : new Date(ev.date);
+      const dateStr = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.`;
+      let line      = `${i + 1}. ${ev.title}\n   📅 ${dateStr}`;
+      if (ev.location_link) line += `\n   📍 ${ev.location_link}`;
+      const desc = String(ev.description || '').trim();
+      if (desc) {
+        const short = desc.length > 100 ? `${desc.slice(0, 97)}...` : desc;
+        line += `\n   ${short}`;
+      }
+      return line;
+    });
+
+    return `${hdrFn(catLabel)}\n\n${lines.join('\n\n')}`;
+
+  } catch (err) {
+    console.error('[engine/eventCategory]', err.message);
+    return NO_RESULTS[lang] || NO_RESULTS.en;
   }
 }
 
@@ -636,6 +854,100 @@ async function handleBeaches(userMsg, session, deps) {
   return MSG[lang] || MSG.en;
 }
 
+// ─── TRANSPORT HANDLER ────────────────────────────────────────────────────────
+
+const TRANSPORT_ANSWERS = {
+  hr: 'Kako doći u Brela:\n• Bus: direktne linije iz Splita i Makarske\n• Auto: autocesta A1, izlaz Zagvozd → 20 min do Brela\n• Taxi/transfer: iz Splita ~1h, rezervacija preporučena\n• Trajekt: Makarska–Sumartin (Brač)\n\nViše: https://brela.hr/',
+  en: 'Getting to Brela:\n• Bus: direct from Split and Makarska\n• Car: highway A1, exit Zagvozd → 20 min to Brela\n• Taxi/transfer: from Split ~1h, booking recommended\n• Ferry: Makarska–Sumartin (Brač island)\n\nMore: https://brela.hr/',
+  de: 'So kommen Sie nach Brela:\n• Bus: Direktverbindungen ab Split und Makarska\n• Auto: Autobahn A1, Ausfahrt Zagvozd → 20 Min nach Brela\n• Taxi/Transfer: ab Split ~1h, Buchung empfohlen\n• Fähre: Makarska–Sumartin (Insel Brač)\n\nMehr: https://brela.hr/',
+  it: 'Come arrivare a Brela:\n• Bus: diretti da Spalato e Makarska\n• Auto: autostrada A1, uscita Zagvozd → 20 min per Brela\n• Taxi/transfer: da Spalato ~1h, prenotazione consigliata\n• Traghetto: Makarska–Sumartin (isola di Brač)\n\nAltro: https://brela.hr/',
+  fr: 'Comment venir à Brela :\n• Bus : liaisons directes depuis Split et Makarska\n• Voiture : autoroute A1, sortie Zagvozd → 20 min jusqu\'à Brela\n• Taxi/transfert : depuis Split ~1h, réservation conseillée\n• Ferry : Makarska–Sumartin (île de Brač)\n\nPlus : https://brela.hr/',
+  sv: 'Att ta sig till Brela:\n• Buss: direkt från Split och Makarska\n• Bil: motorväg A1, avfart Zagvozd → 20 min till Brela\n• Taxi/transfer: från Split ~1h, bokning rekommenderas\n• Färja: Makarska–Sumartin (Brač)\n\nMer: https://brela.hr/',
+  no: 'Slik kommer du til Brela:\n• Buss: direkte fra Split og Makarska\n• Bil: motorvei A1, avkjøring Zagvozd → 20 min til Brela\n• Taxi/transfer: fra Split ~1t, bestilling anbefales\n• Ferje: Makarska–Sumartin (Brač)\n\nMer: https://brela.hr/',
+  cs: 'Jak se dostat do Brely:\n• Autobus: přímé spoje ze Splitu a Makarské\n• Auto: dálnice A1, výjezd Zagvozd → 20 min do Brely\n• Taxi/transfer: ze Splitu ~1h, doporučujeme rezervaci\n• Trajekt: Makarska–Sumartin (ostrov Brač)\n\nVíce: https://brela.hr/',
+  es: 'Cómo llegar a Brela:\n• Autobús: líneas directas desde Split y Makarska\n• Coche: autopista A1, salida Zagvozd → 20 min hasta Brela\n• Taxi/transfer: desde Split ~1h, se recomienda reservar\n• Ferry: Makarska–Sumartin (isla de Brač)\n\nMás: https://brela.hr/',
+  pl: 'Jak dojechać do Breli:\n• Autobus: bezpośrednio ze Splitu i Makarskiej\n• Auto: autostrada A1, zjazd Zagvozd → 20 min do Breli\n• Taxi/transfer: ze Splitu ~1h, rezerwacja zalecana\n• Prom: Makarska–Sumartin (Brač)\n\nWięcej: https://brela.hr/',
+};
+
+async function handleTransport(userMsg, session, deps) {
+  const { lang } = deps;
+  session.pendingSlot = null;
+  session.lastQuestion = null;
+  session.lastTopic = 'transport';
+  return TRANSPORT_ANSWERS[lang] || TRANSPORT_ANSWERS.en;
+}
+
+// ─── SERVICES HANDLER ─────────────────────────────────────────────────────────
+
+const PHARMACY_MSG = {
+  hr: 'Ljekarna u Brelima: u centru mjesta. Za hitne slučajeve: dežurna ljekarna u Makarskoj (~15 km).\nHitna pomoć: 194',
+  en: 'Pharmacy in Brela: town center. For emergencies: on-duty pharmacy in Makarska (~15 km).\nEmergency: 194',
+  de: 'Apotheke in Brela: Ortszentrum. Im Notfall: Bereitschaftsapotheke Makarska (~15 km).\nNotruf: 194',
+  it: 'Farmacia a Brela: centro. Emergenze: farmacia di turno a Makarska (~15 km).\nEmergenza: 194',
+  fr: 'Pharmacie à Brela : centre-ville. Urgence : pharmacie de garde à Makarska (~15 km).\nUrgence : 194',
+};
+
+const ATM_MSG = {
+  hr: 'Bankomati u Brelima: u centru i kod glavnih plaža. Prihvaća VISA, Mastercard, Maestro.\nSavjet: u sezoni podignite gotovinu ranije — bankomati se brzo prazne.',
+  en: 'ATMs in Brela: town center and near the main beaches. Accepts VISA, Mastercard, Maestro.\nTip: withdraw cash early in season — ATMs fill up fast.',
+  de: 'Geldautomaten in Brela: Zentrum und bei den Hauptstränden. VISA, Mastercard, Maestro.\nTipp: In der Saison früh abheben — Automaten leeren sich schnell.',
+  it: 'Bancomat a Brela: centro e spiagge principali. VISA, Mastercard, Maestro.\nConsiglio: prelevare in anticipo in alta stagione.',
+  fr: 'Distributeurs à Brela : centre-ville et plages principales. VISA, Mastercard, Maestro.\nConseil : retirer tôt en saison haute.',
+};
+
+const TAXI_MSG = {
+  hr: 'Taxi u Brelima i okolici:\n• Lokalni taxi: na upit\n• Split → Brela: ~1h, ~60–80€\n• Makarski taxi: ~15 min\n\nZa rezervaciju: pitajte recepciju smještaja ili turističku zajednicu.',
+  en: 'Taxi in and around Brela:\n• Local taxi: available on request\n• Split → Brela: ~1h, ~€60–80\n• Makarska taxi: ~15 min\n\nFor bookings: ask your accommodation or the tourist office.',
+  de: 'Taxi in und um Brela:\n• Lokales Taxi: auf Anfrage\n• Split → Brela: ~1h, ~60–80€\n• Makarska Taxi: ~15 Min\n\nBuchung: über Unterkunft oder Tourismusbüro.',
+  it: 'Taxi a Brela e dintorni:\n• Taxi locale: su richiesta\n• Spalato → Brela: ~1h, ~€60–80\n• Taxi Makarska: ~15 min\n\nPrenotazioni: reception o ufficio turistico.',
+  fr: 'Taxi à Brela :\n• Taxi local : sur demande\n• Split → Brela : ~1h, ~60–80€\n• Taxi Makarska : ~15 min\n\nRéservations : réception ou office du tourisme.',
+};
+
+const DOCTOR_MSG = {
+  hr: 'Medicinska pomoć:\n• Ambulanta Brela (sezonska)\n• Makarska bolnica: ~15 km\n• Hitna pomoć: 194\n\nEuropska kartica zdravstvenog osiguranja (EHIC) vrijedi u Hrvatskoj.',
+  en: 'Medical help:\n• Brela health post (seasonal)\n• Makarska Hospital: ~15 km\n• Emergency: 194\n\nEuropean Health Insurance Card (EHIC) valid in Croatia.',
+  de: 'Medizinische Hilfe:\n• Ambulanz Brela (saisonal)\n• Krankenhaus Makarska: ~15 km\n• Notruf: 194\n\nEuropäische Krankenversicherungskarte (EHIC) gilt in Kroatien.',
+  it: 'Assistenza medica:\n• Ambulatorio Brela (stagionale)\n• Ospedale Makarska: ~15 km\n• Emergenza: 194\n\nTessera sanitaria europea (EHIC) valida in Croazia.',
+  fr: 'Aide médicale :\n• Poste de santé Brela (saisonnier)\n• Hôpital Makarska : ~15 km\n• Urgences : 194\n\nCarte Européenne d\'Assurance Maladie (CEAM) valide en Croatie.',
+};
+
+const SERVICES_GENERIC_MSG = {
+  hr: 'Usluge u Brelima:\n• Ljekarna: u centru\n• Bankomat: centar i plaže\n• Taxi: na upit\n• Hitna pomoć: 194\n\nŠto vam točno treba?',
+  en: 'Services in Brela:\n• Pharmacy: town center\n• ATM: center and beaches\n• Taxi: on request\n• Emergency: 194\n\nWhat exactly do you need?',
+  de: 'Dienste in Brela:\n• Apotheke: Zentrum\n• Geldautomat: Zentrum und Strände\n• Taxi: auf Anfrage\n• Notruf: 194\n\nWas brauchen Sie?',
+  it: 'Servizi a Brela:\n• Farmacia: in centro\n• Bancomat: centro e spiagge\n• Taxi: su richiesta\n• Emergenza: 194\n\nDi cosa hai bisogno?',
+  fr: 'Services à Brela :\n• Pharmacie : centre-ville\n• Distributeur : centre et plages\n• Taxi : sur demande\n• Urgences : 194\n\nDe quoi avez-vous besoin ?',
+  sv: 'Tjänster i Brela:\n• Apotek: centrum\n• ATM: centrum och stränder\n• Taxi: på begäran\n• Nödnummer: 194',
+  no: 'Tjenester i Brela:\n• Apotek: sentrum\n• Minibank: sentrum og strender\n• Taxi: på forespørsel\n• Nødnummer: 194',
+  cs: 'Služby v Brele:\n• Lékárna: centrum\n• Bankomat: centrum a pláže\n• Taxi: na vyžádání\n• Záchranná služba: 194',
+  es: 'Servicios en Brela:\n• Farmacia: centro\n• Cajero: centro y playas\n• Taxi: a petición\n• Emergencias: 194',
+  pl: 'Usługi w Breli:\n• Apteka: centrum\n• Bankomat: centrum i plaże\n• Taxi: na żądanie\n• Pogotowie: 194',
+};
+
+async function handleServices(userMsg, session, deps) {
+  const { lang } = deps;
+  session.pendingSlot = null;
+  session.lastQuestion = null;
+  session.lastTopic = 'services';
+
+  const n = norm(userMsg);
+
+  if (/\b(pharmacy|ljekarna|apoteka|ljekarnica|apotheke|pharmacie|farmacia|farmacja|lekarnie|lékárna)\b/.test(n)) {
+    return PHARMACY_MSG[lang] || PHARMACY_MSG.en;
+  }
+  if (/\b(atm|bankomat|cash machine|geldautomat|distributeur)\b/.test(n)) {
+    return ATM_MSG[lang] || ATM_MSG.en;
+  }
+  if (/\b(taxi|cab)\b/.test(n)) {
+    return TAXI_MSG[lang] || TAXI_MSG.en;
+  }
+  if (/\b(doctor|lijecnik|arzt|medecin|médecin|medico|lekarz|hospital|bolnica|ambulance|hitna)\b/.test(n)) {
+    return DOCTOR_MSG[lang] || DOCTOR_MSG.en;
+  }
+
+  return SERVICES_GENERIC_MSG[lang] || SERVICES_GENERIC_MSG.en;
+}
+
 // ─── TOPIC HANDLERS MAP ───────────────────────────────────────────────────────
 
 const TOPIC_HANDLERS = {
@@ -644,6 +956,8 @@ const TOPIC_HANDLERS = {
   events:      { handle: handleEvents },
   restaurants: { handle: handleRestaurants },
   beaches:     { handle: handleBeaches },
+  transport:   { handle: handleTransport },
+  services:    { handle: handleServices },
 };
 
 // ─── ROUTING HELPERS ──────────────────────────────────────────────────────────
@@ -869,7 +1183,14 @@ async function handleMessage(userMsg, session, deps) {
     return reply;
   }
 
-  // ── Priority 3: weather follow-up ────────────────────────────────────────
+  // ── Priority 3: event category follow-up ─────────────────────────────────
+  // User replied with a category name (e.g. "koncerti", "festivals") after the
+  // category-menu was shown. Must come before the generic event follow-up check.
+  if (session.lastTopic === 'events' && detectEventCategory(msg)) {
+    return handleEventCategory(msg, session, deps);
+  }
+
+  // ── Priority 3b: time-based event follow-up ───────────────────────────────
   // Keep event follow-ups deterministic and bypass generic intent detection.
   if (isEventFollowUp(msg, session)) {
     return TOPIC_HANDLERS.events.handle(msg, session, deps);

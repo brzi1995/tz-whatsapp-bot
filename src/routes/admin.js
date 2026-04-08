@@ -368,11 +368,13 @@ router.get('/events', requireAuth, async (req, res) => {
   const tenantId = req.session.tenantId;
 
   try {
-    const [rows] = await pool.query(
-      'SELECT * FROM events WHERE tenant_id = ? ORDER BY date DESC',
-      [tenantId]
-    );
-    res.render('events', { events: rows });
+    const showInactive = req.query.showInactive === '1';
+    let sql = 'SELECT * FROM events WHERE tenant_id = ?';
+    if (!showInactive) sql += ' AND is_active = 1';
+    sql += ' ORDER BY date DESC';
+
+    const [rows] = await pool.query(sql, [tenantId]);
+    res.render('events', { events: rows, showInactive });
   } catch (err) {
     console.error('[admin] events list error:', err.message);
     res.status(500).send('Server error');
@@ -488,6 +490,25 @@ router.post('/events/:id/toggle-featured', requireAuth, async (req, res) => {
     res.redirect('/admin/events');
   } catch (err) {
     console.error('[admin] events toggle-featured error:', err.message);
+    res.redirect('/admin/events');
+  }
+});
+
+// POST /admin/events/:id/toggle-active
+router.post('/events/:id/toggle-active', requireAuth, async (req, res) => {
+  const tenantId = req.session.tenantId;
+  const id = parseInt(req.params.id, 10);
+
+  if (isNaN(id)) return res.redirect('/admin/events');
+
+  try {
+    await pool.query(
+      'UPDATE events SET is_active = 1 - is_active WHERE id = ? AND tenant_id = ?',
+      [id, tenantId]
+    );
+    res.redirect('/admin/events');
+  } catch (err) {
+    console.error('[admin] events toggle-active error:', err.message);
     res.redirect('/admin/events');
   }
 });
@@ -614,25 +635,9 @@ router.post('/import-events', requireAuth, async (req, res) => {
   }
 
   try {
-    const { fetchBrelaEvents } = require('../services/brelaEvents');
-    const scraped = await fetchBrelaEvents(month);
-
-    let imported = 0;
-    for (const ev of scraped) {
-      const [existing] = await pool.query(
-        'SELECT id FROM events WHERE tenant_id = ? AND title = ? AND date = ? LIMIT 1',
-        [tenantId, ev.title, ev.date]
-      );
-      if (existing.length) continue;
-
-      await pool.query(
-        'INSERT INTO events (tenant_id, title, description, date, location_link, featured, is_active) VALUES (?, ?, ?, ?, ?, 0, 1)',
-        [tenantId, ev.title, '', ev.date, ev.link || null]
-      );
-      imported++;
-    }
-
-    return res.json({ imported, total: scraped.length });
+    const { importEventsForMonth } = require('../services/eventImporter');
+    const result = await importEventsForMonth(tenantId, month);
+    return res.json({ imported: result.imported, skipped: result.skipped, errors: result.errors });
   } catch (err) {
     console.error('[admin] import-events error:', err.message);
     return res.status(500).json({ error: 'Import failed: ' + err.message });

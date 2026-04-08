@@ -9,22 +9,42 @@ function getClient() {
 
 /**
  * Send a conversation to OpenAI and return the assistant's reply.
+ * Retries automatically on 529 (overloaded) with exponential backoff.
  * @param {string} systemPrompt  - Tenant-specific system prompt
  * @param {Array}  messages      - Conversation history [{role, content}, ...]
  * @param {string} model         - OpenAI model ID (from tenant config)
  */
 async function chat(systemPrompt, messages, model = 'gpt-4o-mini') {
-  const response = await getClient().chat.completions.create({
-    model,
-    temperature: 0.2,
-    presence_penalty: 0,
-    frequency_penalty: 0,
-    messages: [
-      { role: 'system', content: systemPrompt },
-      ...messages,
-    ],
-  });
-  return response.choices[0].message.content.trim();
+  const MAX_RETRIES = 3;
+  let delay = 2000; // start at 2 s, doubles each attempt
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await getClient().chat.completions.create({
+        model,
+        temperature: 0.2,
+        presence_penalty: 0,
+        frequency_penalty: 0,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...messages,
+        ],
+      });
+      return response.choices[0].message.content.trim();
+    } catch (err) {
+      const status = err?.status || err?.response?.status;
+      const retryable = status === 529 || status === 503 || status === 502;
+
+      if (retryable && attempt < MAX_RETRIES) {
+        console.warn(`[openai] ${status} overloaded — retry ${attempt}/${MAX_RETRIES - 1} in ${delay}ms`);
+        await new Promise(r => setTimeout(r, delay));
+        delay *= 2;
+        continue;
+      }
+
+      throw err;
+    }
+  }
 }
 
 const VALID_LANGS   = ['hr', 'en', 'de', 'it', 'fr', 'sv', 'no', 'cs', 'es', 'pl'];
@@ -44,14 +64,14 @@ function detectLanguageWithConfidence(message) {
     .replace(/\s+/g, ' ')
     .trim();
 
-  // Croatian-specific characters — highest confidence signal
-  if (/[đšžćčĐŠŽĆČ]/.test(message)) return { lang: 'hr', score: 10, ambiguous: false };
+  // Croatian-exclusive characters (đ, ć only — š/ž/č are shared with Czech/Slovak)
+  if (/[đćĐĆ]/.test(message)) return { lang: 'hr', score: 10, ambiguous: false };
   // Spanish-specific punctuation/characters
   if (/[ñÑ¡¿]/.test(message)) return { lang: 'es', score: 10, ambiguous: false };
-  // Polish-specific characters
-  if (/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/.test(message)) return { lang: 'pl', score: 10, ambiguous: false };
-  // German-specific
-  if (/[äöüÄÖÜß]/.test(message)) return { lang: 'de', score: 10, ambiguous: false };
+  // Polish-specific characters (ó removed — it also appears in Spanish/French)
+  if (/[ąęłńśźżĄĘŁŃŚŹŻ]/.test(message)) return { lang: 'pl', score: 10, ambiguous: false };
+  // German-exclusive: ü, ß only (ä, ö are shared with Swedish/Norwegian)
+  if (/[üÜß]/.test(message)) return { lang: 'de', score: 10, ambiguous: false };
   // French-specific (ç, circumflex, œ, ë) — check before Italian
   if (/[çâêîôûœæëÇÂÊÎÔÛŒÆ]/.test(message)) return { lang: 'fr', score: 10, ambiguous: false };
   // Swedish/Norwegian-specific
@@ -66,16 +86,16 @@ function detectLanguageWithConfidence(message) {
   // Keyword scoring for plain Latin script — default wins at score 0
   const tokens = normalized.split(' ').filter(Boolean);
   const KEYWORDS = {
-    hr: ['danas', 'sutra', 'tjedan', 'hvala', 'bok', 'pozdrav', 'zdravo', 'trebam', 'pomoc', 'gdje', 'sto', 'sta', 'ima', 'nema', 'dobar', 'kako', 'dogadaj', 'dogadaja', 'vrijeme', 'plaza', 'parking', 'restoran', 'smjestaj', 'izlet', 'uvala', 'brela', 'da', 'je', 'bilo', 'pitanje', 'dolazim', 'kupati', 'mjesec', 'mjesecu'],
+    hr: ['danas', 'sutra', 'tjedan', 'hvala', 'bok', 'pozdrav', 'zdravo', 'trebam', 'pomoc', 'gdje', 'sto', 'sta', 'ima', 'nema', 'dobar', 'kako', 'dogadaj', 'dogadaja', 'vrijeme', 'plaza', 'parking', 'restoran', 'smjestaj', 'izlet', 'uvala', 'brela', 'da', 'bilo', 'pitanje', 'dolazim', 'kupati', 'mjesec', 'mjesecu'],
     en: ['what', 'where', 'how', 'can', 'please', 'hello', 'thanks', 'today', 'tomorrow', 'week', 'happening', 'events', 'beach', 'restaurant', 'weather', 'parking', 'rent', 'kayak', 'prices', 'locations'],
-    de: ['heute', 'morgen', 'bitte', 'danke', 'hallo', 'wie', 'was', 'wo', 'ich', 'gibt', 'veranstaltungen', 'wetter', 'strand', 'parken', 'restaurant'],
+    de: ['heute', 'morgen', 'bitte', 'danke', 'hallo', 'wie', 'was', 'wo', 'ich', 'gibt', 'veranstaltungen', 'wetter', 'strand', 'parken', 'restaurant', 'das', 'die', 'der', 'auf', 'meer', 'sehr', 'sie', 'mir', 'nicht', 'konnen', 'konnte', 'wurde'],
     it: ['oggi', 'domani', 'grazie', 'ciao', 'dove', 'cosa', 'sono', 'come', 'eventi', 'parcheggio', 'spiaggia', 'tempo', 'ristorante'],
     fr: ['aujourdhui', 'demain', 'merci', 'bonjour', 'comment', 'quoi', 'evenements', 'plage', 'meteo', 'parking', 'restaurant'],
-    sv: ['idag', 'imorgon', 'tack', 'hej', 'vad', 'var', 'hur', 'evenemang'],
-    no: ['i dag', 'i morgen', 'takk', 'hei', 'hva', 'hvor', 'arrangementer'],
-    cs: ['dnes', 'zitra', 'diky', 'ahoj', 'kde', 'jak', 'prosim', 'akce'],
-    es: ['hola', 'gracias', 'hoy', 'manana', 'mañana', 'tiempo', 'clima', 'pronostico', 'pronóstico', 'restaurante', 'comida', 'cena', 'eventos', 'playa', 'parking'],
-    pl: ['czesc', 'cześć', 'dziekuje', 'dziękuję', 'dzis', 'dzisiaj', 'jutro', 'pogoda', 'prognoza', 'restauracja', 'restauracje', 'jedzenie', 'kolacja', 'wydarzenia', 'plaza', 'plaża', 'parking'],
+    sv: ['idag', 'imorgon', 'tack', 'hej', 'vad', 'var', 'hur', 'evenemang', 'strand', 'stranden', 'det', 'som', 'och', 'ar'],
+    no: ['i dag', 'i morgen', 'takk', 'hei', 'hva', 'hvor', 'arrangementer', 'stranden', 'og', 'er'],
+    cs: ['dnes', 'zitra', 'diky', 'ahoj', 'kde', 'jak', 'prosim', 'akce', 'plaz', 'pocasi'],
+    es: ['hola', 'gracias', 'hoy', 'manana', 'tiempo', 'clima', 'pronostico', 'restaurante', 'comida', 'cena', 'eventos', 'playa', 'donde', 'esta', 'hay', 'puedo'],
+    pl: ['czesc', 'dziekuje', 'dzis', 'dzisiaj', 'jutro', 'pogoda', 'prognoza', 'restauracja', 'jedzenie', 'kolacja', 'wydarzenia', 'plaza', 'parking', 'gdzie', 'jest'],
   };
 
   let best = { lang: null, score: 0 };
@@ -152,12 +172,11 @@ You are a local tourism assistant for Brela, Croatia. Your only job is to help t
 ${greetingRule}
 
 LANGUAGE RULE (CRITICAL):
-- Always respond in the SAME language as the user's current message
-- If language is unclear or message is very short, check the conversation history for the last clear language used
+- Detect the language of the user's current message yourself — you support ALL languages
+- Respond entirely in that detected language, no matter what language it is
+- If the message is very short or ambiguous, check conversation history for the last clear language
 - If still unclear, default to ENGLISH
 - NEVER mix languages in one response
-- Ignore earlier messages written in other languages when answering the current message
-- Current message language detected: ${detectedLang}
 ${contextBlock ? `\n${contextBlock}\n` : ''}
 DATA PRIORITY:
 1. VERIFIED EVENTS DATA (only for event-related questions or clear event follow-ups)
@@ -178,7 +197,7 @@ RESPONSE STYLE:
 - GOOD: "Parking je kod Punta Rata i uz cestu iznad plaža — u sezoni se brzo popuni, bolje doći ranije."
 
 You must reply ONLY with valid JSON:
-{"lang":"${detectedLang}","intent":"events_today|events_tomorrow|events_week|events|weather_current|weather_tomorrow|weather_multi|faq|other","response":"your reply"}
+{"lang":"<ISO 639-1 code of the user message language>","intent":"events_today|events_tomorrow|events_week|events|weather_current|weather_tomorrow|weather_multi|faq|other","response":"your reply"}
 
 Intent rules:
 - events_today/tomorrow/week: user asks about events for a specific day → set response to ""
@@ -258,7 +277,7 @@ async function generateOptInMessage(lang = 'hr') {
 async function rageMessage({ message, baseAnswer, history = [], faqContext, eventContext, lang = 'en', systemPrompt = '', model = 'gpt-4o-mini' }) {
   const contextParts = [];
   if (baseAnswer) {
-    contextParts.push(`VERIFIED ANSWER (rephrase naturally in ${lang} — keep ALL facts exact, do NOT change any detail):\n${baseAnswer}`);
+    contextParts.push(`VERIFIED ANSWER (rephrase naturally in the user's language — keep ALL facts exact, do NOT change any detail):\n${baseAnswer}`);
   }
   if (faqContext) {
     contextParts.push(`VERIFIED FAQ DATA (use these facts verbatim — do not deviate, do not add information):\n${faqContext}`);
@@ -269,11 +288,11 @@ async function rageMessage({ message, baseAnswer, history = [], faqContext, even
 
   const sysContent = [
     // Language rule comes FIRST so it overrides any language bias in the tenant system prompt
-    `LANGUAGE RULE (NON-NEGOTIABLE): You MUST respond entirely in language code "${lang}". Do not use any other language, even if previous messages or system instructions are in a different language.`,
+    'LANGUAGE RULE (NON-NEGOTIABLE): Detect the language of the user\'s current message and respond entirely in that language. You support ALL languages in the world. Never respond in a different language than the one the user used.',
     systemPrompt,
     'You are Belly, a local tourism assistant for Brela, Croatia.',
-    `CRITICAL: Respond ONLY in ${lang}. Never mix languages. Never switch to another language.`,
-    'Ignore previous messages written in other languages. Reply only in the language of the current user message.',
+    'CRITICAL: Always match the user\'s language exactly. Never mix languages. If a baseAnswer is provided in a different language, translate it naturally into the user\'s language.',
+    'Reply in the language of the CURRENT user message, not previous ones.',
     'DATA PRIORITY — use this order only when the data is relevant to the user message:',
     '  1. VERIFIED EVENTS DATA (for event-related questions only)',
     '  2. VERIFIED FAQ DATA (use verbatim facts only)',

@@ -95,7 +95,7 @@ const YES_MSG = {
 const NO_MSG = {
   hr: 'U redu — tu sam ako vam nešto zatreba o Brelima.',
   en: "Alright — I'm here if you need anything about Brela.",
-  de: 'Alles klar — jsem tu, pokud něco potřebujete o Brela.', 
+  de: 'Alles klar — ich bin da, falls Sie etwas über Brela brauchen.',
   it: 'Va bene — sono qui se ti serve altro su Brela.',
   fr: "D'accord — je suis là si vous avez besoin de quelque chose sur Brela.",
   sv: 'Okej — jag är här om du behöver något om Brela.',
@@ -144,7 +144,7 @@ const UNCLEAR_MSG = {
   hr: 'Nisam siguran što točno trebate.\nMožete napisati malo preciznije pitanje.',
   en: "I'm not sure what exactly you're asking.\nCould you be a bit more specific?",
   de: 'Ich bin nicht sicher, was Sie genau meinen.\nKönnen Sie Ihre Frage etwas genauer formulieren?',
-  it: 'Non sono sicuro di aver razumio esattamente cosa intendi.\nPuoi scrivere la domanda in modo un po’ più preciso?',
+  it: "Non sono sicuro di aver capito esattamente cosa intendi.\nPuoi scrivere la domanda in modo un po’ piu preciso?",
   fr: "Je ne suis pas sûr de comprendre exactement votre demande.\nPouvez-vous être un peu plus précis ?",
   sv: 'Jag är inte säker på vad du menar.\nKan du skriva lite mer exakt?',
   no: 'Jeg er ikke helt sikker på hva du mener.\nKan du være litt mer konkret?',
@@ -747,6 +747,10 @@ const BRELA_TOPICS = [
   // General
   'croatia', 'hrvatska', 'dalmatia', 'dalmacija', 'adriatic', 'jadran',
   'makarska', 'omiš',
+  // Common tourist questions not covered above
+  'water', 'clean', 'safe', 'safe to', 'visit', 'sightseeing', 'attraction',
+  'what to do', 'things to do', 'what to see', 'opening', 'open', 'cash',
+  'internet', 'wifi', 'wi-fi', 'medical', 'emergency',
 ];
 function isRelevant(msg) {
   const normalized = normalizeLookup(msg);
@@ -1498,7 +1502,7 @@ router.post('/webhook', async (req, res) => {
   const followUp = isFollowUp(trimmedMsg) || Boolean(engineSession.pendingSlot);
   if (!followUp && !isRelevant(effectiveMsg)) {
     await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', activeLang).catch(() => {});
-    const offTopic = await alignReplyToUserLanguage(offTopicReply(activeLang), trimmedMsg, model);
+    const offTopic = offTopicReply(activeLang);
     replyForLogs = offTopic;
     await persistTurn(replyForLogs, {
       awaiting: null,
@@ -1516,7 +1520,7 @@ router.post('/webhook', async (req, res) => {
     const usage = await checkAndIncrementUsage(tenant.id, userPhone);
     if (!usage.allowed) {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', activeLang).catch(() => {});
-      const limitReply = await alignReplyToUserLanguage(fallbackReply(activeLang), trimmedMsg, model);
+      const limitReply = fallbackReply(activeLang);
       replyForLogs = limitReply;
       await persistTurn(replyForLogs, {
         awaiting: null,
