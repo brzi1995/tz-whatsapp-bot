@@ -28,8 +28,13 @@ function normalizeMessage(msg) {
 
 // Pure acknowledgements — no reply needed
 const TRIVIAL = new Set([
-  'ok', 'okay', 'k', 'yes', 'no', 'yep', 'nope', 'thanks', 'thx', 'ty', 'np',
-  'hvala', 'nein', 'danke', 'grazie', 'merci', 'si', 'sí', 'tak', 'nie',
+  'thanks', 'thank you', 'thx', 'ty', 'np', 'hvala', 'danke', 'grazie', 'merci', 'tack', 'takk', 'cheers',
+]);
+const AFFIRMATIVE_REPLIES = new Set([
+  'ok', 'okay', 'k', 'yes', 'yep', 'sure', 'da', 'naravno', 'ja', 'si', 'sí', 'tak', 'ano',
+]);
+const NEGATIVE_REPLIES = new Set([
+  'no', 'nope', 'ne', 'nein', 'nie',
 ]);
 const SHORT_UNCLEAR = new Set(['da', 'ne', 'yes', 'no', 'yep', 'nope']);
 
@@ -1258,6 +1263,26 @@ router.post('/webhook', async (req, res) => {
     await persistTurn(reply);
     console.log('[webhook] FINAL RESPONSE SENT — greeting');
     return res.send(twiml(reply));
+  }
+
+  // Standalone short confirmations should feel conversational, not silent.
+  if (!engineSession.pendingSlot && !engineSession.lastTopic) {
+    if (AFFIRMATIVE_REPLIES.has(lowerMsg)) {
+      const reply = yesReply(activeLang);
+      replyForLogs = reply;
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', activeLang).catch(() => {});
+      await persistTurn(reply, { lastTopic: 'greeting' });
+      console.log('[webhook] FINAL RESPONSE SENT — standalone affirmative');
+      return res.send(twiml(reply));
+    }
+    if (NEGATIVE_REPLIES.has(lowerMsg)) {
+      const reply = noReply(activeLang);
+      replyForLogs = reply;
+      await logMessage(tenant.id, userPhone, trimmedMsg, 'ai', activeLang).catch(() => {});
+      await persistTurn(reply, { lastTopic: 'greeting' });
+      console.log('[webhook] FINAL RESPONSE SENT — standalone negative');
+      return res.send(twiml(reply));
+    }
   }
 
   // ── TRIVIAL ACK (ok/thanks/etc.) without pending context → silent ──────────
