@@ -294,6 +294,8 @@ function normalizeConversationState(state) {
     lastEventPeriod: safe.lastEventPeriod || null,
     lastFaq: safe.lastFaq || null,
     lastBotQuestion: safe.lastBotQuestion || null,
+    lastTopicAt: safe.lastTopicAt || null,
+    followUpCount: safe.followUpCount || 0,
     awaiting,
   };
 }
@@ -1098,9 +1100,8 @@ function formatWeatherForecast(city, forecastDays, lang, requestedDays, currentL
 }
 
 router.post('/webhook', async (req, res) => {
-  console.log('WEBHOOK HIT');
-  console.log('[webhook] incoming body:', JSON.stringify(req.body));
-  res.type('text/xml');
+  console.log('[webhook] HIT — From:', req.body?.From, 'To:', req.body?.To, 'Body:', req.body?.Body);
+  res.status(200).type('text/xml');
 
   // will be populated as we build replies, used only for error logging
   let replyForLogs = null;
@@ -1123,10 +1124,10 @@ router.post('/webhook', async (req, res) => {
     // ── Resolve tenant ───────────────────────────────────────────────────────
     const tenant = await getTenant(tenantPhone);
     if (!tenant) {
-      console.warn(`[webhook] no tenant for number: ${tenantPhone}`);
+      console.warn(`[webhook] no tenant for number: "${tenantPhone}" — check tenants.phone_number in DB`);
       return res.send(emptyTwiml());
     }
-    console.log(`[webhook] tenant: ${tenant.name}`);
+    console.log(`[webhook] tenant: ${tenant.name} (id=${tenant.id})`);
 
     // ── Upsert user ──────────────────────────────────────────────────────────
     try { await upsertWhatsappUser(tenant.id, userPhone); } catch (_) {}
@@ -1171,10 +1172,13 @@ router.post('/webhook', async (req, res) => {
   // Old state fields (lastIntent, awaiting, lastBotQuestion) are still preserved for
   // the FAQ clarification flow which runs outside the engine.
   const engineSession = {
-    pendingSlot:  conversationState.pendingSlot  || null,
-    lastTopic:    conversationState.lastTopic    || conversationState.lastIntent || null,
-    lastQuestion: conversationState.lastQuestion || conversationState.lastBotQuestion || null,
+    pendingSlot:   conversationState.pendingSlot  || null,
+    lastTopic:     conversationState.lastTopic    || conversationState.lastIntent || null,
+    lastQuestion:  conversationState.lastQuestion || conversationState.lastBotQuestion || null,
+    lastTopicAt:   conversationState.lastTopicAt  || null,
+    followUpCount: conversationState.followUpCount || 0,
   };
+  console.log('[webhook] engineSession loaded:', { lastTopic: engineSession.lastTopic, followUpCount: engineSession.followUpCount });
 
   // ── persistTurn — safe persistence (non-blocking on DB errors) ──────────
   const persistTurn = async (assistantReply, statePatch = {}) => {
@@ -1182,10 +1186,12 @@ router.post('/webhook', async (req, res) => {
     const mergedState = normalizeConversationState({
       ...conversationState,
       ...statePatch,
-      pendingSlot: statePatch.pendingSlot !== undefined ? statePatch.pendingSlot : engineSession.pendingSlot,
-      lastTopic: statePatch.lastTopic !== undefined ? statePatch.lastTopic : engineSession.lastTopic,
-      lastQuestion: statePatch.lastQuestion !== undefined ? statePatch.lastQuestion : engineSession.lastQuestion,
-      lastLanguage: activeLang,
+      pendingSlot:   statePatch.pendingSlot   !== undefined ? statePatch.pendingSlot   : engineSession.pendingSlot,
+      lastTopic:     statePatch.lastTopic     !== undefined ? statePatch.lastTopic     : engineSession.lastTopic,
+      lastQuestion:  statePatch.lastQuestion  !== undefined ? statePatch.lastQuestion  : engineSession.lastQuestion,
+      lastTopicAt:   engineSession.lastTopicAt   || null,
+      followUpCount: engineSession.followUpCount || 0,
+      lastLanguage:  activeLang,
     });
     const mergedHistory = [...history, { role: 'user', content: trimmedMsg }, { role: 'assistant', content: safeReply }].slice(-40);
 
@@ -1308,11 +1314,14 @@ router.post('/webhook', async (req, res) => {
     _historyLooksLikeWeather: historyLooksLikeWeather(history),
   };
 
+  console.log('[webhook] calling engineHandleMessage...');
   const engineReply = await engineHandleMessage(trimmedMsg, engineSession, engineDeps);
+  console.log('[webhook] engineHandleMessage returned:', engineReply === null ? 'null (fall-through)' : `"${String(engineReply).slice(0, 60)}"`);
 
   if (engineReply !== null) {
     let safeReply = engineReply;
     if (!safeReply || typeof safeReply !== 'string') {
+      console.warn('[webhook] engineReply was non-string/empty, using fallback');
       safeReply = 'Došlo je do greške. Molimo pokušajte ponovno.';
     }
     safeReply = cleanMixedLanguageReply(safeReply, activeLang);
@@ -1593,22 +1602,27 @@ router.post('/webhook', async (req, res) => {
     return res.send(twiml(reply));
 
   } catch (err) {
-    console.error('WHATSAPP ROUTE FULL ERROR');
-    console.error(err);
-    console.error(err?.message);
-    console.error(err?.stack);
-    console.error('WHATSAPP ROUTE ERROR CONTEXT', {
-      userId: req?.body?.From,
-      incomingMessage: req?.body?.Body,
+    console.error('[webhook] UNHANDLED ERROR in webhook handler');
+    console.error('[webhook] error message:', err?.message);
+    console.error('[webhook] error stack:', err?.stack);
+    console.error('[webhook] error context:', {
+      from: req?.body?.From,
+      body: req?.body?.Body,
       session: sessionForLogs,
-      reply: replyForLogs,
+      replyAtTimeOfError: replyForLogs,
     });
-    const isQuota = err.status === 429 || err.code === 'insufficient_quota';
-    console.log('[webhook] FINAL RESPONSE SENT — error fallback');
-    res.send(twiml(isQuota
-      ? 'Usluga je privremeno nedostupna. Molimo pokušajte ponovo.'
-      : 'Došlo je do greške. Molimo pokušajte ponovo.'
-    ));
+    try {
+      const isQuota = err?.status === 429 || err?.code === 'insufficient_quota';
+      const fallbackText = isQuota
+        ? 'Usluga je privremeno nedostupna. Molimo pokušajte ponovo.'
+        : 'Došlo je do greške. Molimo pokušajte ponovo.';
+      console.log('[webhook] FINAL RESPONSE SENT — error fallback');
+      if (!res.headersSent) {
+        res.status(200).type('text/xml').send(twiml(fallbackText));
+      }
+    } catch (sendErr) {
+      console.error('[webhook] CRITICAL: failed to send error fallback:', sendErr?.message);
+    }
   }
 });
 
