@@ -268,12 +268,12 @@ async function getUpcomingEvents(tenantId) {
   try {
     // Featured events take priority (max 3); fall back to all upcoming
     const [featured] = await pool.query(
-      'SELECT title, description, date, location_link FROM events WHERE tenant_id = ? AND date >= CURDATE() AND featured = 1 ORDER BY date ASC LIMIT 3',
+      'SELECT title, description, date, location_link, category FROM events WHERE tenant_id = ? AND date >= CURDATE() AND featured = 1 AND is_active = 1 ORDER BY date ASC LIMIT 3',
       [tenantId]
     );
     if (featured.length) return featured;
     const [rows] = await pool.query(
-      'SELECT title, description, date, location_link FROM events WHERE tenant_id = ? AND date >= CURDATE() ORDER BY date ASC LIMIT 5',
+      'SELECT title, description, date, location_link, category FROM events WHERE tenant_id = ? AND date >= CURDATE() AND is_active = 1 ORDER BY date ASC LIMIT 30',
       [tenantId]
     );
     return rows;

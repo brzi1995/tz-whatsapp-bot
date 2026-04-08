@@ -667,11 +667,6 @@ async function handleEvents(userMsg, session, deps) {
 async function handleEventCategory(userMsg, session, deps) {
   const { tenantId, getUpcomingEvents, lang } = deps;
 
-  // Always clear event context after showing results — no further follow-up
-  session.lastTopic    = null;
-  session.pendingSlot  = null;
-  session.lastQuestion = null;
-
   const cat = detectEventCategory(userMsg);
 
   const NO_RESULTS = {
@@ -714,6 +709,10 @@ async function handleEventCategory(userMsg, session, deps) {
     }
 
     if (!filtered.length) {
+      // Clear after showing no-results — no point retrying the same category
+      session.lastTopic    = null;
+      session.pendingSlot  = null;
+      session.lastQuestion = null;
       return NO_RESULTS[lang] || NO_RESULTS.en;
     }
 
@@ -736,10 +735,16 @@ async function handleEventCategory(userMsg, session, deps) {
       return line;
     });
 
+    // Clear after successfully showing results — no further follow-up
+    session.lastTopic    = null;
+    session.pendingSlot  = null;
+    session.lastQuestion = null;
+
     return `${hdrFn(catLabel)}\n\n${lines.join('\n\n')}`;
 
   } catch (err) {
     console.error('[engine/eventCategory]', err.message);
+    // Do NOT clear session on DB error — user can retry their category request
     return NO_RESULTS[lang] || NO_RESULTS.en;
   }
 }
@@ -1102,6 +1107,18 @@ async function handleMessage(userMsg, session, deps) {
   const msg = String(userMsg || '').trim();
   if (!msg) return null;
 
+  // ── Follow-up expiration ──────────────────────────────────────────────────
+  // CLAUDE.md: clear lastTopic after 2 min or 2 follow-up messages
+  if (session.lastTopic) {
+    const TWO_MIN = 2 * 60 * 1000;
+    const age = session.lastTopicAt ? (Date.now() - session.lastTopicAt) : Infinity;
+    if (age > TWO_MIN || (session.followUpCount || 0) >= 2) {
+      session.lastTopic     = null;
+      session.lastTopicAt   = null;
+      session.followUpCount = 0;
+    }
+  }
+
   // ── Priority 1: pendingSlot ───────────────────────────────────────────────
   // pendingSlot always wins. No intent detection, no fallback.
   if (session.pendingSlot) {
@@ -1175,6 +1192,7 @@ async function handleMessage(userMsg, session, deps) {
   const weatherContext = session.lastTopic === 'weather'
     || (!session.lastTopic && Boolean(deps?._historyLooksLikeWeather));
   if (standaloneDays && weatherContext) {
+    session.followUpCount = (session.followUpCount || 0) + 1;
     const synthMsg = standaloneDays >= 10
       ? '10 days'
       : (standaloneDays === 1 ? 'tomorrow' : `${Math.min(Math.max(standaloneDays, 2), 5)} days`);
@@ -1187,12 +1205,14 @@ async function handleMessage(userMsg, session, deps) {
   // User replied with a category name (e.g. "koncerti", "festivals") after the
   // category-menu was shown. Must come before the generic event follow-up check.
   if (session.lastTopic === 'events' && detectEventCategory(msg)) {
+    session.followUpCount = (session.followUpCount || 0) + 1;
     return handleEventCategory(msg, session, deps);
   }
 
   // ── Priority 3b: time-based event follow-up ───────────────────────────────
   // Keep event follow-ups deterministic and bypass generic intent detection.
   if (isEventFollowUp(msg, session)) {
+    session.followUpCount = (session.followUpCount || 0) + 1;
     return TOPIC_HANDLERS.events.handle(msg, session, deps);
   }
 
@@ -1201,6 +1221,7 @@ async function handleMessage(userMsg, session, deps) {
   // detectIntent() is NOT called here either.
   const weatherFollow = isWeatherFollowUp(msg, session) ? parseWeatherFollowUp(msg) : null;
   if (weatherFollow) {
+    session.followUpCount = (session.followUpCount || 0) + 1;
     const synthMsg = (() => {
       if (weatherFollow.type === 'tomorrow') return 'tomorrow';
       if (weatherFollow.type === 'forecast') return `${weatherFollow.days} days`;
@@ -1216,6 +1237,7 @@ async function handleMessage(userMsg, session, deps) {
   // follow-ups to the last resolved topic. "Local", "near beach", "ok",
   // "center" after a restaurant or parking reply all land here.
   } else if (session.lastTopic && TOPIC_HANDLERS[session.lastTopic] && msg.split(/\s+/).length <= 2 && !Object.values(TOPIC_PATTERNS).some(p => p.test(msg))) {
+    session.followUpCount = (session.followUpCount || 0) + 1;
     activeTopic = session.lastTopic;
 
   // ── Priority 6: normal intent detection (no context at all) ──────────────
@@ -1227,7 +1249,14 @@ async function handleMessage(userMsg, session, deps) {
   const handler = TOPIC_HANDLERS[activeTopic];
   if (!handler) return null; // Unknown topic → fall through
 
+  const prevTopic = session.lastTopic;
   const reply = await handler.handle(msg, session, deps);
+
+  // Reset expiration tracking when a new topic is established by the handler
+  if (session.lastTopic && session.lastTopic !== prevTopic) {
+    session.lastTopicAt   = Date.now();
+    session.followUpCount = 0;
+  }
 
   // Safety net anti-loop: if handler ended up setting the same question again, break
   if (

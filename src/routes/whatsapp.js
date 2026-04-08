@@ -1502,7 +1502,7 @@ router.post('/webhook', async (req, res) => {
   const followUp = isFollowUp(trimmedMsg) || Boolean(engineSession.pendingSlot);
   if (!followUp && !isRelevant(effectiveMsg)) {
     await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', activeLang).catch(() => {});
-    const offTopic = offTopicReply(activeLang);
+    const offTopic = await alignReplyToUserLanguage(offTopicReply(activeLang), trimmedMsg, model);
     replyForLogs = offTopic;
     await persistTurn(replyForLogs, {
       awaiting: null,
@@ -1520,7 +1520,7 @@ router.post('/webhook', async (req, res) => {
     const usage = await checkAndIncrementUsage(tenant.id, userPhone);
     if (!usage.allowed) {
       await logMessage(tenant.id, userPhone, trimmedMsg, 'fallback', activeLang).catch(() => {});
-      const limitReply = fallbackReply(activeLang);
+      const limitReply = await alignReplyToUserLanguage(fallbackReply(activeLang), trimmedMsg, model);
       replyForLogs = limitReply;
       await persistTurn(replyForLogs, {
         awaiting: null,

@@ -74,3 +74,98 @@ In the Twilio console, set each WhatsApp number's incoming message webhook to:
 https://yourdomain.com/whatsapp/webhook
 ```
 Method: HTTP POST. The `WEBHOOK_BASE_URL` env var must match this domain exactly for signature validation to pass.
+
+
+
+The bot is a tourism AI assistant for Brela.
+It must behave like a helpful local guide for visitors, providing clear, practical, and reliable information.
+The bot supports short follow-up conversations, but in a controlled way.
+
+# FOLLOW-UP CONTEXT RULES
+
+The bot supports short follow-up conversations, but in a controlled way.
+
+---
+
+## WHEN FOLLOW-UP IS ALLOWED
+
+Follow-up is allowed ONLY if:
+
+- session.lastTopic exists
+- the message is short OR clearly related
+
+Examples of valid follow-up:
+- "beaches"
+- "restaurants"
+- "5 days"
+- "tonight"
+- "center"
+
+---
+
+## FOLLOW-UP BEHAVIOR
+
+If follow-up is detected:
+
+- stay within the same topic
+- do NOT run full intent detection
+- do NOT switch topics
+
+---
+
+## FOLLOW-UP EXPIRATION
+
+Context must be short-lived.
+
+Clear session.lastTopic when:
+- more than 2 minutes passed
+OR
+- more than 2 follow-up messages happened
+OR
+- a clear new topic is detected
+
+---
+
+## NEW TOPIC DETECTION
+
+If the message clearly introduces a new topic:
+
+Examples:
+- "weather"
+- "events"
+- "parking"
+- "how to get there"
+
+Then:
+- reset session.lastTopic
+- process as a new request
+
+---
+
+## MULTI-LANGUAGE SUPPORT
+
+Follow-up must work across languages.
+
+Do NOT rely on exact text.
+
+Use normalized keyword mapping:
+
+Examples:
+- beaches / plaže / plage → same intent
+- restaurants / restorani → same intent
+- events / događanja → same intent
+
+---
+
+## IMPORTANT RULES
+
+- NEVER allow follow-up to override a clear new topic
+- NEVER create loops
+- NEVER route to wrong topic based on short input
+
+---
+
+## GOAL
+
+Follow-up should feel natural and helpful,
+but never cause confusion or incorrect responses.
