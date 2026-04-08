@@ -1303,7 +1303,8 @@ async function handleMessage(userMsg, session, deps) {
     const words = msg.split(/\s+/).length;
     const isLocationQualifier = /^(near|at\b|in\b|by\b|around|next to|close to|uz\b|blizu|pored|kod)\b/i.test(msg) && words <= 4;
     const isShort = words <= 2 && !Object.values(TOPIC_PATTERNS).some(p => p.test(msg));
-    return isLocationQualifier || isShort;
+    const isAffirmativeFollowUp = /^(yes|yeah|yep|sure|ok|okay|da|naravno|ja|oui|si|sí|tak|ano)\b/i.test(msg) && words <= 4;
+    return isLocationQualifier || isShort || isAffirmativeFollowUp;
   })()) {
     session.followUpCount = (session.followUpCount || 0) + 1;
     activeTopic = session.lastTopic;
